@@ -1,0 +1,28 @@
+node_modules/
+dist/
+coverage/
+.vitest/
+
+# Secrets: only the empty examples are committed
+.env
+.env.*
+!.env*.example
+*.local
+.claude/settings.local.json
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/
+
+# Logs and build state
+logs/
+*.log
+*.tsbuildinfo
+apps/voice/logs/
+
+# Test output
+playwright-report/
+test-results/
+
+# Knowledge-graph output (/graphify)
+graphify-out/

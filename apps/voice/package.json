@@ -1,0 +1,16 @@
+{
+  "name": "@va/voice",
+  "version": "0.0.0",
+  "private": true,
+  "description": "LiveKit Agents worker; runs @va/core in-process",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
