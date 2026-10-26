@@ -44,7 +44,7 @@ Roughly 10–12 sessions for the skeleton. Parallel work goes in git worktrees, 
 
 Tick when a part is merged to `main`.
 
-- [ ] Part 1 — repository, tooling, Claude Code harness, CI
+- [x] Part 1 — repository, tooling, Claude Code harness, CI (2026-10-26)
 - [ ] Part 2 — Supabase project, schema, RLS, pgTAP, generated types
 - [ ] Part 3a — core: types, tool registry, prompts, fakes
 - [ ] Part 3b — core: orchestration loop, history assembly
