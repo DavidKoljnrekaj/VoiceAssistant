@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # The version comes from the packageManager field in package.json.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # One lockfile covers every workspace package, so one audit covers all. Fails on a newly
+      # published advisory too, even when this push did not cause it: see what it is with
+      # `pnpm audit --prod`, then update the dependency (minimum two-week-old version).
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test

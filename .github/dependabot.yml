@@ -1,0 +1,28 @@
+# Weekly update pull requests against main. Security updates for a published advisory are
+# separate: switch them on in the repository settings (Code security → Dependabot security updates).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+    # Only versions at least two weeks old, the same rule used when adding dependencies by hand.
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    groups:
+      # @livekit/agents and its plugins pin each other exactly, so they can only move together.
+      livekit:
+        patterns: ['@livekit/*']
+      minor-and-patch:
+        update-types: [minor, patch]
+        exclude-patterns: ['@livekit/*']
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
