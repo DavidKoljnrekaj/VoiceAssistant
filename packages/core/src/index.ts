@@ -1,14 +1,38 @@
 // @va/core public surface. Test helpers (fakes, fixtures, harness) are exported from
-// `@va/core/test`. The loop, dispatch, history and sinks arrive with Parts 3b and 3c.
+// `@va/core/test`. The spoken-text sink arrives with Part 3c.
 export { authenticateToken, isAuthError } from './auth.js'
 export type { AuthContext, AuthError, AuthResult, Language, Role } from './auth.js'
 export { CHANNEL_DEFAULTS, channelSettings } from './channel.js'
 export type { Channel, ChannelSettings, Effort } from './channel.js'
 export { MESSAGES_HR, mapAnthropicError } from './errors.js'
 export type { ErrorCode, MappedError } from './errors.js'
+export { log } from './log.js'
+export type { LogLevel } from './log.js'
+export { dispatchTool, dispatchToolWithTimeout } from './loop/dispatch.js'
+export type { ToolOutcome } from './loop/dispatch.js'
+export { applyMessageCacheBreakpoint, assembleHistory } from './loop/history.js'
+export type { AssembleOptions, HistoryRow } from './loop/history.js'
+export { runOrchestrationLoop, TRUNCATED_HR } from './loop/orchestrator.js'
+export type {
+  ContentBlock,
+  EventSink,
+  InMemoryMessage,
+  LoopConfig,
+  LoopHooks,
+  LoopInput,
+  LoopMark,
+  MessageRow,
+  MessageStore,
+  TextBlock,
+  ToolResultBlock,
+  ToolUseBlock,
+  Usage,
+  UsageReport,
+} from './loop/ports.js'
 export { FALLBACK_BETA, modelProfile } from './model.js'
 export type { ModelExtra, ModelProfile } from './model.js'
 export { buildStaticSystemPrompt, buildUserContext, DOMAIN_RULES_HR } from './prompts/index.js'
+export { BufferedSink } from './sinks/buffered.js'
 export { defineTool } from './tools/define.js'
 export type { ToolDefinition, ToolHandlerExtras, ToolPack } from './tools/define.js'
 export { CHANNEL_ALLOWLIST, ToolRegistry } from './tools/registry.js'

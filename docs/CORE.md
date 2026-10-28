@@ -3,9 +3,9 @@
 The engine behind every channel: one loop, one tool registry, one role gate, one prompt lineage.
 A channel supplies a sink, a store, loop hooks and a settings row; nothing else differs. The
 plan is `docs/plan/03-core-engine.md`; the invariants it enforces are in `CLAUDE.md` and
-`.claude/rules/engine.md`. Part 3a (this document's current state) delivers the types, the tool
-registry, the prompts, the model profiles, the error catalogue and the fakes. The loop, dispatch,
-history assembly (3b) and the spoken-text sink (3c) are marked as such below.
+`.claude/rules/engine.md`. Parts 3a and 3b are built: the types, the tool registry, the prompts,
+the model profiles, the error catalogue, the fakes, the loop, dispatch, history assembly and the
+buffered sink. The spoken-text sink (3c) is marked as such below.
 
 ## Layout
 
@@ -19,9 +19,9 @@ packages/core/src/
 ├── log.ts                one JSON line per event, never content
 ├── prompts/              DOMAIN_RULES_HR, chat and voice blocks, buildStaticSystemPrompt, buildUserContext
 ├── tools/                defineTool, ToolRegistry, CHANNEL_ALLOWLIST, toAnthropicTool
-├── loop/                 (3b) orchestrator, dispatch, history
-├── sinks/                (3b) BufferedSink; (3c) SpokenTextSink, speakable
-└── test/                 fake-anthropic, fake-supabase, fixtures, harness → exported as @va/core/test
+├── loop/                 ports, orchestrator, model-call, tool-round, dispatch, history
+├── sinks/                BufferedSink; (3c) SpokenTextSink, speakable
+└── test/                 fake-anthropic, fake-supabase, fixtures, tools, harness → exported as @va/core/test
 packages/tools-demo/src/  the example pack: search_items, get_item, create_note
 ```
 
@@ -29,31 +29,90 @@ Dependencies: `@anthropic-ai/sdk` 0.133.0 (pinned exactly), `zod` 4, `@va/db`. N
 app, no HTTP, no LiveKit, no React. The engine reads no environment variable; apps pass what
 varies (`channelSettings(channel, env)`, injected clients).
 
-## Ports (3b)
+## The loop
 
-The loop will take three ports, unchanged from Landmark except where the plan says:
+`runOrchestrationLoop(ctx, config, input, sink, store, hooks, signal)` takes three ports,
+unchanged from Landmark except where the plan says:
 
 - `EventSink`: `textDelta`, `toolStarting`, `textBlock(text, messageId)`, `toolCall`,
   `toolResult`, `done(stopReason, usage)`, `error(code, message)`. Chat's SSE sink emits deltas,
-  blocks and tool events; the voice sink speaks text only.
-- `MessageStore`: `insert(row)` → `{ id | null, code? }`. Chat inserts per row inside the loop;
-  voice defers persistence until after the answer.
-- `LoopHooks`: `isCancelled`, `onComplete`, optional `mark` (timing) and `usage` (token counts
-  incl. cache reads and writes).
+  blocks and tool events; the voice sink speaks text only; `BufferedSink` keeps everything.
+- `MessageStore`: `insert(row)` → `{ id | null, code? }`, never throws. A row carries `role`,
+  `turn_kind` (`user` | `assistant` | `tool_result`), `content`, `parent_id`, and for assistant
+  rows the model, the four token counts and the stop reason. Chat inserts per row inside the
+  loop; voice defers persistence until after the answer.
+- `LoopHooks`: `isCancelled`, `onComplete`, optional `mark` (`model_call`, `first_event`,
+  `tools_start`, `tools_done`) and `usage` (input, output, cache read, cache write per call).
 
-### Persistence order and abort contract (3b)
+`LoopConfig` is the channel, its `ChannelSettings`, the injected Anthropic client, the system
+blocks (the static one first, with the breakpoint), `registry.anthropicTools(ctx, channel)`, the
+registry and the owner's log tag. `LoopInput` is the session id, the assembled history plus the
+user turn just persisted, the id of that row and the `ToolHandlerExtras`.
+
+### How a turn flows
+
+```
+owner      persist user row ─┐
+loop   ┌──▶ hooks.isCancelled? ── yes ──▶ return (silent)
+       │    applyMessageCacheBreakpoint(messages)
+       │    messages.stream(params, { signal })      deltas → sink.textDelta, tool starts → sink.toolStarting
+       │      abort while streaming ──▶ log, return (silent)      SDK error ──▶ sink.error(mapped), return
+       │    store.insert(assistant row)              failure ──▶ sink.error(persistence_error), return
+       │    blocks in order: text → sink.textBlock(text, rowId); tool_use → sink.toolCall
+       │    refusal ──▶ sink.done('refusal'), onComplete, return
+       │    tool_use:
+       │      cancelled before dispatch ──▶ synthetic results for every tool
+       │      else dispatch all concurrently (timeout + child signal each), settle early on abort
+       │      store.insert(tool_result row, tool_use order)   failure ──▶ retry once, then sink.error(persistence_error)
+       │      aborted ──▶ return (silent, row persisted)      else sink.toolResult × n
+       └────  continue
+            terminal with tool_use blocks (truncation) ──▶ synthetic results persisted, explanation row, textBlock, done
+            terminal ──▶ sink.done(stopReason, usage), onComplete
+       iteration cap ──▶ tool_limit_reached row, textBlock, done, onComplete
+```
+
+### Persistence order and abort contract
 
 Per iteration: stream the model turn → persist the assistant row → emit its blocks in content
 order → dispatch the turn's tools concurrently, each with its own timeout and child abort signal
 → persist the single `tool_result` row (blocks in `tool_use` order) → emit the results → loop.
-Token deltas are the one provisional exception; the `turn` event that follows is canonical.
+Token deltas are the one provisional exception; the `turn` event that follows is canonical. The
+`tool_result` insert is retried once: that row is what keeps the branch from ending on a bare
+`tool_use`.
 
-Abort is checked before each model call, between the model call and dispatch, and while tools
-run. On abort the loop persists synthetic `is_error` results for tools that did not finish
-(finished tools keep their real output) and returns silently; the request owner decides whether
-to emit `error`. A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
-fallback and unknown block types are persisted verbatim and never emitted. The manual loop over
-`messages.stream` is a decision (`docs/decisions/0009`), not an omission.
+Abort is checked before each model call, between the model call and dispatch, and after
+dispatch. On abort the loop persists synthetic `is_error` results for tools that did not finish
+(`cancelled before the tool ran` / `cancelled before the tool returned`; finished tools keep
+their real output), emits no result event and returns silently; the request owner decides
+whether to emit `error`. A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
+fallback and unknown block types are persisted verbatim and never emitted. A terminal stop with
+`tool_use` blocks (truncation) persists synthetic results and one Croatian explanation row
+(`TRUNCATED_HR`). The manual loop over `messages.stream` is a decision (`docs/decisions/0009`),
+not an omission.
+
+### Dispatch
+
+`dispatchToolWithTimeout(registry, name, input, ctx, extras, timeoutMs, channel, signal, logTag)`
+resolves the name through `registry.find` (an unknown or forbidden name throws with its
+`RefusalReason`, logged as `tool refused at dispatch`, and becomes
+`{ error: 'tool execution failed: tool refused: <reason>' }`), re-validates the input with the
+tool's zod schema (`{ error: 'invalid tool input', issues }` without calling the handler), and
+runs the handler with a child signal (`AbortSignal.any` of the loop signal and the timeout). The
+timer is cleared on every exit; a timeout is `{ error: 'tool execution failed: tool_timeout' }`
+and the handler is told to stop through its signal. A handler's `{ error }` return is an error
+result too; a throw becomes `{ error: 'tool execution failed: <message>' }`.
+
+### History assembly
+
+`assembleHistory(rows, { hardCeilingTokens, summary? })` takes the rows `ai_session_history`
+returns (root → leaf) and builds the message array: rows with no content blocks (a refusal) are
+dropped; an assistant row whose `tool_use` ids are not all answered by the next row gets
+synthetic `is_error` results (`interrupted before the tool returned`), appended to the existing
+`tool_result` message or inserted as a new one, in memory only; turns split at `turn_kind:
+'user'`; a session summary whose boundary is on the branch replaces the turns up to it and is
+folded into the first kept message as a banner; above the ceiling (chars / 4) whole oldest turns
+are dropped, at least one kept. `applyMessageCacheBreakpoint` moves the message breakpoint to the
+last block of the last message before every call. The compaction writer is not built (`CORE-3`).
 
 ## Channels
 
@@ -127,7 +186,7 @@ product and role names replaced. Every Croatian string is marked for native revi
 
 Render order is `tools` → `system` → `messages`. Three breakpoints: the last tool definition
 (`anthropicTools` sets it), the static system block, and the last block of the last message,
-slid forward every iteration (3b). Changing a prompt or the tool set changes the cache key; say
+slid forward every iteration. Changing a prompt or the tool set changes the cache key; say
 so in the commit and re-run the voice bench.
 
 ## Tools
@@ -165,10 +224,9 @@ stays) and sets `additionalProperties: false` and `required` on every object nod
 schema under `strict`, drop `strict` for that tool and keep the zod check at dispatch, never
 the other way round. `eager_input_streaming` stays off.
 
-Dispatch (3b) re-validates the input with the tool's zod schema; a failure becomes an
-`is_error` result with the issues and the handler is not called. A handler that returns
-`{ error }` is an `is_error` result too; one that throws becomes
-`{ error: 'tool execution failed: …' }`.
+Dispatch re-validates the input with the tool's zod schema; a failure becomes an `is_error`
+result with the issues and the handler is not called. A handler that returns `{ error }` is an
+`is_error` result too; one that throws becomes `{ error: 'tool execution failed: …' }`.
 
 ### Channel allowlist
 
@@ -193,7 +251,8 @@ generated `Database` and needs no cast.
 
 `/new-tool <pack> <name> <one line>` walks it: the `defineTool` block in
 `packages/<pack>/src/tools/<name>.ts`, registration in the pack's `tools` array, the voice
-allowlist decision (with the reason in the commit), a scenario test through the loop (3b) and
+allowlist decision (with the reason in the commit), a scenario test through the loop (`runChat`,
+as `D10` in the demo pack) and
 the `tool-security-reviewer` agent. Escape `\\`, `%` and `_` before any `ilike` and reject `*` in the schema (PostgREST reads `*` as `%` and cannot be made to take it literally; `escapeLike` and `NO_STAR` in the demo pack are the pattern), never interpolate raw input into `.or()`, cap lists in the query itself (not only in the schema), and update the catalogue above.
 
 ### How to add a channel
@@ -218,10 +277,18 @@ Supabase env for `@va/db`, routes `globalThis.fetch` for `fake-anthropic.test` a
   recorded requests with the client that made them (`clientOf`).
 - `fixtures`: `seedWorld(db)` with an admin and a member (`TOKENS`, `USERS`), the member's chat
   session (three-row chain), five `demo_items`, and the `ai_session_history` RPC.
+- `tools`: `TEST_PACK` (`echo`, `whoami`, `gate`, `fail`, `boom`, `admin_only`, `write_note`)
+  and `TEST_ALLOWLIST`; `openGate(key, value)` releases a running `gate` handler,
+  `awaitHandlerEvent('start:key' | 'end:key' | 'aborted:key')` waits for one, `handlerEvents`
+  lists them.
 - `harness`: `scenario(name, fn)` (fresh world, fails on an unscripted or unused model turn),
   `reset()`, `anthropicClient()`, `authAs('member')`, `sessionMessages`, `blocksOf`,
-  `toolResultSentToModel`. `runChat` (BufferedSink, in-memory store, default hooks) arrives with
-  the loop in 3b.
+  `toolResultSentToModel`, and `runChat(ctx, text, opts)`: one turn through the real loop with a
+  `BufferedSink`, rows inserted through the fake service client (`serviceStore`), default hooks
+  and an `AbortController`; `opts` picks the channel, packs and allowlist, settings, hooks, the
+  controller, an existing session and parent row (history is read and assembled), extras, a
+  sink the test owns. `anthropic.onRequest(hook)` and `db.onRequest(hook)` run when a request
+  arrives, for aborts at exact moments.
 
 Run one file with logs:
 
@@ -229,7 +296,8 @@ Run one file with logs:
 VA_TEST_LOGS=1 pnpm exec vitest run packages/core/src/auth.test.ts
 ```
 
-Suites in 3a: `C` settings, `M` model profiles, `X` errors (through the real SDK), `A` identity,
-`P` prompts, `T` registry and schema, `F` fake Anthropic, `G` fake Supabase (GoTrue and
-PostgREST), `D` the demo pack.
-The `E`, `H` and `S`(poken) scenarios come with 3b and 3c.
+Suites: `C` settings, `M` model profiles, `X` errors (through the real SDK), `A` identity, `P`
+prompts, `T` registry and schema, `F` fake Anthropic, `G` fake Supabase (GoTrue and PostgREST),
+`D` the demo pack (handlers, and `D10`/`D11` through the loop), `E` the loop
+(`loop/orchestrator.test.ts`, `loop/abort.test.ts`), `H` history assembly. The `S`(poken)
+scenarios come with 3c.

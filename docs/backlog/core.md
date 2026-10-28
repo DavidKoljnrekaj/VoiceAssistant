@@ -1,6 +1,6 @@
 # Backlog — core
 
-Ids: CORE-3 (next free)
+Ids: CORE-4 (next free)
 
 The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
@@ -34,6 +34,18 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 public.app_user_id())` (the insert returns a representation, which needs the SELECT policy),
   no UPDATE or DELETE; pgTAP as admin and member. A real pack never needs the cast: its tables
   are in the generated `Database`
+
+### CORE-3 · Low · The compaction writer is not implemented
+
+- **Check:** Confirmed (by design, docs/plan/03-core-engine.md §8)
+- **Where:** `packages/core/src/loop/history.ts` applies a summary (`selectKeptChain`,
+  `injectSummaryBanner`) and the hard ceiling; nothing writes `ai_sessions.context_summary` or
+  `summary_through_message_id`
+- **What happens:** a long chat thread replays its whole branch up to the 130K-token ceiling,
+  then loses whole oldest turns instead of a summary
+- **Fix direction:** port Landmark's `maybeCompactSession` (`planCompaction`,
+  `renderTurnsForSummary`, the summary model call) as a post-turn step owned by the API's stream
+  worker, off the user's critical path; the chat channel setting `compaction` turns it on
 
 ## Resolved
 
