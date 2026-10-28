@@ -28,7 +28,7 @@ VoiceAssistant/
 ```
 web ──HTTP──▶ api ──▶ core ──▶ db
               voice ─▶ core ──▶ db
-              tools-* ─▶ core (types only)
+              tools-* ─▶ core (defineTool and types)
 ```
 
 `core` never imports an app, never does HTTP, never imports LiveKit or React. Packages are

@@ -19,8 +19,8 @@ Tests live beside the code as `*.test.ts`. Each package has a `vitest.config.ts`
 
 - **Fakes stand in for the services, never for the SDKs.** The Anthropic Messages API
   (`POST /v1/messages`, JSON and SSE), PostgREST and GoTrue are answered by fakes routed through
-  `globalThis.fetch`; `@anthropic-ai/sdk` and `supabase-js` run for real. The fakes arrive in
-  Part 3 under `packages/core/src/test/` and are exported from `@va/core/test`.
+  `globalThis.fetch`; `@anthropic-ai/sdk` and `supabase-js` run for real. The fakes live under
+  `packages/core/src/test/` and are exported from `@va/core/test` (`docs/CORE.md` → Testing).
 - **A scenario starts from a freshly seeded world** (`fixtures`) and must consume exactly the model
   turns it scripted.
 - **Assert on wire output, rows and requests sent**, never on internals. Scenario names carry an
