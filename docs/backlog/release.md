@@ -7,7 +7,7 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
 
 ## Open
 
-- [ ] Part 1: create branch protection on `main` with `Tests` and `Database tests` as required
+- [ ] Part 1: create branch protection on `main` with the Actions job checks `test` and `db` as required
       checks, and enable Dependabot security updates (repository settings → Code security).
 
 ## Resolved
