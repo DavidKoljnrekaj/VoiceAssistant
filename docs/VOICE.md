@@ -32,8 +32,10 @@ apps/voice/
 │   ├── config.ts           VoiceDeps, voiceLoopConfig(deps, ctx): the LoopConfig of one caller; dateLine
 │   ├── messages.ts         chat context → InMemoryMessage[] (port of voice-llm/messages.ts)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
-│   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, the timing line, settle()
+│   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, chained saves, the timing line, settle()
+│   ├── session-options.ts  turn handling as data: Soniox end of turn, VAD barge-in, no preemptive generation, no recording
 │   ├── assistant-llm.ts    AssistantAgent (llmNode override), engineStream, EngineLLM (the stub LiveKit requires)
+│   ├── redact.ts           no `lk.pii.*` key leaves the process: LiveKit's own log lines lose them on stdout
 │   ├── warm.ts             warm(deps, ctx): max_tokens 0 with the real system/tools/profile
 │   ├── metrics.ts          turns / bargein / warm / bench JSONL writers: timings and lengths, never text
 │   ├── greeting.ts         GREETING_HR
@@ -103,16 +105,23 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
 4. The warm-up starts without being awaited: `identity.ctx()` then `warm()` (a `max_tokens: 0`
    request with the exact model, system, tools, thinking and effort of a real turn) while the
    greeting plays, logged to `warm.jsonl`.
-5. The `AgentSession` starts with the providers and the turn-handling settings below; the agent
-   connects and says `GREETING_HR`.
+5. The `AgentSession` starts with the providers and the turn-handling settings below
+   (`turnDetection: 'stt'`, `interruption.mode: 'vad'`, **preemptive generation off**: LiveKit
+   would otherwise run the engine on partial transcripts, count those against the call and
+   persist them; `record: false`: the project's observability setting never uploads audio,
+   transcripts or traces); the agent connects and says `GREETING_HR`.
 6. Every user turn: `CallSession.turn` applies the per-call cap (50; the 51st hears
    `rate_limited`), reads the identity (cached up to `IDENTITY_CACHE_MS`, then the row and
    `authenticateToken` again, which picks up a rotated JWT and a changed role; a gone row is
    `call_ended`), bumps `last_seen_at` off the critical path, runs the turn and logs one
-   `timing` line.
-7. On participant disconnect, room close and job shutdown the worker waits for the deferred
-   writes and deletes the `voice_calls` row (`identity.end()`, idempotent). The API's `/end` and
-   the sweep are the other two paths; Landmark's four rules (`docs/API.md`) all hold.
+   `timing` line. The call's saves run one after another, so each turn chains off the previous
+   one's rows even when a turn was cut short.
+7. While the participant is connected the worker bumps `last_seen_at` every minute, so a quiet
+   caller stays inside the row's three-minute idle window.
+8. On participant disconnect, room close and job shutdown the worker waits for the deferred
+   writes and deletes the `voice_calls` row (`identity.end()`, idempotent; a failed delete is
+   retried by the next path). The API's `/end` and the sweep are the other two paths;
+   Landmark's four rules (`docs/API.md`) all hold.
 
 ## Settings (`env.ts`)
 
@@ -192,7 +201,11 @@ WebSocket client of LiveKit). The worker's `prewarm` loads Silero once per proce
 Logs are one JSON line per event with `tag: '[voice]'`: `job refused`, `call accepted`, `warm`,
 `timing` per turn (`auth_ms`, `first_text_ms`, `total_ms`, the engine's marks, `spoken_len`,
 token and cache counts, `outcome`), `turn limit reached`, `identity refused`, `call ending`.
-Never the transcript, the audio or the call token. The JSONL metrics in `apps/voice/logs/`:
+Never the transcript, the audio or the call token. LiveKit's own logger (pino, JSON) writes the
+caller's words and the agent's answer under `lk.pii.*` keys at `info` and `warn`; the worker
+forces JSON output in the job process and strips every `lk.pii.*` key from what reaches stdout
+(`redact.ts`, `W18`), adding `redacted: <count>` to the line. `LOG_LEVEL` (`info` for `start`,
+`debug` for `dev`) sets LiveKit's level. The JSONL metrics in `apps/voice/logs/`:
 
 - `turns.jsonl`: per reply, LiveKit's own `e2e_ms`, `transcription_delay_ms`,
   `end_of_turn_delay_ms`, `llm_ttft_ms`, `tts_ttfb_ms`, `interrupted`, `text_len`, with the
@@ -240,7 +253,8 @@ The worker needs a home. Two options, both EU:
 
 - **LiveKit Cloud agent hosting (EU).** The container above deployed to LiveKit's own agent
   infrastructure: no servers to run, scaling by LiveKit, the vendor keys as LiveKit secrets. The
-  worker's Supabase and Anthropic traffic leaves LiveKit's region to ours.
+  worker's Supabase and Anthropic traffic leaves LiveKit's region to ours. Keep the project's
+  Agent Observability off: the worker passes `record: false`, but stdout goes to LiveKit's logs.
 - **Own container** (the Supabase project's region, e.g. a small VM or a container service):
   one more thing to operate, but the data path, logs and the keys stay with us, and the bench
   can run next to it.
@@ -258,23 +272,27 @@ reads the stream (a flush shows as `⏎`). `openCall()` seeds a voice session an
 `CallSession` and the agent; every opened call is settled at the end of the scenario so one
 scenario's deferred rows never land in the next one's world.
 
-| Id         | Scenario                                                                                              |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| W01        | a job without `callToken` is refused and logged; `callTokenOf`                                        |
-| W02        | an unknown, foreign-room, expired or idle token resolves to null; a failed lookup throws              |
-| W03        | identity cached for 60 s, re-read after (second `getUser` only once the clock moves); role change     |
-| W03b, W03c | a rotated JWT, a deleted row (`call_ended`), `end()` idempotent; `touch()` with the user filter       |
-| W04        | `toAnthropicMessages`: system items and the greeting dropped, roles merged, cap 20, trailing user     |
-| W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT             |
-| W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                |
-| W07        | rows written after the answer, chained, newest row first for the next turn, one insert                |
-| W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                |
-| W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`       |
-| W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request         |
-| W11, W12   | a model error is spoken and the stream ends; a refusal with nothing spoken says the decline           |
-| W13        | metrics lines carry latencies and lengths, no `text`; the writer refuses content keys                 |
-| W14        | the 51st turn of a call hears `rate_limited` and reaches no model; an expired identity `unauthorized` |
-| W15        | the hints file parses: comments stripped, duplicates dropped                                          |
+| Id         | Scenario                                                                                                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W01        | a job without `callToken` is refused and logged; `callTokenOf`                                                                                                                            |
+| W02        | an unknown, foreign-room, expired or idle token resolves to null; a failed lookup throws                                                                                                  |
+| W03        | identity cached for 60 s, re-read after (second `getUser` only once the clock moves); role change                                                                                         |
+| W03b, W03c | a rotated JWT, a deleted row (`call_ended`), `end()` idempotent; `touch()` with the user filter                                                                                           |
+| W04        | `toAnthropicMessages`: system items and the greeting dropped, roles merged, cap 20, trailing user                                                                                         |
+| W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT                                                                                                 |
+| W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                                                                                                    |
+| W07        | rows written after the answer, chained, newest row first for the next turn, one insert                                                                                                    |
+| W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                                                                                                    |
+| W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`                                                                                           |
+| W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request                                                                                             |
+| W11, W12   | a model error is spoken and the stream ends; a refusal with nothing spoken says the decline                                                                                               |
+| W13        | metrics lines carry latencies and lengths, no `text`; the writer refuses content keys                                                                                                     |
+| W14        | the cap is 50 turns per call; past it the caller hears `rate_limited` and no model is called (pinned with a cap of 1); an expired JWT is `unauthorized`, a failed lookup `internal_error` |
+| W15        | the hints file parses: comments stripped, duplicates dropped                                                                                                                              |
+| W16        | the request timeout aborts the loop and is spoken; only the user row is written                                                                                                           |
+| W17        | a failed save is logged without the text; the next turn still saves; no log line carries the words                                                                                        |
+| W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                              |
+| W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                 |
 
 ```
 pnpm exec vitest run apps/voice

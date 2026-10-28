@@ -28,8 +28,10 @@ fallback if a future version stops accepting string chunks.
 The adapter is ~100 lines and testable without LiveKit: the tests call `llmNode` with a real
 `ChatContext` and read the stream as the activity does (W05–W12). The worker depends on three
 facts about `@livekit/agents` (string chunks, `cancel()` on interruption, the flush ending a
-segment), all pinned by the exact version and by W05/W08; a version bump re-reads
-`performLLMInference` for them. Token usage is reported in the worker's own `timing` line, not
+segment) that only the exact version pins: the tests call `llmNode` and read the stream
+themselves (W05, W08), they never run LiveKit's `performLLMInference`, so a version bump re-reads
+it for those three facts and for the `lk.pii.*` logging and the preemptive-generation default
+that the worker switches off. Token usage is reported in the worker's own `timing` line, not
 through LiveKit's `metrics_collected`.
 
 ## Date

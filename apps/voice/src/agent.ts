@@ -11,8 +11,10 @@ import { fileURLToPath } from 'node:url'
 import {
   cli,
   defineAgent,
+  initializeLogger,
   type JobContext,
   type JobProcess,
+  loggerOptions,
   ServerOptions,
   type VAD,
   voice,
@@ -35,8 +37,13 @@ import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
 import { createTts } from './providers/tts.js'
 import { loadVad } from './providers/vad.js'
+import { installStdoutRedaction } from './redact.js'
 import { CallSession } from './session.js'
+import { startOptions, turnHandlingOptions, vadFor } from './session-options.js'
 import { warm } from './warm.js'
+
+// No `lk.pii.*` key leaves this process (invariant 9): installed before anything logs.
+installStdoutRedaction()
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const env = parseVoiceEnv(process.env)
@@ -65,12 +72,16 @@ const TUNING = {
 }
 
 type UserData = { vad: VAD }
+/** How often a connected call bumps `last_seen_at` between turns (the idle window is 3 min). */
+const KEEPALIVE_MS = 60_000
 
 export default defineAgent<UserData>({
   prewarm: async (proc: JobProcess<UserData>) => {
     proc.userData.vad = await loadVad(env)
   },
   entry: async (ctx: JobContext<UserData>) => {
+    // JSON lines only, so the stdout redaction sees every key LiveKit logs (`dev` is pretty).
+    initializeLogger({ pretty: false, level: loggerOptions()?.level ?? 'info' })
     const room = ctx.job.room?.name ?? ''
     const ids: Record<string, unknown> = { job_id: ctx.job.id, room }
     const callToken = callTokenOf(ctx.job.metadata)
@@ -104,18 +115,10 @@ export default defineAgent<UserData>({
 
     const call = new CallSession(deps, identity)
     const session = new voice.AgentSession({
-      // mode 'vad' only means "not LiveKit's hosted adaptive model"; without a VAD the framework
-      // interrupts on the STT's interim words instead. `null` opts out of the bundled VAD.
-      vad: env.INTERRUPT_ON === 'stt' ? null : ctx.proc.userData.vad,
+      vad: vadFor(env, ctx.proc.userData.vad),
       stt: createStt(env, loadHints()),
       tts: createTts(env),
-      turnHandling: {
-        turnDetection: 'stt',
-        // In 'stt' mode LiveKit adds minDelay after Soniox's end-of-turn token, which already
-        // follows the final words, so its 500 ms default is pure waiting.
-        endpointing: { minDelay: env.TURN_MIN_DELAY_MS },
-        interruption: { enabled: true, mode: 'vad', minDuration: env.INTERRUPT_MIN_MS },
-      },
+      turnHandling: turnHandlingOptions(env),
     })
 
     // The framework's own e2e figure per reply: user stopped speaking → the agent's first frame.
@@ -169,15 +172,20 @@ export default defineAgent<UserData>({
 
     // The credential goes when the caller leaves, when the room closes and on shutdown; the
     // API's `/end` and the sweep are the other paths. All idempotent.
+    // A quiet caller is still a live call: the row's idle window (3 min) is kept open while the
+    // participant is connected, not only when a turn runs.
+    const keepalive = setInterval(() => identity.touch(), KEEPALIVE_MS)
     let ended = false
     const endCall = async (reason: string): Promise<void> => {
       if (ended) return
-      ended = true
       log('info', LOG_TAG, 'call ending', { ...ids, reason })
+      clearInterval(keepalive)
       await call.settle()
       try {
         await identity.end()
+        ended = true
       } catch (err) {
+        // Not marked ended: the next path (room close, shutdown) tries the delete again.
         log('error', LOG_TAG, 'call end failed', {
           ...ids,
           reason: err instanceof Error ? err.message : String(err),
@@ -195,7 +203,7 @@ export default defineAgent<UserData>({
     await session.start({
       agent: new AssistantAgent(call, deps.settings.model),
       room: ctx.room,
-      outputOptions: { queueSizeMs: env.OUTPUT_QUEUE_MS },
+      ...startOptions(env),
     })
     await ctx.connect()
     log('info', LOG_TAG, 'connected', { ...ids, request_id: randomUUID() })

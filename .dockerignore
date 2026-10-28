@@ -1,0 +1,12 @@
+# What the images never copy: local secrets, logs, host node_modules (the deps stage installs
+# its own), build output and the local Supabase state.
+**/node_modules
+**/dist
+**/coverage
+**/logs
+**/.env
+**/.env.*
+!**/.env*.example
+supabase/.temp
+supabase/.branches
+.git

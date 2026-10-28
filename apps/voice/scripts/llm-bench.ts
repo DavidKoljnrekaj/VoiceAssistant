@@ -30,6 +30,9 @@ import { warm } from '../src/warm.js'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const metrics = createMetrics(process.env.VOICE_LOGS_DIR ?? join(HERE, '..', 'logs'))
 
+/** <!-- needs native review --> */
+const BENCH_TITLE = 'Mjerenje (llm-bench)'
+
 function env(name: string): string {
   const v = process.env[name]
   if (!v) throw new Error(`${name} is not set`)
@@ -76,7 +79,7 @@ async function signIn(): Promise<AuthContext> {
 async function openSession(ctx: AuthContext): Promise<{ id: string; close: () => Promise<void> }> {
   const { data, error } = await ctx.serviceClient
     .from('ai_sessions')
-    .insert({ user_id: ctx.userId, channel: 'voice', title: 'Mjerenje (llm-bench)' })
+    .insert({ user_id: ctx.userId, channel: 'voice', title: BENCH_TITLE })
     .select('id')
     .single()
   if (error || !data) throw new Error(`session insert failed: ${error?.code}`)

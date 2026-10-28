@@ -7,6 +7,7 @@ import {
   buildStaticSystemPrompt,
   buildUserContext,
   type ChannelSettings,
+  dateLine,
   log,
   type LoopHooks,
   MESSAGES_HR,
@@ -37,13 +38,6 @@ export const SSE_HEADERS = {
   'cache-control': 'no-cache, no-transform',
   'x-accel-buffering': 'no',
   connection: 'keep-alive',
-}
-
-/** `Danas je …` for the Europe/Zagreb day of `now`: the third, uncached system block. */
-export function dateLine(now: Date): string {
-  // hr-HR renders "srijeda, 28. listopada 2026." with its own full stop.
-  const day = new Intl.DateTimeFormat('hr-HR', { timeZone: 'Europe/Zagreb', dateStyle: 'full' }).format(now)
-  return `Danas je ${day.replace(/\.$/, '')}.`
 }
 
 export function streamChatResponse(input: StreamInput): Response {

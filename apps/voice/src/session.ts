@@ -3,11 +3,21 @@
 // (`assistant-llm.ts`) hands every user turn here; the bench runs turns through it too.
 import { randomUUID } from 'node:crypto'
 
-import { type InMemoryMessage, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
+import { type ErrorCode, type InMemoryMessage, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
 
 import type { CallIdentity } from './call.js'
 import { LOG_TAG, type VoiceDeps } from './config.js'
 import { runVoiceTurn, type VoiceTurnResult } from './turn.js'
+
+/** What the caller hears when the identity cannot be read. */
+export function identityCode(
+  err: unknown,
+): Extract<ErrorCode, 'unauthorized' | 'no_profile' | 'internal_error'> {
+  const message = err instanceof Error ? err.message : ''
+  if (message === 'unauthorized' || message === 'call_ended') return 'unauthorized'
+  if (message === 'no_profile') return 'no_profile'
+  return 'internal_error'
+}
 
 /** The brief's voice rate limit: turns per call. */
 export const MAX_TURNS_PER_CALL = 50
@@ -27,6 +37,8 @@ export interface CallSessionOptions {
 export class CallSession {
   private turns = 0
   private readonly pending = new Set<Promise<unknown>>()
+  /** The call's saves run one after another, so each turn chains off the previous one's rows. */
+  private saves: Promise<unknown> = Promise.resolve()
   private readonly maxTurns: number
 
   constructor(
@@ -60,11 +72,11 @@ export class CallSession {
     try {
       ctx = await this.identity.ctx()
     } catch (err) {
-      const code = err instanceof Error ? err.message : 'internal_error'
+      // The auth codes and `call_ended` are the caller's situation (spoken as "not signed in");
+      // anything else (a failed lookup) is ours.
+      const code = identityCode(err)
       log('warn', LOG_TAG, 'identity refused', { ...ids, code })
-      const message =
-        code in MESSAGES_HR ? MESSAGES_HR[code as keyof typeof MESSAGES_HR] : MESSAGES_HR.unauthorized
-      await io.say(message)
+      await io.say(MESSAGES_HR[code])
       await io.end('error')
       return null
     }
@@ -79,8 +91,10 @@ export class CallSession {
       say: io.say,
       end: io.end,
       signal: io.signal,
+      persistAfter: this.saves,
       ...(this.options.pickFiller ? { pickFiller: this.options.pickFiller } : {}),
     })
+    this.saves = result.persisted
     // Where a turn's time goes: identity, then the model and tools until the first spoken text,
     // then the rest of the answer.
     log('info', LOG_TAG, 'timing', {

@@ -19,6 +19,14 @@ export function buildStaticSystemPrompt(channel: Channel): string {
   return `${INTRO[channel]}\n\n${DOMAIN_RULES_HR}\n\n${PRESENTATION[channel]}`
 }
 
+/** `Danas je …` for the Europe/Zagreb day of `now`: the third, uncached system block every
+ * channel appends after the per-user block. Pure: the caller passes the clock. */
+export function dateLine(now: Date): string {
+  // hr-HR renders "srijeda, 28. listopada 2026." with its own full stop.
+  const day = new Intl.DateTimeFormat('hr-HR', { timeZone: 'Europe/Zagreb', dateStyle: 'full' }).format(now)
+  return `Danas je ${day.replace(/\.$/, '')}.`
+}
+
 /** The per-user block: identity and role, plus the role's scope note. <!-- needs native review --> */
 export function buildUserContext(ctx: Pick<AuthContext, 'email' | 'role'>): string {
   const identifier = ctx.email ?? 'nepoznat korisnik'

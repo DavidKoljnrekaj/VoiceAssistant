@@ -84,6 +84,9 @@ export interface VoiceTurnInput {
   end: (reason: SpokenEnd) => Promise<void>
   /** Fires on a barge-in: LiveKit cancels the stream and the loop stops at its next check. */
   signal: AbortSignal
+  /** The previous save of this call: this turn's rows are written after it, so they chain off
+   * the right leaf. */
+  persistAfter?: Promise<unknown>
   pickFiller?: () => string
 }
 
@@ -163,15 +166,16 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
     clearTimeout(timeout)
   }
 
-  const persisted = persistTurn(ctx.serviceClient, sessionId, userRowId, userText, store.rows).catch(
-    (err: unknown) => {
+  const persisted = (input.persistAfter ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => persistTurn(ctx.serviceClient, sessionId, userRowId, userText, store.rows))
+    .catch((err: unknown) => {
       log('error', LOG_TAG, 'persist failed', {
         ...ids,
         rows: store.rows.length + 1,
         reason: err instanceof Error ? err.message : String(err),
       })
-    },
-  )
+    })
   return {
     outcome: state.outcome,
     spoken: sink.spoken,

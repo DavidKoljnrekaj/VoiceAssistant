@@ -19,6 +19,8 @@ import {
 } from '@va/core/test'
 import { demoPack } from '@va/tools-demo'
 
+import { MAX_TURNS_PER_CALL } from '../src/session.js'
+
 import {
   anthropic,
   ask,
@@ -214,6 +216,7 @@ describe('a spoken turn', () => {
   })
 
   scenario('W14 the turn cap per call is spoken as rate_limited and reaches no model', async () => {
+    expect(MAX_TURNS_PER_CALL).toBe(50)
     anthropic.script(answer('Prvi.'))
     const call = await openCall({ maxTurns: 1 })
     expect((await (await ask(call, 'Jedan.')).done).text).toBe('Prvi.')
@@ -232,6 +235,57 @@ describe('a spoken turn', () => {
     const out = await (await ask(call, 'Halo?')).done
     expect(out.text).toBe(MESSAGES_HR.unauthorized)
     expect(anthropic.calls).toHaveLength(0)
+  })
+
+  scenario('W14c a failed identity lookup is spoken as internal_error, not as "not signed in"', async () => {
+    const call = await openCall()
+    await call.identity.ctx()
+    call.clock.ms += 60_000
+    db.fault((r) => r.table === 'voice_calls' && r.method === 'GET', { status: 500 })
+    const out = await (await ask(call, 'Halo?')).done
+    expect(out.text).toBe(MESSAGES_HR.internal_error)
+    expect(anthropic.calls).toHaveLength(0)
+    expect(
+      logs.some((l) => l.line.includes('identity refused') && l.line.includes('"code":"internal_error"')),
+    ).toBe(true)
+  })
+
+  scenario(
+    'W16 the request timeout aborts the loop and is spoken; only the user row is written',
+    async () => {
+      anthropic.script({ hangUntilAborted: true })
+      const call = await openCall({ settings: { requestTimeoutMs: 40 } })
+      const out = await (await ask(call, 'Halo?')).done
+      expect(out.text).toBe(MESSAGES_HR.request_timeout)
+      await call.session.settle()
+      expect(kinds(call.sessionId)).toEqual(['user'])
+      expect(logs.some((l) => l.line.includes('request timeout'))).toBe(true)
+      expect(logs.some((l) => l.line.includes('"outcome":"request_timeout"'))).toBe(true)
+    },
+  )
+
+  scenario('W17 a failed save is logged without the text; the next turn still saves', async () => {
+    anthropic.script(answer('Prvi odgovor.'), answer('Drugi odgovor.'))
+    const call = await openCall()
+    db.fault((r) => r.table === 'ai_messages' && r.method === 'POST', { status: 500 })
+    expect((await (await ask(call, 'Prvo pitanje?')).done).text).toBe('Prvi odgovor.')
+    await call.session.settle()
+    expect(rowsOf(call.sessionId)).toHaveLength(0)
+    const failed = logs.find((l) => l.line.includes('persist failed'))
+    expect(failed?.level).toBe('error')
+    expect(failed?.line).toContain('"rows":2')
+    for (const l of logs) {
+      expect(l.line).not.toContain('Prvo pitanje')
+      expect(l.line).not.toContain('Prvi odgovor')
+    }
+    await (
+      await ask(call, 'Drugo pitanje?', [
+        { role: 'user', text: 'Prvo pitanje?' },
+        { role: 'assistant', text: 'Prvi odgovor.' },
+      ])
+    ).done
+    await call.session.settle()
+    expect(kinds(call.sessionId)).toEqual(['user', 'assistant'])
   })
 
   scenario('W05b the demo pack is what the worker registers', async () => {
