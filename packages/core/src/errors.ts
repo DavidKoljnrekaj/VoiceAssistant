@@ -9,6 +9,8 @@ export type ErrorCode =
   | 'bad_request'
   | 'message_too_long'
   | 'session_not_found'
+  | 'not_found'
+  | 'method_not_allowed'
   | 'payload_too_large'
   | 'rate_limited'
   | 'internal_error'
@@ -23,6 +25,7 @@ export type ErrorCode =
   | 'request_timeout'
   | 'tool_limit_reached'
   | 'cancelled'
+  | 'voice_dispatch_failed'
 
 /** User-facing messages. Ported from Landmark where it had one. <!-- needs native review --> */
 export const MESSAGES_HR: Record<ErrorCode, string> = {
@@ -31,6 +34,8 @@ export const MESSAGES_HR: Record<ErrorCode, string> = {
   bad_request: 'Neispravan zahtjev.',
   message_too_long: 'Poruka je predugačka.',
   session_not_found: 'Razgovor nije pronađen.',
+  not_found: 'Nije pronađeno.',
+  method_not_allowed: 'Metoda nije dopuštena.',
   payload_too_large: 'Zahtjev je prevelik.',
   rate_limited: 'Previše zahtjeva. Pokušajte ponovno za nekoliko minuta.',
   internal_error: 'Došlo je do greške. Pokušajte ponovno.',
@@ -45,6 +50,7 @@ export const MESSAGES_HR: Record<ErrorCode, string> = {
   request_timeout: 'Odgovor je trajao predugo. Pokušajte ponovno.',
   tool_limit_reached: 'Dostignut je limit poziva alata. Pokušajte preformulirati pitanje.',
   cancelled: 'Zahtjev je prekinut.',
+  voice_dispatch_failed: 'Glasovni poziv nije uspio. Pokušajte ponovno.',
 }
 
 export interface MappedError {

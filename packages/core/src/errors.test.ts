@@ -61,7 +61,7 @@ describe('mapAnthropicError', () => {
 
   it('X05: every code has a non-empty Croatian message', () => {
     const codes = Object.keys(MESSAGES_HR) as ErrorCode[]
-    expect(codes).toHaveLength(19)
+    expect(codes).toHaveLength(22)
     for (const code of codes) expect(MESSAGES_HR[code].length).toBeGreaterThan(5)
   })
 })

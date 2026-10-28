@@ -14,10 +14,12 @@ paths:
   | 400    | `bad_request`, `message_too_long` |
   | 401    | `unauthorized`                    |
   | 403    | `no_profile`                      |
-  | 404    | `session_not_found`               |
+  | 404    | `session_not_found`, `not_found`  |
+  | 405    | `method_not_allowed`              |
   | 413    | `payload_too_large`               |
   | 429    | `rate_limited`                    |
   | 500    | `internal_error`                  |
+  | 502    | `voice_dispatch_failed`           |
 
   Mid-stream failures are `error` events on the already-open 200 stream.
 

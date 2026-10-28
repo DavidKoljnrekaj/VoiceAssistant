@@ -10,8 +10,10 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
 - **Check:** Confirmed (every file is marked)
 - **Where:** `packages/core/src/errors.ts` (`MESSAGES_HR`), `packages/core/src/prompts/*.hr.ts`,
-  `buildUserContext` in `packages/core/src/prompts/index.ts`; later the filler and refusal line of
-  the spoken sink (3c)
+  `buildUserContext` in `packages/core/src/prompts/index.ts`, `TRUNCATED_HR` in
+  `packages/core/src/loop/orchestrator.ts`, the summary banner in `loop/history.ts`; in the API
+  the route context line (`apps/api/src/chat/route-context.ts`) and the voice session title
+  (`apps/api/src/voice/calls.ts`); later the filler and refusal line of the spoken sink (3c)
 - **What happens:** users read and hear placeholder Croatian written by the port, not by a native
   speaker; the voice prompt is Landmark's with the product name and role names swapped
 - **Fix direction:** a native speaker reads every `<!-- needs native review -->` block, the marks
