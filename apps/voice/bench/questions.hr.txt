@@ -1,0 +1,15 @@
+# The bench's question set: ten product-neutral Croatian questions the demo pack can answer
+# (search_items and get_item over the demo catalogue), plus two small-talk lines. One question
+# per line as `id|text`; `#` starts a comment. <!-- needs native review -->
+q01|Koji stolovi postoje u katalogu?
+q02|Koliko košta stolna lampa?
+q03|Imate li uredsku stolicu i koliko košta?
+q04|Što sve ima u kategoriji namještaj?
+q05|Koliko košta prijenosno računalo?
+q06|Koji monitori su dostupni?
+q07|Ima li kabela u katalogu i po kojoj cijeni?
+q08|Reci mi detalje o radnom stolu.
+q09|Koliko artikala ima u kategoriji promo?
+q10|Što je najjeftinije u katalogu?
+hello|Bok, kako si?
+thanks|Hvala, to je sve za sada.

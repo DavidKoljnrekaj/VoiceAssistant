@@ -1,0 +1,22 @@
+# Vocabulary hints for Soniox stt-rt-v5: terms the caller is likely to say that general
+# Croatian speech models mishear. One term per line; `#` starts a comment. Product-neutral
+# for the skeleton: the demo catalogue's item names and the words the demo tools understand.
+# Integration packs add their own domain terms (project names, subcontractors) later.
+asistent
+katalog
+artikl
+stavka
+cijena
+kategorija
+napomena
+stolna lampa
+radni stol
+uredska stolica
+prijenosno računalo
+monitor
+kabel
+kupon
+OIB
+IBAN
+PDV
+eura
