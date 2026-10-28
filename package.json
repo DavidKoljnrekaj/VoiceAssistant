@@ -33,7 +33,13 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
-    ]
+      "esbuild",
+      "onnxruntime-node",
+      "@livekit/local-inference"
+    ],
+    "overrides": {
+      "sharp": "0.35.5",
+      "adm-zip": "0.6.1"
+    }
   }
 }

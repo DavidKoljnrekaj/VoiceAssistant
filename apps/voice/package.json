@@ -8,9 +8,28 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "dev": "node --watch src/index.ts",
+    "dev": "tsx src/agent.ts dev",
+    "start": "node --import tsx src/agent.ts start",
+    "bench": "node --import tsx scripts/llm-bench.ts",
+    "call-test": "node --import tsx scripts/call-test.ts",
     "build": "tsc -p tsconfig.json --noEmit false",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
+    "@livekit/agents": "1.9.2",
+    "@livekit/agents-plugin-elevenlabs": "1.9.2",
+    "@livekit/agents-plugin-silero": "1.9.2",
+    "@livekit/agents-plugin-soniox": "1.9.2",
+    "@livekit/rtc-node": "1.1.0",
+    "@va/core": "workspace:*",
+    "@va/db": "workspace:*",
+    "@va/tools-demo": "workspace:*",
+    "onnxruntime-node": "1.24.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
   }
 }
