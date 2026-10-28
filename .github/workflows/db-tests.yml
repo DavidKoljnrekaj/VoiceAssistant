@@ -2,7 +2,6 @@ name: Database tests
 
 # pgTAP tests in supabase/tests/database/ against a local database built from every migration.
 # No secrets: everything runs inside the runner and nothing touches a linked project.
-# Until Part 2 adds supabase/, the job only checks that the directory is absent and passes.
 # See docs/TESTING.md → Database tests.
 
 on:
@@ -27,14 +26,8 @@ jobs:
         with:
           version: 2.99.0 # the version used locally; bump both together
 
-      - name: Start Supabase (applies every migration)
-        if: hashFiles('supabase/config.toml') != ''
+      - name: Start Supabase (applies every migration and the seed)
         run: supabase start
 
       - name: Run database tests
-        if: hashFiles('supabase/config.toml') != ''
         run: supabase test db
-
-      - name: Nothing to test yet
-        if: hashFiles('supabase/config.toml') == ''
-        run: echo "supabase/ does not exist yet (Part 2); nothing to test."
