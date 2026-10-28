@@ -1,5 +1,5 @@
 // @va/core public surface. Test helpers (fakes, fixtures, harness) are exported from
-// `@va/core/test`. The spoken-text sink arrives with Part 3c.
+// `@va/core/test`.
 export { authenticateToken, isAuthError } from './auth.js'
 export type { AuthContext, AuthError, AuthResult, Language, Role } from './auth.js'
 export { CHANNEL_DEFAULTS, channelSettings } from './channel.js'
@@ -33,6 +33,9 @@ export { FALLBACK_BETA, modelProfile } from './model.js'
 export type { ModelExtra, ModelProfile } from './model.js'
 export { buildStaticSystemPrompt, buildUserContext, DOMAIN_RULES_HR } from './prompts/index.js'
 export { BufferedSink } from './sinks/buffered.js'
+export { speakable } from './sinks/speakable.js'
+export { FILLERS_HR, SpokenTextSink } from './sinks/spoken.js'
+export type { SpokenEnd } from './sinks/spoken.js'
 export { defineTool } from './tools/define.js'
 export type { ToolDefinition, ToolHandlerExtras, ToolPack } from './tools/define.js'
 export { CHANNEL_ALLOWLIST, ToolRegistry } from './tools/registry.js'
