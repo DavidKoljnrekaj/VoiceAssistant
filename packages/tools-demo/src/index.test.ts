@@ -1,9 +1,22 @@
-// The demo pack against the fakes, as the user. The scenario tests through the loop (E04, E06,
-// E08, E09) arrive with Part 3b; these pin the handlers, the strict schemas and the allowlist.
+// The demo pack against the fakes, as the user: the handlers, the strict schemas, the allowlist,
+// and two scenarios through the real loop (D10, D11).
 import { describe, expect, it } from 'vitest'
 
 import { CHANNEL_ALLOWLIST, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
-import { authAs, clientOf, db, ITEMS, reset, USERS } from '@va/core/test'
+import {
+  anthropic,
+  answer,
+  authAs,
+  callTools,
+  clientOf,
+  db,
+  ITEMS,
+  reset,
+  runChat,
+  scenario,
+  toolUse,
+  USERS,
+} from '@va/core/test'
 
 import { demoPack, createNote, getItem, searchItems } from './index.js'
 
@@ -149,4 +162,49 @@ describe('@va/tools-demo', () => {
       /search_items failed/,
     )
   })
+
+  scenario(
+    'D10 through the loop: search_items runs as the user, its result reaches the model and the tool_result row',
+    async () => {
+      anthropic.script(callTools(toolUse('search_items', { query: 'stol' })), answer('Tri stavke.'))
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'Koji stolovi postoje?', {
+        packs: [demoPack],
+        allowlist: CHANNEL_ALLOWLIST,
+      })
+      expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual([
+        'create_note',
+        'get_item',
+        'search_items',
+      ])
+      const result = run.sink.toolResults[0]!.output as { items: { name: string }[]; total: number }
+      expect(run.sink.toolResults[0]!.isError).toBe(false)
+      expect(result.total).toBe(3)
+      expect(result.items.map((i) => i.name)).toEqual(['Radni stol', 'Stolna lampa', 'Uredska stolica'])
+      expect(clientOf(db.requestsTo('demo_items', 'GET')[0]!)).toBe('user')
+      expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
+
+  scenario(
+    'D11 through the loop on voice: create_note is not advertised and is refused at dispatch',
+    async () => {
+      anthropic.script(
+        callTools(toolUse('create_note', { item_id: ITEMS.lamp.id, text: 'x' })),
+        answer('Ne mogu.'),
+      )
+      const ctx = await authAs('admin')
+      const run = await runChat(ctx, 'Zabilježi nešto', {
+        channel: 'voice',
+        packs: [demoPack],
+        allowlist: CHANNEL_ALLOWLIST,
+      })
+      expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual(['get_item', 'search_items'])
+      expect(run.sink.toolResults[0]!.output).toEqual({
+        error: expect.stringMatching(/not_permitted_on_channel/),
+      })
+      expect(db.rows('demo_notes')).toHaveLength(0)
+    },
+  )
 })

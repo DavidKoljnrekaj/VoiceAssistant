@@ -85,6 +85,7 @@ export class FakeAnthropic {
   rejections: string[] = []
   validate = true
   private msgCounter = 0
+  private hooks: Array<(call: CapturedCall) => void> = []
 
   reset(): void {
     this.queue = []
@@ -92,6 +93,12 @@ export class FakeAnthropic {
     this.unexpectedCalls = 0
     this.rejections = []
     this.validate = true
+    this.hooks = []
+  }
+
+  /** Runs when a request arrives, after it is recorded and before it is served. */
+  onRequest(hook: (call: CapturedCall) => void): void {
+    this.hooks.push(hook)
   }
 
   script(...turns: Scripted[]): void {
@@ -111,6 +118,7 @@ export class FakeAnthropic {
     const body = JSON.parse(await req.text()) as CapturedCall['body']
     const call: CapturedCall = { body, headers: req.headers }
     this.calls.push(call)
+    for (const h of this.hooks) h(call)
 
     if (this.validate) {
       const problem = validateConversation(body.messages)
