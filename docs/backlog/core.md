@@ -1,6 +1,6 @@
 # Backlog — core
 
-Ids: CORE-4 (next free)
+Ids: CORE-5 (next free)
 
 The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
@@ -10,8 +10,8 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
 - **Check:** Confirmed (every file is marked)
 - **Where:** `packages/core/src/errors.ts` (`MESSAGES_HR`), `packages/core/src/prompts/*.hr.ts`,
-  `buildUserContext` in `packages/core/src/prompts/index.ts`; later the filler and refusal line of
-  the spoken sink (3c)
+  `buildUserContext` in `packages/core/src/prompts/index.ts`, `FILLERS_HR` in
+  `packages/core/src/sinks/spoken.ts` (the refusal line is `MESSAGES_HR.model_refused`)
 - **What happens:** users read and hear placeholder Croatian written by the port, not by a native
   speaker; the voice prompt is Landmark's with the product name and role names swapped
 - **Fix direction:** a native speaker reads every `<!-- needs native review -->` block, the marks
@@ -46,6 +46,19 @@ public.app_user_id())` (the insert returns a representation, which needs the SEL
 - **Fix direction:** port Landmark's `maybeCompactSession` (`planCompaction`,
   `renderTurnsForSummary`, the summary model call) as a post-turn step owned by the API's stream
   worker, off the user's critical path; the chat channel setting `compaction` turns it on
+
+### CORE-4 · Low · OQ: `speakable` runs per released chunk, so markup that straddles two chunks escapes it
+
+- **Check:** Code reading
+- **Where:** `packages/core/src/sinks/spoken.ts` (`say` applies `speakable` to each chunk;
+  `flushWords` cuts at the last whitespace)
+- **What happens:** the acronym rules are safe because a chunk never ends inside a word, but a
+  markdown link whose text contains a space (`[dvije riječi](url)`) or a run of blank lines split
+  across deltas is released in two chunks and the link or newline rule sees neither half whole.
+  The voice prompt forbids links and markdown, so `speakable` is the backstop, not the rule
+- **Fix direction:** hold the pending text while it contains an unclosed `[` or `(`, or apply
+  `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
+  `/bench-voice` before changing the release point
 
 ## Resolved
 
