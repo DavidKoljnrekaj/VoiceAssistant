@@ -28,7 +28,7 @@ VoiceAssistant/
 ```
 web ──HTTP──▶ api ──▶ core ──▶ db
               voice ─▶ core ──▶ db
-              tools-* ─▶ core (types only)
+              tools-* ─▶ core (defineTool and types)
 ```
 
 `core` never imports an app, never does HTTP, never imports LiveKit or React. Packages are
@@ -66,6 +66,17 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 | request timeout           | 90 s                                           | 25 s                                                                              |
 | rate limits               | 20 user turns / 5 min, 200 / day               | 50 turns per call, 20 calls per user per day, 3 concurrent calls globally         |
 | compaction                | later (port Landmark `context-window.ts`)      | off                                                                               |
+
+## Data
+
+Four tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
+picks the presentation), `ai_sessions` (one conversation per row; `channel` already allows
+chat, voice, whatsapp and phone), `ai_messages` (one Anthropic message per row, a tree through
+`parent_id`; `turn_kind` separates real user turns from tool results) and `voice_calls` (the
+caller's JWT handed to the voice worker by an opaque token, service role only). Signed-in users
+read their own sessions and messages; every write goes through the API with the service role.
+`ai_session_history(leaf, max_rows)` is the bounded history read. Details, grants and the seed
+users are in `docs/DB.md`.
 
 ## Where things live
 

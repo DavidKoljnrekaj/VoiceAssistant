@@ -12,19 +12,19 @@ rules). The scope `@va` is a placeholder until the product has a name.
 
 ## Commands
 
-| Command                     | What it does                                                                  |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `pnpm install`              | Install every workspace package (lockfile is at the root)                     |
-| `pnpm dev`                  | Run every app's `dev` script in parallel                                      |
-| `pnpm --filter @va/api dev` | One app (`@va/api`, `@va/voice`, `@va/web`)                                   |
-| `pnpm typecheck`            | `tsc --noEmit` in every package                                               |
-| `pnpm lint`                 | ESLint over the whole repo (`pnpm exec eslint <files>` for a subset)          |
-| `pnpm test`                 | Every Vitest suite (`pnpm exec vitest run <path>` for one)                    |
-| `pnpm test:watch`           | Vitest in watch mode                                                          |
-| `pnpm test:db`              | pgTAP tests against the local Supabase stack (Part 2; needs `supabase start`) |
-| `pnpm db:types`             | Regenerate `packages/db/src/database.ts` (Part 2; only through `/db-types`)   |
-| `pnpm audit`                | Production dependency audit, fails on high                                    |
-| `pnpm format`               | Prettier over the repo (a hook formats every file you edit anyway)            |
+| Command                     | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm install`              | Install every workspace package (lockfile is at the root)                                   |
+| `pnpm dev`                  | Run every app's `dev` script in parallel                                                    |
+| `pnpm --filter @va/api dev` | One app (`@va/api`, `@va/voice`, `@va/web`)                                                 |
+| `pnpm typecheck`            | `tsc --noEmit` in every package                                                             |
+| `pnpm lint`                 | ESLint over the whole repo (`pnpm exec eslint <files>` for a subset)                        |
+| `pnpm test`                 | Every Vitest suite (`pnpm exec vitest run <path>` for one)                                  |
+| `pnpm test:watch`           | Vitest in watch mode                                                                        |
+| `pnpm test:db`              | pgTAP tests against the local Supabase stack (needs `supabase start`)                       |
+| `pnpm db:types`             | Regenerate `packages/db/src/database.ts` from the linked project (only through `/db-types`) |
+| `pnpm audit`                | Production dependency audit, fails on high                                                  |
+| `pnpm format`               | Prettier over the repo (a hook formats every file you edit anyway)                          |
 
 Before saying work is done run `/done`. CI runs typecheck, lint, unit tests, audit and pgTAP on
 every push. A Stop hook runs typecheck and the related tests before a turn can end.
@@ -45,7 +45,7 @@ packages/tools-demo  @va/tools-demo  example tool pack (the contract for real pa
 apps/api             @va/api         Hono: /chat (SSE), /voice/sessions, /health
 apps/voice           @va/voice       LiveKit Agents worker; imports @va/core in-process
 apps/web             @va/web         React PWA: auth, chat panel, call button
-supabase/            config, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
+supabase/            config, migrations/, tests/database/ (pgTAP), seed.sql
 docs/                one doc per package, decisions/, backlog/, plan/
 tools/               repo-level scripts only
 ```

@@ -47,4 +47,7 @@ ranking. Never reuse or renumber an id: tests and commits quote them.
 
 ## Open work, ranked
 
-Nothing yet. Rank by what goes wrong if the item is left, then by how small the job is.
+Rank by what goes wrong if the item is left, then by how small the job is.
+
+1. `CORE-1` native review of every Croatian string before a user hears or reads one
+2. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)
