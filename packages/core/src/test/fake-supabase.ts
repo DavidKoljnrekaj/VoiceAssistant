@@ -9,7 +9,7 @@
 // or FK hint, with `!inner`; filters eq/neq/gt/gte/lt/lte/like/ilike/is/in, `not.` negation,
 // embedded filters (`alias.col`) and `or=(...)`; order with nulls first/last; limit/offset;
 // `Prefer: count=exact` (+ HEAD); `vnd.pgrst.object+json` (single); insert / update / delete
-// with `return=representation`; and RPCs registered by the test.
+// with `return=representation` (delete returns the removed rows); and RPCs registered by the test.
 
 export type Row = Record<string, unknown>
 
@@ -307,8 +307,13 @@ export class FakeSupabase {
           )
         }
         case 'DELETE': {
-          this.tables[table] = rows.filter((r) => !base.every((c) => evalCond(r, c)))
-          return new Response(null, { status: 204 })
+          const gone = rows.filter((r) => base.every((c) => evalCond(r, c)))
+          this.tables[table] = rows.filter((r) => !gone.includes(r))
+          if (!returnRep) return new Response(null, { status: 204 })
+          return this.respond(
+            gone.map((r) => this.project(table, r, select, embedded)!),
+            wantsObject,
+          )
         }
       }
     } catch (e) {
