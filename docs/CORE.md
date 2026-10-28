@@ -3,9 +3,9 @@
 The engine behind every channel: one loop, one tool registry, one role gate, one prompt lineage.
 A channel supplies a sink, a store, loop hooks and a settings row; nothing else differs. The
 plan is `docs/plan/03-core-engine.md`; the invariants it enforces are in `CLAUDE.md` and
-`.claude/rules/engine.md`. Parts 3a and 3b are built: the types, the tool registry, the prompts,
-the model profiles, the error catalogue, the fakes, the loop, dispatch, history assembly and the
-buffered sink. The spoken-text sink (3c) is marked as such below.
+`.claude/rules/engine.md`. Part 3 is built in full: the types, the tool registry, the prompts,
+the model profiles, the error catalogue, the fakes, the loop, dispatch, history assembly, the
+buffered sink and the spoken-text sink.
 
 ## Layout
 
@@ -20,7 +20,7 @@ packages/core/src/
 ├── prompts/              DOMAIN_RULES_HR, chat and voice blocks, buildStaticSystemPrompt, buildUserContext
 ├── tools/                defineTool, ToolRegistry, CHANNEL_ALLOWLIST, toAnthropicTool
 ├── loop/                 ports, orchestrator, model-call, tool-round, dispatch, history
-├── sinks/                BufferedSink; (3c) SpokenTextSink, speakable
+├── sinks/                BufferedSink, SpokenTextSink, speakable
 └── test/                 fake-anthropic, fake-supabase, fixtures, tools, harness → exported as @va/core/test
 packages/tools-demo/src/  the example pack: search_items, get_item, create_note
 ```
@@ -113,6 +113,41 @@ synthetic `is_error` results (`interrupted before the tool returned`), appended 
 folded into the first kept message as a banner; above the ceiling (chars / 4) whole oldest turns
 are dropped, at least one kept. `applyMessageCacheBreakpoint` moves the message breakpoint to the
 last block of the last message before every call. The compaction writer is not built (`CORE-3`).
+
+## Sinks
+
+`BufferedSink` keeps everything (`text`, `blocks`, `toolCalls`, `toolResults`, `doneEvent`,
+`errorEvent`, `order`): the tests and any non-streamed response use it. Chat's SSE sink lives in
+the API (`docs/API.md`). The voice sink lives here, so every later spoken channel (phone) reuses
+it.
+
+### SpokenTextSink
+
+`new SpokenTextSink(say, end, pickFiller?)` turns the loop's events into sentences for
+text-to-speech and nothing else: `say(text)` receives what to speak, `end('done' | 'error')` is
+called once after `done` or `error`, `pickFiller` picks the filler sentence (random from
+`FILLERS_HR` by default; tests pin one). Landmark's `OpenAiChunkSink` without its wire format: the
+voice worker runs the loop in-process and hands `say` to the TTS adapter.
+
+- `textDelta` is spoken a word at a time, up to the last whitespace, so an abbreviation is never
+  split across two chunks before `speakable()` sees it. The first sentence of every stretch of
+  text is **held** until a second sentence starts; if a tool call starts instead, the held
+  sentence was the model announcing a lookup and is dropped (the filler covers it).
+- `toolStarting` speaks one filler per request (`Samo trenutak, provjeravam.` and two
+  variants), followed by `\n\n` so the TTS synthesises it at once instead of waiting for more
+  text.
+- `textBlock` is spoken only when its text was not already streamed as deltas: the loop's own
+  messages (iteration cap, truncation) reach the caller, the model's answer is not repeated.
+- `toolCall` and `toolResult` are no-ops: nothing about tools is spoken.
+- `done` flushes what is pending; on `refusal` with nothing spoken it says
+  `MESSAGES_HR.model_refused`. `error` flushes, then speaks the Croatian message. Both call `end`.
+- Everything goes through `speakable()`. `spoken` holds the whole spoken text; `firstOutputAt`
+  (`performance.now()`) is when the first text reached `say`, for the worker's timing log.
+
+`speakable(text)` is pure and deterministic: TIC, OIB and IBAN become declined lower-case words
+(`TIC-u` → `ticu`), `EUR` and `€` become `eura`, markdown links and images are reduced to their
+text, `**`, `__`, backticks, headings and list bullets are stripped, and three or more newlines
+collapse to two. The Croatian strings are marked for native review (`CORE-1`).
 
 ## Channels
 
@@ -299,5 +334,5 @@ VA_TEST_LOGS=1 pnpm exec vitest run packages/core/src/auth.test.ts
 Suites: `C` settings, `M` model profiles, `X` errors (through the real SDK), `A` identity, `P`
 prompts, `T` registry and schema, `F` fake Anthropic, `G` fake Supabase (GoTrue and PostgREST),
 `D` the demo pack (handlers, and `D10`/`D11` through the loop), `E` the loop
-(`loop/orchestrator.test.ts`, `loop/abort.test.ts`), `H` history assembly. The `S`(poken)
-scenarios come with 3c.
+(`loop/orchestrator.test.ts`, `loop/abort.test.ts`), `H` history assembly, `S` the spoken sink
+and `speakable` (`sinks/spoken.test.ts`).
