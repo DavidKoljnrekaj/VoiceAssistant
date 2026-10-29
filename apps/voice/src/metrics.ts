@@ -3,7 +3,7 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { log } from '@va/core'
+import { errorReason, log } from '@va/core'
 
 import { LOG_TAG } from './config.js'
 
@@ -47,7 +47,7 @@ export function createMetrics(dir: string): MetricsWriter {
       } catch (err) {
         log('error', LOG_TAG, 'metrics write failed', {
           file,
-          reason: err instanceof Error ? err.message : String(err),
+          reason: errorReason(err),
         })
       }
     },

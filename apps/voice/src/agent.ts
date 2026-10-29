@@ -22,7 +22,7 @@ import {
 import { RoomEvent } from '@livekit/rtc-node'
 import Anthropic from '@anthropic-ai/sdk'
 
-import { channelSettings, log, ToolRegistry } from '@va/core'
+import { channelSettings, errorReason, log, ToolRegistry } from '@va/core'
 import { createServiceClient } from '@va/db'
 import { demoPack } from '@va/tools-demo'
 
@@ -188,7 +188,7 @@ export default defineAgent<UserData>({
         // Not marked ended: the next path (room close, shutdown) tries the delete again.
         log('error', LOG_TAG, 'call end failed', {
           ...ids,
-          reason: err instanceof Error ? err.message : String(err),
+          reason: errorReason(err),
         })
       }
     }
