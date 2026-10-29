@@ -168,8 +168,8 @@ Without the three `LIVEKIT_*` variables, start answers 500 `internal_error` and 
 
 ## Logging
 
-One JSON line per event, `tag: '[api]'`, with `request_id`, `user_id`, `session_id`, codes and
-timings. Never the message, the JWT or the call token. Per turn a `timing` line carries
+One JSON line per event (`{ ts, tag, event, …fields }`, `docs/OPS.md` → Logging), `tag: '[api]'`,
+with `request_id`, `user_id`, `session_id`, codes and timings. Never the message, the JWT or the call token. Per turn a `timing` line carries
 `auth_ms`, `prepare_ms`, `first_delta_ms` (−1 when no delta), `total_ms`, `iterations`,
 `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens` and `outcome`
 (`completed`, `client_disconnect`, `request_timeout`). `X-Request-Id` is taken from the request
@@ -184,8 +184,8 @@ pnpm --filter @va/api dev                   # tsx watch src/index.ts on PORT (30
 ```
 
 The container (`apps/api/Dockerfile`) installs the workspace with the frozen lockfile and runs
-`node --import tsx apps/api/src/index.ts`, because the workspace packages export their
-TypeScript sources (`OPS-1`). `pnpm --filter @va/api build` emits `dist/` for the day the
+`node --import tsx src/index.ts` from `apps/api` (where `tsx` resolves), because the workspace
+packages export their TypeScript sources (`OPS-1`). `pnpm --filter @va/api build` emits `dist/` for the day the
 packages do too.
 
 ### curl recipes

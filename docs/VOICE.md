@@ -292,7 +292,8 @@ The worker needs a home. Two options, both EU:
   one more thing to operate, but the data path, logs and the keys stay with us, and the bench
   can run next to it.
 
-Recorded as `VOICE-1`; decide before the first user trial. Either way `AGENT_NAME` keeps the
+Recorded as `VOICE-1` (the API and the PWA are `OPS-3`); the proposal with regions and the
+first-deploy order is `docs/OPS.md` → Deploy sketch. Decide before the first user trial. Either way `AGENT_NAME` keeps the
 worker to dispatched jobs, and nothing in the worker depends on where it runs.
 
 ## Testing

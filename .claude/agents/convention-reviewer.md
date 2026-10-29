@@ -37,7 +37,11 @@ Check each item that the diff touches:
 9. **Croatian user-facing text** — marked `<!-- needs native review -->` unless the diff says it
    was reviewed.
 10. **Docs** — the package's `docs/<PACKAGE>.md` and `docs/ARCHITECTURE.md` reflect the change;
-    a new voice-allowlisted tool has its reason in the commit message.
+    a new voice-allowlisted tool has its reason in the commit message; a new env variable is in
+    the matrix in `docs/OPS.md`; a new log line keeps to ids, codes, timings and counts.
+11. **The security checklist** — walk `docs/SECURITY.md` → The checklist and name every item the
+    diff touches (a new service-role query, a new tool, a new endpoint, a new secret, a new log
+    line, CORS, a dependency) with where the diff keeps or breaks it.
 
 Only report what you can point to. Output:
 
