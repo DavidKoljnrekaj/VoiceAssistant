@@ -46,16 +46,19 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** build the workspace to `dist` (`OPS-1`) so the job process imports compiled
   JavaScript; then the timeout can go back to the default
 
-### VOICE-5 · Low · OQ: the call's context carries no tool rounds, so the model cannot see that it looked something up
+### VOICE-5 · Medium · The call's context carries no tool rounds, so the model disowns its own earlier answer
 
-- **Check:** Confirmed (live call 2026-10-29: after a failed lookup the model's next answer said its
-  previous error message "was given without a real attempt")
+- **Check:** Confirmed twice (live calls 2026-10-29). After a failed lookup the model's next
+  answer said its previous error message "was given without a real attempt"; with real data it
+  apologised that the previous (correct) list of items "was not from the catalogue, ignore it"
+  and offered to look it up again. The caller hears a correct answer retracted
 - **Where:** `apps/voice/src/messages.ts` (by design: user and assistant text only, as Landmark)
 - **What happens:** on the second question of a call the model reasons about its own earlier
   answer without the tool results behind it, and may contradict or second-guess it aloud
-- **Fix direction:** either a prompt line ("your earlier answers in this call were based on real
-  lookups") or carry a short `[lookup: search_items → error]` marker in the assistant text of the
-  call context; measure what it costs in tokens before choosing
+- **Fix direction:** either a line in `VOICE_PRESENTATION_HR` ("your earlier answers in this
+  call came from real lookups; do not retract or apologise for them") or carry a short
+  `[lookup: search_items → 3 items]` marker in the assistant text of the call context; a prompt
+  change moves the cache key, so re-run the bench and `call-test ask` with two questions
 
 ## Resolved
 

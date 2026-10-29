@@ -167,13 +167,15 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | Date       | Commit    | What changed            | Model                      | First text p50 / p95 | Whole answer p50 / p95 | Rounds | n   |
 | ---------- | --------- | ----------------------- | -------------------------- | -------------------- | ---------------------- | ------ | --- |
 | 2026-10-29 | `6490fc2` | Part 5 baseline (bench) | `claude-sonnet-5-5`, `low` | 1.77 s / 4.95 s      | 5.94 s / 9.37 s        | 2.69   | 36  |
+| 2026-10-29 | `e57f31c` | demo tables seeded      | `claude-sonnet-5-5`, `low` | 1.85 s / 2.84 s      | 4.22 s / 9.08 s        | 2.08   | 36  |
 
-The baseline bench ran against the local stack, where the demo tables do not exist (`CORE-2`):
-every catalogue question got a tool error, the model retried with a shorter stem and then
-answered that it cannot reach the catalogue, so each one took 3 rounds. The whole-answer figure
-is therefore an upper bound for the skeleton; the first-text figure (the filler after the first
-tool call) is representative. Small talk: first text 1.5 s, whole answer 1.6 s, one round. Prompt
-cache hit on 36/36 first calls.
+The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
+catalogue question got a tool error, the model retried and then said it cannot reach the
+catalogue, so each one took 3 rounds. The second row is the same bench with the seeded catalogue
+(`20261029100000_demo_tables.sql`): one-lookup questions answer in 2 rounds at p50 3.7–4.9 s,
+the three that need a second lookup (q04, q08, q10) in 3 rounds at 6.9–8.5 s, which is Landmark's
+own figure for Sonnet 5.5 at `low` (whole answer p50 4.5 s). Small talk: first text 1.6 s, whole
+answer 1.7 s, one round. Prompt cache hit on 36/36 first calls in both runs.
 
 ### The live checklist (2026-10-29, LiveKit Cloud Frankfurt, local Supabase, Sonnet 5.5 at `low`)
 
