@@ -5,7 +5,7 @@
 # The native pieces (onnxruntime-node for Silero, @livekit/rtc-node) are prebuilt for linux-x64;
 # their build scripts are allowed through `pnpm.onlyBuiltDependencies` in the root package.json.
 # The worker is an outbound WebSocket client of LiveKit Cloud: no port is exposed.
-FROM node:24-slim AS base
+FROM node:25-slim AS base
 RUN corepack enable
 WORKDIR /app
 
