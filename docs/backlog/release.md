@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-3 (next free)
+Ids: REL-5 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -22,6 +22,17 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       latency all verified; barge-in 7/7 in `vad` mode and 5/5 (slower) in `stt`, short of the
       20-try count. Still open: the full 20 tries once a take reliably provokes a long answer, and
       the bench against a database that has the demo tables (`CORE-2`).
+
+- [ ] REL-3 · Part 6: a Lighthouse "installable" audit of the built PWA (the `build` then
+      `preview` scripts of `@va/web`, or the deployed HTTPS origin) and a DevTools check
+      that Cache Storage holds only the precached shell after a streamed turn. The build was
+      inspected on 2026-10-29 (manifest, `sw.js` with `NetworkOnly` for both backend origins);
+      the audit itself was not run.
+
+- [ ] REL-4 · Part 6: a voice call from the PWA's call button with the worker running
+      (`docs/VOICE.md` → Running locally): the agent is heard, the "Poziv u tijeku" banner shows,
+      mute and hang-up work, and `voice_calls` loses its row on hang-up. Not run on 2026-10-29
+      (the worker was not started in the session that built the button).
 
 ## Resolved
 
