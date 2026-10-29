@@ -1,0 +1,97 @@
+name: E2E smoke
+
+# The Playwright smoke (apps/web/e2e/) against the dev Supabase project: the built PWA served by
+# `vite preview`, driven in Chromium. Gated twice: the job is skipped (not failed) when the
+# secrets are absent, which is every fork pull request; and it refuses to run unless the
+# Supabase URL equals the dev project URL hardcoded below, so pointing the secret at any other
+# project (production above all) fails the job, and changing the allowed URL takes a reviewed
+# commit (Landmark's guard). Secrets: E2E_SUPABASE_URL, E2E_SUPABASE_ANON_KEY; optional
+# E2E_API_URL, E2E_EMAIL, E2E_PASSWORD (a test user on the dev project; without them the
+# signed-in case is skipped). Each secret is exposed to the one step that needs it. Traces are
+# off in CI (apps/web/playwright.config.ts), so the uploaded report holds no password or JWT.
+# See docs/OPS.md → CI.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The only Supabase project the smoke may ever talk to (docs/DB.md → Local stack).
+  E2E_ALLOWED_SUPABASE_URL: https://kdplqbldohrzsewhckgl.supabase.co
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+        run: |
+          ready=true
+          for var in E2E_SUPABASE_URL E2E_SUPABASE_ANON_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::notice::Secret $var is not set; the smoke is skipped."
+              ready=false
+            fi
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Refuse any Supabase URL but the allowlisted dev project
+        env:
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+        run: |
+          if [ "$E2E_SUPABASE_URL" != "$E2E_ALLOWED_SUPABASE_URL" ]; then
+            echo "::error::VITE_SUPABASE_URL is not the allowlisted dev URL; refusing to run."
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @va/web exec playwright install --with-deps chromium
+
+      - name: Build the PWA
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          VITE_API_URL: ${{ secrets.E2E_API_URL || 'http://127.0.0.1:3000' }}
+        run: pnpm --filter @va/web build
+
+      - name: Run the smoke
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: pnpm --filter @va/web test:e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14
