@@ -3,10 +3,11 @@
 // (`assistant-llm.ts`) hands every user turn here; the bench runs turns through it too.
 import { randomUUID } from 'node:crypto'
 
-import { type ErrorCode, type InMemoryMessage, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
+import { type ErrorCode, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
 
 import type { CallIdentity } from './call.js'
 import { LOG_TAG, type VoiceDeps } from './config.js'
+import { type CallRow, callHistory } from './messages.js'
 import { runVoiceTurn, type VoiceTurnResult } from './turn.js'
 
 /** What the caller hears when the identity cannot be read. */
@@ -23,7 +24,8 @@ export function identityCode(
 export const MAX_TURNS_PER_CALL = 50
 
 export interface TurnIO {
-  messages: InMemoryMessage[]
+  /** What the caller just said. */
+  userText: string
   say: (text: string) => Promise<void>
   end: (reason: SpokenEnd) => Promise<void>
   signal: AbortSignal
@@ -39,6 +41,8 @@ export class CallSession {
   private readonly pending = new Set<Promise<unknown>>()
   /** The call's saves run one after another, so each turn chains off the previous one's rows. */
   private saves: Promise<unknown> = Promise.resolve()
+  /** The call's own rows so far, the model's history (tool rounds included; VOICE-5). */
+  private readonly rows: CallRow[] = []
   private readonly maxTurns: number
 
   constructor(
@@ -86,7 +90,8 @@ export class CallSession {
       deps: this.deps,
       ctx,
       sessionId: this.identity.sessionId,
-      messages: io.messages,
+      history: callHistory(this.rows),
+      userText: io.userText,
       requestId,
       say: io.say,
       end: io.end,
@@ -95,6 +100,7 @@ export class CallSession {
       ...(this.options.pickFiller ? { pickFiller: this.options.pickFiller } : {}),
     })
     this.saves = result.persisted
+    this.rows.push(...result.rows)
     // Where a turn's time goes: identity, then the model and tools until the first spoken text,
     // then the rest of the answer.
     log('info', LOG_TAG, 'timing', {

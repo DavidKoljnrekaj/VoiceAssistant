@@ -196,4 +196,4 @@ provisional bubble and the interrupted marker, and a reload showed only the pers
 rename and delete through the API; the language switch survived a reload through
 `users.language`; an aborted `ai_sessions` request showed the error state with retry; no console
 errors. Not run: a Lighthouse "installable" audit (needs an HTTPS origin or `localhost` with the
-built app; `REL-3`) and a voice call from the button (the worker was not started; `REL-4`).
+built app; `REL-4`) and a voice call from the button (the worker was not started; `REL-5`).

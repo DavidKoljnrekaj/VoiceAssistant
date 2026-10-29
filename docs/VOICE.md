@@ -30,7 +30,7 @@ apps/voice/
 │   ├── job.ts              callTokenOf(metadata), acceptDispatchedJob(req): a job without a call token is refused
 │   ├── call.ts             CallIdentity: token → voice_calls → authenticateToken; 60 s cache; touch(); end()
 │   ├── config.ts           VoiceDeps, voiceLoopConfig(deps, ctx): the LoopConfig of one caller; dateLine
-│   ├── messages.ts         chat context → InMemoryMessage[] (port of voice-llm/messages.ts)
+│   ├── messages.ts         userTurnOf (the new user turn from LiveKit's context), callHistory (the call's own rows → messages)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
 │   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, chained saves, the timing line, settle()
 │   ├── session-options.ts  turn handling as data: Soniox end of turn, VAD barge-in, no preemptive generation, no recording
@@ -68,9 +68,10 @@ The plan (§3) offered two designs, to be chosen by what the installed `@livekit
 consumes a plain string chunk as spoken text, calls `cancel()` on the stream when the caller
 interrupts, and ends the current text-to-speech segment on a `FlushSentinel`. So:
 
-- `AssistantAgent.llmNode(chatCtx)` turns the call's context into messages
-  (`toAnthropicMessages`: system items dropped, user and assistant text only, consecutive roles
-  merged, last 20, first and last must be the user's) and returns `engineStream(run)`.
+- `AssistantAgent.llmNode(chatCtx)` takes only the new user turn from LiveKit's context
+  (`userTurnOf`: the trailing user items, merged; system items never) and returns
+  `engineStream(run)`. The history is the call's own rows (`callHistory`, below), not LiveKit's
+  text-only context.
 - `engineStream` hands the sink's `say` to the stream: text is enqueued as it is spoken, a
   paragraph break (`\n\n`, which the sink emits after the filler) becomes a `FlushSentinel`, `end`
   closes the stream, and the stream's `cancel()` aborts the turn's signal.
@@ -114,8 +115,13 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    `rate_limited`), reads the identity (cached up to `IDENTITY_CACHE_MS`, then the row and
    `authenticateToken` again, which picks up a rotated JWT and a changed role; a gone row is
    `call_ended`), bumps `last_seen_at` off the critical path, runs the turn and logs one
-   `timing` line. The call's saves run one after another, so each turn chains off the previous
-   one's rows even when a turn was cut short.
+   `timing` line. The model's history is the call's own rows kept in worker memory, exactly as
+   the loop wrote them (user text, assistant blocks with `tool_use`, the `tool_result` rows),
+   the last 20 rows cut on a turn boundary and assembled by the engine (`callHistory`;
+   decision 0011). LiveKit's text-only context is not used for history: a model that saw its
+   earlier answer with no lookup behind it retracted it on the next question (`VOICE-5`). The
+   call's saves run one after another, so each turn chains off the previous one's rows even
+   when a turn was cut short.
 7. While the participant is connected the worker bumps `last_seen_at` every minute, so a quiet
    caller stays inside the row's three-minute idle window.
 8. On participant disconnect, room close and job shutdown the worker waits for the deferred
@@ -167,13 +173,15 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | Date       | Commit    | What changed            | Model                      | First text p50 / p95 | Whole answer p50 / p95 | Rounds | n   |
 | ---------- | --------- | ----------------------- | -------------------------- | -------------------- | ---------------------- | ------ | --- |
 | 2026-10-29 | `6490fc2` | Part 5 baseline (bench) | `claude-sonnet-5-5`, `low` | 1.77 s / 4.95 s      | 5.94 s / 9.37 s        | 2.69   | 36  |
+| 2026-10-29 | `e57f31c` | demo tables seeded      | `claude-sonnet-5-5`, `low` | 1.85 s / 2.84 s      | 4.22 s / 9.08 s        | 2.08   | 36  |
 
-The baseline bench ran against the local stack, where the demo tables do not exist (`CORE-2`):
-every catalogue question got a tool error, the model retried with a shorter stem and then
-answered that it cannot reach the catalogue, so each one took 3 rounds. The whole-answer figure
-is therefore an upper bound for the skeleton; the first-text figure (the filler after the first
-tool call) is representative. Small talk: first text 1.5 s, whole answer 1.6 s, one round. Prompt
-cache hit on 36/36 first calls.
+The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
+catalogue question got a tool error, the model retried and then said it cannot reach the
+catalogue, so each one took 3 rounds. The second row is the same bench with the seeded catalogue
+(`20261029100000_demo_tables.sql`): one-lookup questions answer in 2 rounds at p50 3.7–4.9 s,
+the three that need a second lookup (q04, q08, q10) in 3 rounds at 6.9–8.5 s, which is Landmark's
+own figure for Sonnet 5.5 at `low` (whole answer p50 4.5 s). Small talk: first text 1.6 s, whole
+answer 1.7 s, one round. Prompt cache hit on 36/36 first calls in both runs.
 
 ### The live checklist (2026-10-29, LiveKit Cloud Frankfurt, local Supabase, Sonnet 5.5 at `low`)
 

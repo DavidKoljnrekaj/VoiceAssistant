@@ -145,8 +145,16 @@ describe('a spoken turn', () => {
       ])
       expect(after[4]!.parent_id).toBe(rows[3]!.id)
       expect(after[5]!.parent_id).toBe(after[4]!.id)
-      // The model got the call's own context, not the rows.
-      expect(anthropic.calls[2]!.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
+      // The model got the call's own rows as history, tool round included (VOICE-5), then the new turn.
+      expect(anthropic.calls[2]!.body.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+        'user',
+      ])
+      expect(blocksOf(anthropic.calls[2]!.body.messages[1]!.content, 'tool_use')).toHaveLength(1)
+      expect(blocksOf(anthropic.calls[2]!.body.messages[2]!.content, 'tool_result')).toHaveLength(1)
     },
   )
 

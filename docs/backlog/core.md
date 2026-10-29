@@ -21,23 +21,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   are removed in one commit, and the voice bench is re-run because a prompt change moves the cache
   key
 
-### CORE-2 · Low · `demo_items` and `demo_notes` exist only in the fakes
-
-- **Check:** Confirmed
-- **Where:** `packages/core/src/test/fixtures.ts` seeds them; `packages/tools-demo/src/demo-db.ts`
-  types them by hand and narrows `ctx.userClient` to that shape
-- **What happens:** the demo pack cannot run against the local stack or the dev project, only
-  against the fakes. The decision the plan left open (a migration for the dev project, or fakes
-  only) is taken as fakes only for the skeleton
-- **Fix direction:** if a demo against a real database is wanted, write the two tables with
-  `/new-migration`, regenerate types with `/db-types`, and delete `demo-db.ts`. The migration must
-  enforce what the handlers assume: `demo_items` RLS on, SELECT `TO authenticated USING (true)`
-  (a company-wide catalogue; say so in the table comment), no write grant; `demo_notes` RLS on,
-  INSERT `WITH CHECK (user_id = public.app_user_id())` and SELECT `USING (user_id =
-public.app_user_id())` (the insert returns a representation, which needs the SELECT policy),
-  no UPDATE or DELETE; pgTAP as admin and member. A real pack never needs the cast: its tables
-  are in the generated `Database`
-
 ### CORE-3 · Low · The compaction writer is not implemented
 
 - **Check:** Confirmed (by design, docs/plan/03-core-engine.md §8)
@@ -65,4 +48,9 @@ public.app_user_id())` (the insert returns a representation, which needs the SEL
 
 ## Resolved
 
-Nothing yet.
+### CORE-2 · Low · `demo_items` and `demo_notes` exist only in the fakes
+
+Resolved by `supabase/migrations/20261029100000_demo_tables.sql` (with `demo_tables.test.sql` and
+the local seed). The hand-written cast in `packages/tools-demo/src/demo-db.ts` stays until the
+migration is applied to a project and `/db-types` regenerates `packages/db/src/database.ts`
+(`REL-3`).

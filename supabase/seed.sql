@@ -59,3 +59,18 @@ VALUES
    '[{"type":"tool_result","tool_use_id":"toolu_seed_01","content":"2026-10-28T10:00:00+01:00"}]',
    '30000000-0000-4000-8000-000000000002', NULL, NULL, NULL, NULL, NULL, NULL)
 ON CONFLICT (id) DO NOTHING;
+
+-- The demo catalogue the example tool pack reads: the same nine items the test fakes carry
+-- (packages/core/src/test/fixtures.ts), with Croatian categories, so the voice bench and a live
+-- call on the local stack get real answers. <!-- needs native review -->
+INSERT INTO public.demo_items (id, name, category, price, description) VALUES
+  ('00000000-0000-4000-8000-000000000501', 'Stolna lampa', 'namještaj', 49.90, 'LED stolna lampa s prigušivanjem, topla bijela svjetlost.'),
+  ('00000000-0000-4000-8000-000000000502', 'Radni stol', 'namještaj', 320.00, 'Radni stol 160 x 80 cm, hrastov furnir, podesiva visina.'),
+  ('00000000-0000-4000-8000-000000000503', 'Uredska stolica', 'namještaj', 189.50, 'Ergonomska uredska stolica s lumbalnom potporom.'),
+  ('00000000-0000-4000-8000-000000000504', 'Prijenosno računalo', 'informatika', 1299.00, 'Prijenosno računalo 14 inča, 16 GB memorije, 512 GB diska.'),
+  ('00000000-0000-4000-8000-000000000505', 'Monitor 27"', 'informatika', 275.00, 'Monitor 27 inča, 2560 x 1440, podesiv po visini.'),
+  ('00000000-0000-4000-8000-000000000506', 'Kupon 100% popusta', 'promo', 0.00, 'Promotivni kupon za jedan artikl.'),
+  ('00000000-0000-4000-8000-000000000507', 'Kutija 100 komada', 'promo', 12.00, 'Promotivne kutije, pakiranje od sto komada.'),
+  ('00000000-0000-4000-8000-000000000508', 'Kabel 1_5 m', 'informatika', 4.50, 'USB-C kabel, jedan i pol metar.'),
+  ('00000000-0000-4000-8000-000000000509', 'Kabel 125 m', 'informatika', 60.00, 'Mrežni kabel na kolutu, sto dvadeset pet metara.')
+ON CONFLICT (id) DO NOTHING;

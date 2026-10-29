@@ -16,7 +16,7 @@ import { type ChatChunk, FlushSentinel, type llm as llmNs, llm, voice } from '@l
 import { log, type SpokenEnd } from '@va/core'
 
 import { LOG_TAG } from './config.js'
-import { toAnthropicMessages } from './messages.js'
+import { userTurnOf } from './messages.js'
 import type { CallSession, TurnIO } from './session.js'
 
 export type EngineChunk = string | FlushSentinel
@@ -99,11 +99,11 @@ export class AssistantAgent extends voice.Agent {
     _toolCtx: llmNs.ToolContext,
     _modelSettings: voice.ModelSettings,
   ): Promise<ReadableStream<ChatChunk | string | FlushSentinel> | null> {
-    const messages = toAnthropicMessages(chatCtx.items)
-    if (!messages) {
+    const userText = userTurnOf(chatCtx.items)
+    if (!userText) {
       log('warn', LOG_TAG, 'no user turn to answer', { items: chatCtx.items.length })
       return null
     }
-    return engineStream((io) => this.call.turn({ messages, ...io }))
+    return engineStream((io) => this.call.turn({ userText, ...io }))
   }
 }

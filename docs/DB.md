@@ -102,13 +102,24 @@ enabled (the migration skips the schedule with a notice otherwise; re-run its la
 enabling pg_cron). The guard checks `pg_extension`, not `to_regproc('cron.schedule')`: that name
 is overloaded, so `to_regproc` is NULL even with pg_cron installed.
 
+### `demo_items`, `demo_notes` (the example tool pack, `20261029100000_demo_tables.sql`)
+
+`demo_items` is the catalogue `search_items` and `get_item` read: `id`, `name`, `category`,
+`price` (numeric, EUR), `description`, `created_at`, `updated_at` (trigger). Company-wide: every
+signed-in user reads every row; only the service role writes it. `demo_notes` is what
+`create_note` writes: `id`, `user_id` (cascade), `item_id` (cascade), `text` (≤ 2000),
+`created_at`; owner-scoped, insert as oneself and read one's own, no update or delete. The local
+seed loads the nine items the test fakes carry, so the local stack answers the voice bench.
+Until the migration is applied to a project and `/db-types` is run, the pack keeps its
+hand-written `DemoDatabase` cast (`packages/tools-demo/src/demo-db.ts`).
+
 ## Functions
 
 | Function                                    | Runs as          | Who may call                | What                                                                                                                                                             |
 | ------------------------------------------- | ---------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app_user_id()`                             | definer          | authenticated, service_role | the caller's `users.id` (from `auth.uid()`); the owner-scoping helper every policy uses                                                                          |
 | `app_user_role()`                           | definer          | authenticated, service_role | the caller's role                                                                                                                                                |
-| `set_updated_at()`                          | trigger          | —                           | `updated_at = now()` on `users` and `ai_sessions`                                                                                                                |
+| `set_updated_at()`                          | trigger          | —                           | `updated_at = now()` on `users`, `ai_sessions` and `demo_items`                                                                                                  |
 | `handle_new_auth_user()`                    | definer, trigger | —                           | creates the profile when an auth user is created                                                                                                                 |
 | `touch_session_on_message()`                | trigger          | —                           | bumps the session on message insert                                                                                                                              |
 | `ai_session_history(p_leaf_id, p_max_rows)` | invoker          | service_role only           | the active branch from a leaf, root → leaf, at most `p_max_rows` (default 200), stopping after the session's `summary_through_message_id` and including that row |
@@ -129,6 +140,8 @@ history (invariant 10).
 | `ai_sessions` | nothing | SELECT own                                            | everything   |
 | `ai_messages` | nothing | SELECT rows of own sessions                           | everything   |
 | `voice_calls` | nothing | nothing                                               | everything   |
+| `demo_items`  | nothing | SELECT every row                                      | everything   |
+| `demo_notes`  | nothing | SELECT own; INSERT as oneself                         | everything   |
 
 The grants say the same as the policies: `REVOKE ALL FROM anon, authenticated` first, then
 exactly the grants above. Role changes are an admin operation through the service role; no column
