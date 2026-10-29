@@ -46,17 +46,12 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** build the workspace to `dist` (`OPS-1`) so the job process imports compiled
   JavaScript; then the timeout can go back to the default
 
-### VOICE-5 · Low · OQ: the call's context carries no tool rounds, so the model cannot see that it looked something up
-
-- **Check:** Confirmed (live call 2026-10-29: after a failed lookup the model's next answer said its
-  previous error message "was given without a real attempt")
-- **Where:** `apps/voice/src/messages.ts` (by design: user and assistant text only, as Landmark)
-- **What happens:** on the second question of a call the model reasons about its own earlier
-  answer without the tool results behind it, and may contradict or second-guess it aloud
-- **Fix direction:** either a prompt line ("your earlier answers in this call were based on real
-  lookups") or carry a short `[lookup: search_items → error]` marker in the assistant text of the
-  call context; measure what it costs in tokens before choosing
-
 ## Resolved
 
-Nothing yet.
+### VOICE-5 · Medium · The call's context carries no tool rounds, so the model disowns its own earlier answer
+
+Resolved by decision 0011: the model's history is the call's own rows (tool rounds included),
+kept in worker memory by `CallSession` and assembled by `callHistory`; LiveKit's context supplies
+only the new user turn. A prompt line and filler stripping were tried live first and did not
+help. Confirmed live on 2026-10-29: the second question ("Koliko košta stolna lampa?") was
+answered directly from the first turn's tool result, no retraction, no new lookup.

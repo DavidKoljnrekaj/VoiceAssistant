@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-3 (next free)
+Ids: REL-4 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -22,6 +22,12 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       latency all verified; barge-in 7/7 in `vad` mode and 5/5 (slower) in `stt`, short of the
       20-try count. Still open: the full 20 tries once a take reliably provokes a long answer, and
       the bench against a database that has the demo tables (`CORE-2`).
+
+- [ ] REL-3 · Part 5: apply `20261029100000_demo_tables.sql` to the dev project (after `REL-1`, by the
+      operator), then `/db-types`, commit `packages/db/src/database.ts`, and drop the `DemoDatabase`
+      cast in `packages/tools-demo/src/demo-db.ts`. Check after applying: as a signed-in user
+      `select count(*) from demo_items` works and an insert is refused; the dev project has no demo
+      rows until someone loads them (the seed is local only).
 
 ## Resolved
 
