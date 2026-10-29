@@ -1,5 +1,9 @@
 name: Tests
 
+# The required check on main: audit, typecheck, lint, unit tests with coverage, the PWA build,
+# and a build of each container image without pushing it. Database tests are db-tests.yml; the
+# Playwright smoke is e2e.yml. See docs/OPS.md → CI.
+
 on:
   push:
     branches: [main]
@@ -14,7 +18,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -41,5 +45,46 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests
-        run: pnpm test
+      - name: Unit tests with coverage
+        run: pnpm test:coverage
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # Catches Vite config errors and anything tsc misses in JSX. The three VITE_ values are
+      # placeholders: the bundle is not deployed from here, only built.
+      - name: Build the PWA
+        run: pnpm --filter @va/web build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54431
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+          VITE_API_URL: http://127.0.0.1:3000
+
+  # Each image builds from the repo root with the frozen lockfile (apps/*/Dockerfile) and is
+  # never pushed. A job per app so a slow voice build (native onnxruntime) does not hold the
+  # fast checks; all three are required checks on main (docs/backlog/release.md).
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, voice, web]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the ${{ matrix.app }} image
+        run: |
+          docker build \
+            --file apps/${{ matrix.app }}/Dockerfile \
+            --build-arg VITE_SUPABASE_URL=http://127.0.0.1:54431 \
+            --build-arg VITE_SUPABASE_ANON_KEY=ci-placeholder \
+            --build-arg VITE_API_URL=http://127.0.0.1:3000 \
+            --tag va-${{ matrix.app }}:ci \
+            .

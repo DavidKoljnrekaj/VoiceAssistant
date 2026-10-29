@@ -10,6 +10,8 @@
 | `pnpm test:watch`                        | watch mode                                                             |
 | `pnpm exec vitest related --run <files>` | the tests that import the given source files (what the Stop hook runs) |
 | `pnpm test:db`                           | pgTAP against the local stack (`supabase start` first)                 |
+| `pnpm test:coverage`                     | every project with v8 coverage into `coverage/` (CI uploads it)        |
+| `pnpm --filter @va/web test:e2e`         | the Playwright smoke in `apps/web/e2e/` against the built PWA (below)  |
 | `pnpm typecheck`, `pnpm lint`            | the other two checks CI runs                                           |
 
 Tests live beside the code as `*.test.ts`. Each package has a `vitest.config.ts` with
@@ -62,9 +64,30 @@ auth.users (id, email)` is enough: the sign-up trigger creates the `public.users
   `has_function_privilege` until that is fixed upstream.
 - No test reads a migration's text.
 
+## Lint-style tests
+
+Two suites read the source tree instead of running it. `L04` (`packages/core/src/log-fields.test.ts`)
+finds every `log(` call under `apps/*` and `packages/*` and fails on a field named `text`,
+`message`, `content`, `transcript`, `token` or `jwt` (invariant 9; `docs/OPS.md` → Logging).
+`X01`–`X03` (`env-matrix.test.ts` in each app) fail when the first column of the matrix in
+`docs/OPS.md` does not name a variable an `env.ts` validates. Both exist so a rule in a doc cannot drift from the code silently.
+
+## The Playwright smoke
+
+`apps/web/e2e/smoke.spec.ts` drives the built PWA in Chromium through `vite preview`
+(`apps/web/playwright.config.ts`): the login page renders in Croatian with the manifest and the
+service worker (`E01`), a protected route redirects (`E02`), and with `E2E_EMAIL` /
+`E2E_PASSWORD` a sign-in reaches the composer (`E03`, skipped otherwise). No chat turn is sent,
+so no API or model key is needed. Locally: `pnpm --filter @va/web build` with `apps/web/.env`,
+then `pnpm --filter @va/web exec playwright install chromium` once and
+`pnpm --filter @va/web test:e2e`; `E2E_BASE_URL` points it at a deployed origin instead. In CI it
+is `e2e.yml`, gated on secrets and the allowlisted dev URL (`docs/OPS.md` → CI). Vitest never
+runs `e2e/` (excluded in `apps/web/vitest.config.ts`).
+
 ## Harness checks
 
 - The Stop hook (`.claude/hooks/stop-verify.mjs`) typechecks each changed package and runs the
   related tests before a Claude Code turn can end.
-- CI (`.github/workflows/test.yml`) runs install, audit, typecheck, lint and the unit tests on
-  every push and pull request to `main`; `db-tests.yml` runs pgTAP.
+- CI (`.github/workflows/test.yml`) runs install, audit, typecheck, lint, the unit tests with
+  coverage, the PWA build and a build of each container image on every push and pull request to
+  `main`; `db-tests.yml` runs pgTAP; `e2e.yml` runs the smoke when its secrets are set.

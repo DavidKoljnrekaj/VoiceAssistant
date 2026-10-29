@@ -8,6 +8,7 @@ import type { DbClient, Json } from '@va/db'
 
 import {
   type AuthContext,
+  errorReason,
   type InMemoryMessage,
   log,
   type LoopHooks,
@@ -187,7 +188,7 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
       log('error', LOG_TAG, 'persist failed', {
         ...ids,
         rows: store.rows.length + 1,
-        reason: err instanceof Error ? err.message : String(err),
+        reason: errorReason(err),
       })
     })
   return {

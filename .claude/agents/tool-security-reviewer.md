@@ -11,7 +11,9 @@ inside the model loop, and the model's input to it comes from text the user type
 handler is an injection surface. You did not write the change; assume nothing about it is right.
 
 Find the changed handlers (`packages/*/src/tools/**`, `packages/core/src/tools/**`) and read each
-in full together with `defineTool` in `@va/core` and `CHANNEL_ALLOWLIST`.
+in full together with `defineTool` in `@va/core` and `CHANNEL_ALLOWLIST`. The contract below is
+the tool part of `docs/SECURITY.md` → The checklist; read its threat notes on tools, RLS and
+injection surfaces if you have not.
 
 For every handler check:
 

@@ -16,7 +16,8 @@ packages/core/src/
 ├── auth.ts               Role, AuthContext, authenticateToken(jwt)
 ├── errors.ts             ErrorCode, MESSAGES_HR, mapAnthropicError
 ├── model.ts              modelProfile(settings) → { extra, betas }
-├── log.ts                one JSON line per event, never content
+├── log.ts                one JSON line per event ({ ts, tag, event, …fields }), never content; errorReason() cuts a
+│                         third party's message to 200 chars; log-fields.test.ts lints every call site (docs/OPS.md)
 ├── prompts/              DOMAIN_RULES_HR, chat and voice blocks, buildStaticSystemPrompt, buildUserContext
 ├── tools/                defineTool, ToolRegistry, CHANNEL_ALLOWLIST, toAnthropicTool
 ├── loop/                 ports, orchestrator, model-call, tool-round, dispatch, history

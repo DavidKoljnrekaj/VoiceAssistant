@@ -30,4 +30,6 @@ COPY packages/tools-demo ./packages/tools-demo
 RUN pnpm --filter @va/api typecheck
 EXPOSE 3000
 USER node
-CMD ["node", "--import", "tsx", "apps/api/src/index.ts"]
+# From the app's directory, so `tsx` (a dependency of @va/api, not of the root) resolves.
+WORKDIR /app/apps/api
+CMD ["node", "--import", "tsx", "src/index.ts"]

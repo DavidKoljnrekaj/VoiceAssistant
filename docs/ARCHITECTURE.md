@@ -9,17 +9,18 @@ One shared engine behind every channel. This file is the map; each package has i
 VoiceAssistant/
 ├── CLAUDE.md                     # Claude Code context (< 200 lines)
 ├── .claude/                      # settings.json, rules/, hooks/, skills/, agents/
-├── .github/workflows/            # test.yml, db-tests.yml; dependabot.yml
+├── .github/workflows/            # test.yml (checks, PWA build, image builds), db-tests.yml, e2e.yml; dependabot.yml
+├── compose.dev.yml               # api + voice + web containers against the local Supabase stack
 ├── packages/
 │   ├── core/                     # @va/core — the engine: loop, tools registry, prompts, history, sinks, fakes
 │   ├── db/                       # @va/db   — generated Supabase types, client factories, env
 │   └── tools-demo/               # @va/tools-demo — one example tool pack (the contract for real packs)
 ├── apps/
-│   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /health
-│   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process
-│   └── web/                      # @va/web   — React PWA: auth, chat panel, call button
+│   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /health; Dockerfile
+│   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile
+│   └── web/                      # @va/web   — React PWA: auth, chat panel, call button; Dockerfile (nginx), e2e/ smoke
 ├── supabase/                     # config.toml, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
-├── docs/                         # this file, one doc per package, TESTING.md, decisions/, backlog/, plan/
+├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, decisions/, backlog/, plan/
 └── tools/                        # repo-level scripts only (no app code)
 ```
 
@@ -85,19 +86,23 @@ users are in `docs/DB.md`.
 
 Every later part extends this table.
 
-| Concern                                                           | Lives in                          | Since  |
-| ----------------------------------------------------------------- | --------------------------------- | ------ |
-| Workspace tooling (TypeScript, ESLint, Prettier, Vitest projects) | root config files                 | Part 1 |
-| Claude Code harness (permissions, hooks, rules, skills, agents)   | `.claude/`                        | Part 1 |
-| CI (typecheck, lint, unit tests, audit; pgTAP)                    | `.github/workflows/`              | Part 1 |
-| Decisions                                                         | `docs/decisions/`                 | Part 1 |
-| Backlog by area, release checklist                                | `docs/backlog/`                   | Part 1 |
-| Implementation plan                                               | `docs/plan/`                      | Part 1 |
-| Schema, RLS, pgTAP, seed                                          | `supabase/`                       | Part 2 |
-| Generated types, client factories, env schema                     | `packages/db`                     | Part 2 |
-| Loop, tool registry, prompts, history, sinks, fakes               | `packages/core`                   | Part 3 |
-| Example tool pack                                                 | `packages/tools-demo`             | Part 3 |
-| HTTP API, SSE, rate limits, voice session endpoints               | `apps/api`                        | Part 4 |
-| Voice worker, bench scripts                                       | `apps/voice`                      | Part 5 |
-| PWA                                                               | `apps/web`                        | Part 6 |
-| Env, logging, deploy, security checklist                          | `docs/OPS.md`, `docs/SECURITY.md` | Part 7 |
+| Concern                                                           | Lives in                               | Since  |
+| ----------------------------------------------------------------- | -------------------------------------- | ------ |
+| Workspace tooling (TypeScript, ESLint, Prettier, Vitest projects) | root config files                      | Part 1 |
+| Claude Code harness (permissions, hooks, rules, skills, agents)   | `.claude/`                             | Part 1 |
+| CI (typecheck, lint, unit tests, audit; pgTAP)                    | `.github/workflows/`                   | Part 1 |
+| CI (coverage, PWA build, image builds; Playwright smoke)          | `.github/workflows/`                   | Part 7 |
+| Decisions                                                         | `docs/decisions/`                      | Part 1 |
+| Backlog by area, release checklist                                | `docs/backlog/`                        | Part 1 |
+| Implementation plan                                               | `docs/plan/`                           | Part 1 |
+| Schema, RLS, pgTAP, seed                                          | `supabase/`                            | Part 2 |
+| Generated types, client factories, env schema                     | `packages/db`                          | Part 2 |
+| Loop, tool registry, prompts, history, sinks, fakes               | `packages/core`                        | Part 3 |
+| Example tool pack                                                 | `packages/tools-demo`                  | Part 3 |
+| HTTP API, SSE, rate limits, voice session endpoints               | `apps/api`                             | Part 4 |
+| Voice worker, bench scripts                                       | `apps/voice`                           | Part 5 |
+| PWA                                                               | `apps/web`                             | Part 6 |
+| Env matrix, logging fields, CI, containers, deploy, runbook       | `docs/OPS.md`                          | Part 7 |
+| Security checklist, threat notes, personal data                   | `docs/SECURITY.md`                     | Part 7 |
+| The log helper and the call-site lint test                        | `packages/core/src/log.ts`             | Part 7 |
+| Container images, dev compose                                     | `apps/*/Dockerfile`, `compose.dev.yml` | Part 7 |

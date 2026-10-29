@@ -1,0 +1,79 @@
+# The three apps as containers against the local Supabase stack (`supabase start`, API on
+# 127.0.0.1:54431). A convenience for trying the images, not the dev loop: `pnpm dev` with tsx
+# watch is faster for coding. The containers reach the stack through host.docker.internal
+# (mapped to the host gateway below, which Docker Desktop and Docker Engine ≥ 20.10 support);
+# the browser reaches it through 127.0.0.1, so the PWA is built with the host-side URLs.
+#
+# Secrets come from env files outside the repo (docs/OPS.md → Configuration):
+#   ${VA_CONFIG_DIR:-$HOME/.config/va}/api.env    ANTHROPIC_API_KEY, LIVEKIT_* (optional), SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+#   ${VA_CONFIG_DIR:-$HOME/.config/va}/voice.env  LIVEKIT_*, SONIOX_API_KEY, ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, SUPABASE_*
+# and the PWA's anon key from the shell: `export SUPABASE_ANON_KEY=…` (from `supabase status`).
+# SUPABASE_URL in those files may point at 127.0.0.1; the containers override it.
+#
+#   supabase start
+#   export SUPABASE_ANON_KEY=$(supabase status -o env | sed -n 's/^ANON_KEY="\(.*\)"/\1/p')
+#   docker compose -f compose.dev.yml up --build            # api :3000, web :8080, voice (no port)
+#   docker compose -f compose.dev.yml up --build api web    # without the voice worker
+
+x-supabase: &supabase
+  SUPABASE_URL: http://host.docker.internal:54431
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - ${VA_CONFIG_DIR:-${HOME}/.config/va}/api.env
+    environment:
+      <<: *supabase
+      PORT: '3000'
+      CORS_ORIGINS: http://127.0.0.1:8080,http://localhost:8080
+    ports:
+      - '127.0.0.1:3000:3000'
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://127.0.0.1:3000/health\").then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  voice:
+    build:
+      context: .
+      dockerfile: apps/voice/Dockerfile
+    env_file:
+      - ${VA_CONFIG_DIR:-${HOME}/.config/va}/voice.env
+    environment:
+      <<: *supabase
+      AGENT_NAME: ${VOICE_AGENT_NAME:-va-voice}
+      VOICE_LOGS_DIR: /app/apps/voice/logs
+    volumes:
+      - voice-logs:/app/apps/voice/logs
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_SUPABASE_URL: http://127.0.0.1:54431
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?export SUPABASE_ANON_KEY from `supabase status`}
+        VITE_API_URL: http://127.0.0.1:3000
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - api
+
+volumes:
+  voice-logs:

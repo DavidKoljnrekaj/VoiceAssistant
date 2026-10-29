@@ -26,3 +26,12 @@ updates:
       day: monday
     cooldown:
       default-days: 14
+
+  # The base images of the three Dockerfiles (node, nginx), same cadence and cooldown.
+  - package-ecosystem: docker
+    directories: ['/apps/api', '/apps/voice', '/apps/web']
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14

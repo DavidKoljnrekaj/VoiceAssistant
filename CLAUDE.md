@@ -12,22 +12,24 @@ rules). The scope `@va` is a placeholder until the product has a name.
 
 ## Commands
 
-| Command                     | What it does                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| `pnpm install`              | Install every workspace package (lockfile is at the root)                                   |
-| `pnpm dev`                  | Run every app's `dev` script in parallel                                                    |
-| `pnpm --filter @va/api dev` | One app (`@va/api`, `@va/voice`, `@va/web`)                                                 |
-| `pnpm typecheck`            | `tsc --noEmit` in every package                                                             |
-| `pnpm lint`                 | ESLint over the whole repo (`pnpm exec eslint <files>` for a subset)                        |
-| `pnpm test`                 | Every Vitest suite (`pnpm exec vitest run <path>` for one)                                  |
-| `pnpm test:watch`           | Vitest in watch mode                                                                        |
-| `pnpm test:db`              | pgTAP tests against the local Supabase stack (needs `supabase start`)                       |
-| `pnpm db:types`             | Regenerate `packages/db/src/database.ts` from the linked project (only through `/db-types`) |
-| `pnpm audit`                | Production dependency audit, fails on high                                                  |
-| `pnpm format`               | Prettier over the repo (a hook formats every file you edit anyway)                          |
+| Command                          | What it does                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm install`                   | Install every workspace package (lockfile is at the root)                                   |
+| `pnpm dev`                       | Run every app's `dev` script in parallel                                                    |
+| `pnpm --filter @va/api dev`      | One app (`@va/api`, `@va/voice`, `@va/web`)                                                 |
+| `pnpm typecheck`                 | `tsc --noEmit` in every package                                                             |
+| `pnpm lint`                      | ESLint over the whole repo (`pnpm exec eslint <files>` for a subset)                        |
+| `pnpm test`                      | Every Vitest suite (`pnpm exec vitest run <path>` for one)                                  |
+| `pnpm test:watch`                | Vitest in watch mode                                                                        |
+| `pnpm test:coverage`             | Every suite with v8 coverage into `coverage/` (what CI uploads)                             |
+| `pnpm --filter @va/web test:e2e` | Playwright smoke against the built PWA (`docs/TESTING.md`)                                  |
+| `pnpm test:db`                   | pgTAP tests against the local Supabase stack (needs `supabase start`)                       |
+| `pnpm db:types`                  | Regenerate `packages/db/src/database.ts` from the linked project (only through `/db-types`) |
+| `pnpm audit`                     | Production dependency audit, fails on high                                                  |
+| `pnpm format`                    | Prettier over the repo (a hook formats every file you edit anyway)                          |
 
-Before saying work is done run `/done`. CI runs typecheck, lint, unit tests, audit and pgTAP on
-every push. A Stop hook runs typecheck and the related tests before a turn can end.
+Before saying work is done run `/done`. CI runs audit, typecheck, lint, unit tests with coverage, the PWA
+build, a build of each container image and pgTAP on every push. A Stop hook runs typecheck and the related tests before a turn can end.
 
 ## Stack
 
@@ -112,7 +114,9 @@ behaviour change updates its tests in the same commit, never inside a refactor.
 ## Docs, decisions, backlog
 
 `docs/<PACKAGE>.md` per package, updated in the same change as the code. `docs/ARCHITECTURE.md`
-when the layout changes. `docs/decisions/NNNN-title.md` for choices (one page). `docs/backlog/`
+when the layout changes. `docs/OPS.md` holds the env matrix (a test fails when an `env.ts` adds a
+variable it misses), the log fields and the runbook; `docs/SECURITY.md` is the checklist every PR
+is reviewed against. `docs/decisions/NNNN-title.md` for choices (one page). `docs/backlog/`
 for anything found and not fixed, with an id (`/backlog`). The implementation plan is
 `docs/plan/`; read `00-brief.md` and the current part before starting a session's work.
 

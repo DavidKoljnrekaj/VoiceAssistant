@@ -1,14 +1,15 @@
 # Backlog — release
 
-Ids: REL-6 (next free)
+Ids: REL-7 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
 
 ## Open
 
-- [ ] Part 1: create branch protection on `main` with the Actions job checks `test` and `db` as required
-      checks, and enable Dependabot security updates (repository settings → Code security).
+- [ ] Part 1 / Part 7: create branch protection on `main` with the Actions job checks `test`, `db`,
+      `docker (api)`, `docker (voice)` and `docker (web)` as required checks, and enable Dependabot
+      security updates (repository settings → Code security). `e2e` stays optional.
 - [ ] REL-1 · Part 2: apply `20261028100000_users.sql`, `20261028100100_ai_sessions_and_messages.sql` and
       `20261028100200_voice_calls.sql` to the dev project `kdplqbldohrzsewhckgl` (`supabase link` then
       `supabase db push`, both run by the operator), enable pg_cron (Dashboard → Database → Extensions)
@@ -39,6 +40,21 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       (`docs/VOICE.md` → Running locally): the agent is heard, the "Poziv u tijeku" banner shows,
       mute and hang-up work, and `voice_calls` loses its row on hang-up. Not run on 2026-10-29
       (the worker was not started in the session that built the button).
+
+- [ ] REL-6 · Part 7: the operations pieces nobody has run. (a) `compose.dev.yml`: `supabase start`,
+      export `SUPABASE_ANON_KEY`, put `api.env` and `voice.env` in `~/.config/va/`, then
+      `docker compose -f compose.dev.yml up --build api web`; check `curl localhost:3000/health`
+      and a sign-in at `http://127.0.0.1:8080`. (b) Done locally on 2026-10-29: the three images build, the web image serves the
+      shell with the caching rules, the api and voice images fail fast naming the missing
+      variables and the api image answers `/health`; watch the first `docker (*)` CI jobs on this
+      branch's pull request. (c) The repository secrets for
+      `e2e.yml` (`E2E_SUPABASE_URL` = the dev project URL, `E2E_SUPABASE_ANON_KEY`,
+      `E2E_ALLOWED_SUPABASE_URL` = the same URL, optional `E2E_API_URL`, `E2E_EMAIL`, `E2E_PASSWORD`
+      for a test user created on the dev project after `REL-1`), then one manual run of the
+      workflow (`OPS-6`). (d) Diff each `apps/*/.env.example` against the matrix in `docs/OPS.md`:
+      the session that wrote the matrix could not read the example files (the harness denies
+      `.env*`), so a stale comment or a missing name there is possible; `X01`–`X03` only check the
+      matrix against the code.
 
 ## Resolved
 
