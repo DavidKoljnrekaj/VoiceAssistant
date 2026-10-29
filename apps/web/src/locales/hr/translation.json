@@ -1,0 +1,69 @@
+{
+  "_review": "needs native review",
+  "app": {
+    "name": "Asistent"
+  },
+  "common": {
+    "cancel": "Odustani",
+    "confirm": "Potvrdi",
+    "save": "Spremi",
+    "delete": "Obriši",
+    "rename": "Preimenuj",
+    "retry": "Pokušaj ponovno",
+    "loading": "Učitavanje…",
+    "load_error_title": "Podaci se nisu učitali",
+    "load_error_description": "Provjerite vezu i pokušajte ponovno.",
+    "sign_out": "Odjava",
+    "language": "Jezik",
+    "menu": "Izbornik"
+  },
+  "auth": {
+    "title": "Prijava",
+    "subtitle": "Prijavite se svojim računom tvrtke.",
+    "email": "E-pošta",
+    "password": "Lozinka",
+    "sign_in": "Prijavi se",
+    "signing_in": "Prijava…",
+    "email_required": "Upišite e-poštu.",
+    "password_required": "Upišite lozinku.",
+    "error_invalid_credentials": "Pogrešna e-pošta ili lozinka.",
+    "error_too_many_requests": "Previše pokušaja. Pokušajte ponovno za nekoliko minuta.",
+    "error_network": "Nema veze s poslužiteljem.",
+    "error_no_profile": "Vaš račun nema korisnički profil. Obratite se administratoru.",
+    "error_unknown": "Prijava nije uspjela. Pokušajte ponovno."
+  },
+  "chat": {
+    "conversations": "Razgovori",
+    "new_conversation": "Novi razgovor",
+    "no_conversations": "Još nema razgovora.",
+    "untitled": "Bez naslova",
+    "open_sessions": "Otvori popis razgovora",
+    "close_sessions": "Zatvori popis razgovora",
+    "placeholder": "Pošaljite poruku…",
+    "send": "Pošalji",
+    "stop": "Zaustavi",
+    "empty_title": "Postavite pitanje",
+    "empty_description": "Asistent odgovara na hrvatskom i koristi alate tvrtke.",
+    "interrupted": "Odgovor prekinut.",
+    "provisional": "Nije spremljeno",
+    "rename_title": "Naslov razgovora",
+    "delete_title": "Obrisati razgovor?",
+    "delete_message": "Razgovor i sve njegove poruke bit će trajno obrisani.",
+    "session_actions": "Mogućnosti razgovora"
+  },
+  "call": {
+    "start": "Glasovni poziv",
+    "connecting": "Spajanje poziva…",
+    "live": "Poziv u tijeku",
+    "mute": "Isključi mikrofon",
+    "unmute": "Uključi mikrofon",
+    "end": "Završi poziv",
+    "mic_denied": "Mikrofon nije dostupan. Dopustite pristup mikrofonu u pregledniku.",
+    "start_failed": "Glasovni poziv nije uspio. Pokušajte ponovno.",
+    "banner": "Poziv u tijeku. Govorite s asistentom; poziv se sprema kao zaseban razgovor."
+  },
+  "lang": {
+    "hr": "Hrvatski",
+    "en": "English"
+  }
+}
