@@ -17,13 +17,11 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       minute; sign up a user and see a `public.users` row appear; then `/db-types` and commit
       `packages/db/src/database.ts`. Also check whether `DB-1` reproduces on the project's image.
 
-- [ ] REL-2 · Part 5: run the live checklist of `docs/plan/05-voice-worker.md` §10 with the keys in
-      `~/.config/va/voice.env`: the worker started with `AGENT_NAME`, a call through the API,
-      `pnpm --filter @va/voice bench 3` (record the figures in `docs/VOICE.md` → Measurements),
-      `call-test ask` with a recorded take, and `call-test bargein` 20 tries each with
-      `INTERRUPT_ON=vad` and `stt`. Check: the greeting is heard, a demo question is answered through
-      `search_items`, the turn's rows are in `ai_messages`, and the `voice_calls` row is gone after
-      the hang-up. No keys were available in the session that built Part 5.
+- [x] REL-2 · Part 5: the live checklist of `docs/plan/05-voice-worker.md` §10 ran on 2026-10-29
+      (`docs/VOICE.md` → The live checklist): worker, greeting, answers, rows, hang-up, bench and
+      latency all verified; barge-in 7/7 in `vad` mode and 5/5 (slower) in `stt`, short of the
+      20-try count. Still open: the full 20 tries once a take reliably provokes a long answer, and
+      the bench against a database that has the demo tables (`CORE-2`).
 
 ## Resolved
 

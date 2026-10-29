@@ -164,16 +164,41 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 
 ### Measurements
 
-| Date       | Commit | What changed                   | Model                      | First text p50 / p95 | Whole answer p50 / p95 | Rounds | n   |
-| ---------- | ------ | ------------------------------ | -------------------------- | -------------------- | ---------------------- | ------ | --- |
-| 2026-10-28 | Part 5 | Not run: no vendor keys in the | `claude-sonnet-5-5`, `low` | —                    | —                      | —      | —   |
-|            |        | session that built the worker  |                            |                      |                        |        |     |
+| Date       | Commit    | What changed            | Model                      | First text p50 / p95 | Whole answer p50 / p95 | Rounds | n   |
+| ---------- | --------- | ----------------------- | -------------------------- | -------------------- | ---------------------- | ------ | --- |
+| 2026-10-29 | `6490fc2` | Part 5 baseline (bench) | `claude-sonnet-5-5`, `low` | 1.77 s / 4.95 s      | 5.94 s / 9.37 s        | 2.69   | 36  |
 
-**The live checklist (plan §10) has not been run** (`REL-2`): the session that built Part 5 had
-no Anthropic, Soniox, ElevenLabs or LiveKit keys. The W scenarios prove the worker's logic
-against the fakes; the live run (worker starts, takes a dispatched job, greets, answers through
-the demo tools, persists the turn, deletes the call on hang-up) and the latency figures are the
-operator's step, with the commands below.
+The baseline bench ran against the local stack, where the demo tables do not exist (`CORE-2`):
+every catalogue question got a tool error, the model retried with a shorter stem and then
+answered that it cannot reach the catalogue, so each one took 3 rounds. The whole-answer figure
+is therefore an upper bound for the skeleton; the first-text figure (the filler after the first
+tool call) is representative. Small talk: first text 1.5 s, whole answer 1.6 s, one round. Prompt
+cache hit on 36/36 first calls.
+
+### The live checklist (2026-10-29, LiveKit Cloud Frankfurt, local Supabase, Sonnet 5.5 at `low`)
+
+Run with the operator's keys through `call-test.ts` (the API and the worker on a dev machine,
+Landmark's recorded takes plus four takes synthesised with ElevenLabs for the catalogue and
+barge-in cases). Everything in plan §10 was exercised except the full 20-try barge-in count:
+
+| Check                                                      | Result                                                                                                                                          |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worker starts, registers under `va-voice`, takes the job   | Yes. The first call timed out LiveKit's 10 s runner initialisation (tsx import ~6 s, `VOICE-4`); fixed with a 60 s timeout and one idle process |
+| Greeting heard                                             | Yes, ~1 s of TTS after connect; the warm-up ran meanwhile (2.75 s, cache read 2434 tokens)                                                      |
+| Question transcribed, answered through the engine          | Yes: Soniox heard the take correctly; the engine answered in Croatian; the catalogue questions spoke the filler first, then the answer          |
+| Rows persisted, chained                                    | Yes: `user` → `assistant` per turn, `parent_id` chained, one insert per turn                                                                    |
+| Credential deleted on hang-up                              | Yes: `voice_calls` empty after every call (participant disconnect path)                                                                         |
+| First audio after end of speech, direct answer (4 takes)   | 2.36, 2.91, 3.08, 3.33 s (LiveKit's own `e2e_ms` 2.5–3.4 s; `llm_ttft_ms` 2.3–3.1 s; `tts_ttfb_ms` 130–150 ms)                                  |
+| First audio, catalogue question (filler after a tool call) | 3.49 s and 5.40 s (the second was a 3-round turn on a failing tool)                                                                             |
+| Barge-in, `INTERRUPT_ON=vad`                               | 7 of 7 interruptions that caught the agent speaking stopped it in 307–339 ms (target ≤ 0.5 s)                                                   |
+| Barge-in, `INTERRUPT_ON=stt`                               | 5 of 5 stopped in 840–921 ms: over the target. `vad` stays the default                                                                          |
+
+Barge-in tries that missed the agent (it had finished its answer before the script's 2 s
+interrupt point) do not count; getting 20 clean tries needs a take that reliably provokes a
+long answer, or a shorter interrupt delay in `call-test.ts`. `transcription_delay_ms` and
+`end_of_turn_delay_ms` came back null from LiveKit with the Soniox plugin. Against the targets:
+the first sound is ~1 s over 1.5 s on direct answers and the answer itself is under 4 s; the
+tuning backlog below applies.
 
 Landmark's ordered next steps if the targets are missed, kept as the tuning backlog: the
 caller's list of the most likely entities in the per-user block to save a tool round; stop the

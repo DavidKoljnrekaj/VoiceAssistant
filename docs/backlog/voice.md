@@ -1,6 +1,6 @@
 # Backlog — voice
 
-Ids: VOICE-4 (next free)
+Ids: VOICE-6 (next free)
 
 The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
@@ -34,6 +34,28 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   worker starts answering, which the caller hears as the assistant hesitating
 - **Fix direction:** once the live checklist runs (`REL-2`), look at the distribution over more
   speakers; if the tail is real, try `ENDPOINT_DELAY_MS` and report to Soniox with the take
+
+### VOICE-4 · Low · A job process takes ~6 s to import the worker through tsx
+
+- **Check:** Confirmed (measured 2026-10-29: import 5.7 s, Silero prewarm 0.3 s)
+- **Where:** `apps/voice/src/agent.ts` → `ServerOptions` (`initializeProcessTimeout: 60_000`,
+  `numIdleProcesses: 1`); the cause is `OPS-1` (TypeScript sources run through tsx)
+- **What happens:** the first live call timed out LiveKit's 10 s runner initialisation ("runner
+  initialization timed out") and the caller heard nothing; with the longer timeout and one idle
+  process a call never waits, but a burst of calls beyond the idle pool pays 6 s each
+- **Fix direction:** build the workspace to `dist` (`OPS-1`) so the job process imports compiled
+  JavaScript; then the timeout can go back to the default
+
+### VOICE-5 · Low · OQ: the call's context carries no tool rounds, so the model cannot see that it looked something up
+
+- **Check:** Confirmed (live call 2026-10-29: after a failed lookup the model's next answer said its
+  previous error message "was given without a real attempt")
+- **Where:** `apps/voice/src/messages.ts` (by design: user and assistant text only, as Landmark)
+- **What happens:** on the second question of a call the model reasons about its own earlier
+  answer without the tool results behind it, and may contradict or second-guess it aloud
+- **Fix direction:** either a prompt line ("your earlier answers in this call were based on real
+  lookups") or carry a short `[lookup: search_items → error]` marker in the assistant text of the
+  call context; measure what it costs in tokens before choosing
 
 ## Resolved
 

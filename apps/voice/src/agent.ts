@@ -219,6 +219,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       agent: fileURLToPath(import.meta.url),
       agentName: env.AGENT_NAME,
       requestFunc: acceptDispatchedJob,
+      // A job process imports this module through tsx (~6 s on a dev machine, VOICE-4) before
+      // it answers the runner's initialisation; LiveKit's default of 10 s cut that short on the
+      // first live call. One idle process is kept initialised so a call never pays it.
+      initializeProcessTimeout: 60_000,
+      numIdleProcesses: 1,
     }),
   )
 }
