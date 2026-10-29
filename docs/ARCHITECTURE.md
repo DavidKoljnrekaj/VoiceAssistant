@@ -55,18 +55,18 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 
 ## Channels
 
-| Setting                   | chat                                           | voice                                                                             |
-| ------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------- |
-| sink                      | `SseEventSink` (deltas + blocks + tool events) | `SpokenTextSink` (text only, filler, held first sentence, speakable rewriting)    |
-| history source            | DB, bounded walk from the leaf                 | the call's own context (worker memory), last 20 messages, system messages dropped |
-| persistence               | per row, inside the loop                       | deferred, after the answer, fire-and-forget                                       |
-| model / effort / thinking | Opus 5.5 / `medium` / adaptive                 | Sonnet 5.5 / `low` / `between_tools`                                              |
-| `max_tokens`              | 8192                                           | 1024                                                                              |
-| max iterations            | 10                                             | 4                                                                                 |
-| tool timeout              | 15 s                                           | 6 s                                                                               |
-| request timeout           | 90 s                                           | 25 s                                                                              |
-| rate limits               | 20 user turns / 5 min, 200 / day               | 50 turns per call, 20 calls per user per day, 3 concurrent calls globally         |
-| compaction                | later (port Landmark `context-window.ts`)      | off                                                                               |
+| Setting                   | chat                                           | voice                                                                                        |
+| ------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| sink                      | `SseEventSink` (deltas + blocks + tool events) | `SpokenTextSink` (text only, filler, held first sentence, speakable rewriting)               |
+| history source            | DB, bounded walk from the leaf                 | the call's own rows in worker memory (tool rounds included), last 20, cut on a turn boundary |
+| persistence               | per row, inside the loop                       | deferred, after the answer, fire-and-forget                                                  |
+| model / effort / thinking | Opus 5.5 / `medium` / adaptive                 | Sonnet 5.5 / `low` / `between_tools`                                                         |
+| `max_tokens`              | 8192                                           | 1024                                                                                         |
+| max iterations            | 10                                             | 4                                                                                            |
+| tool timeout              | 15 s                                           | 6 s                                                                                          |
+| request timeout           | 90 s                                           | 25 s                                                                                         |
+| rate limits               | 20 user turns / 5 min, 200 / day               | 50 turns per call, 20 calls per user per day, 3 concurrent calls globally                    |
+| compaction                | later (port Landmark `context-window.ts`)      | off                                                                                          |
 
 ## Data
 

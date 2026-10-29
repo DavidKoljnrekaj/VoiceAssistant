@@ -22,7 +22,7 @@ import {
 } from '@va/core'
 
 import { LOG_TAG, type VoiceDeps, voiceLoopConfig } from './config.js'
-import { userTextOf } from './messages.js'
+import type { CallRow } from './messages.js'
 
 /** Rows kept in memory and written after the answer, chained by ids chosen here. */
 export class DeferredStore implements MessageStore {
@@ -75,8 +75,10 @@ export interface VoiceTurnInput {
   deps: VoiceDeps
   ctx: AuthContext
   sessionId: string
-  /** The call's context as `toAnthropicMessages` built it: the last message is the user's. */
-  messages: InMemoryMessage[]
+  /** The call's earlier turns, as `callHistory` assembled them from the call's own rows. */
+  history: InMemoryMessage[]
+  /** What the caller just said (Soniox's transcript). */
+  userText: string
   requestId: string
   /** Receives what to speak, in order. */
   say: (text: string) => Promise<void>
@@ -98,12 +100,14 @@ export interface VoiceTurnResult {
   totalMs: number
   marks: LoopMark[]
   usage: UsageReport
+  /** The turn's rows (the user row first, then the loop's), for the call's history. */
+  rows: CallRow[]
   /** Settles when the rows are written (or the write has failed and been logged). */
   persisted: Promise<void>
 }
 
 export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResult> {
-  const { deps, ctx, sessionId, messages, requestId, signal } = input
+  const { deps, ctx, sessionId, userText, requestId, signal } = input
   const t0 = performance.now()
   const ids = { request_id: requestId, user_id: ctx.userId, session_id: sessionId }
   const config = voiceLoopConfig(deps, ctx)
@@ -136,7 +140,17 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   const sink = new SpokenTextSink(input.say, input.end, input.pickFiller)
   const store = new DeferredStore()
   const userRowId = randomUUID()
-  const userText = userTextOf(messages)
+  const userRow: CallRow = {
+    id: userRowId,
+    role: 'user',
+    turn_kind: 'user',
+    content: [{ type: 'text', text: userText }] as Json,
+    parent_id: null,
+  }
+  const messages: InMemoryMessage[] = [
+    ...input.history,
+    { role: 'user', content: [{ type: 'text', text: userText }] },
+  ]
 
   try {
     await runOrchestrationLoop(
@@ -179,6 +193,7 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   return {
     outcome: state.outcome,
     spoken: sink.spoken,
+    rows: [userRow, ...store.rows],
     firstTextMs: sink.firstOutputAt === null ? null : Math.round(sink.firstOutputAt - t0),
     totalMs: Math.round(performance.now() - t0),
     marks,

@@ -50,6 +50,5 @@ ranking. Never reuse or renumber an id: tests and commits quote them.
 Rank by what goes wrong if the item is left, then by how small the job is.
 
 1. `CORE-1` native review of every Croatian string before a user hears or reads one
-2. `VOICE-5` the voice model retracts its own earlier answer on the second question of a call
-3. `VOICE-1` decide where the voice worker runs before the first user trial
-4. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)
+2. `VOICE-1` decide where the voice worker runs before the first user trial
+3. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)
