@@ -53,5 +53,5 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 Resolved by decision 0011: the model's history is the call's own rows (tool rounds included),
 kept in worker memory by `CallSession` and assembled by `callHistory`; LiveKit's context supplies
 only the new user turn. A prompt line and filler stripping were tried live first and did not
-help. Live confirmation of the two-question call is still to be repeated after the change
-(Docker was unavailable in the session that made it).
+help. Confirmed live on 2026-10-29: the second question ("Koliko košta stolna lampa?") was
+answered directly from the first turn's tool result, no retraction, no new lookup.
