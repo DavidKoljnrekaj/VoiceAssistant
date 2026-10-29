@@ -17,3 +17,4 @@ Copy `0000-template.md` for a new entry. The first eight were taken in the plan
 | [0007](./0007-abort-as-first-class-exit-no-db-beacon.md) | Abort is a first-class loop exit; no DB cancel beacon        |
 | [0008](./0008-chat-streams-token-deltas.md)              | Chat streams token deltas plus canonical blocks              |
 | [0009](./0009-manual-loop-not-tool-runner.md)            | The manual Messages loop, not the SDK Tool Runner            |
+| [0010](./0010-engine-as-llm-node.md)                     | The engine as the agent's `llmNode`, not a loopback shim     |

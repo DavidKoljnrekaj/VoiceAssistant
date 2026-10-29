@@ -208,7 +208,8 @@ not logged loudly; our-fault errors and the fall-through are.
 It is byte-identical per channel, pure (no clock, locale or env) and carries the cache
 breakpoint. `buildUserContext(ctx)` is the per-user block (`## Korisnik` with email and role,
 plus a scope sentence for members), sent as a second, uncached system block. The caller appends
-the date line (`Danas je …`, Europe/Zagreb) as a third uncached block.
+`dateLine(now)` (`Danas je …`, Europe/Zagreb; pure, the caller passes the clock) as a third
+uncached block.
 
 `DOMAIN_RULES_HR` is one short placeholder rule in the skeleton (rely on tool output; retry a
 search with a shorter stem, then ask). Integration packs will contribute rules through the

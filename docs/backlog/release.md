@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-2 (next free)
+Ids: REL-3 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -16,6 +16,12 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       Check after applying: `select jobname, schedule from cron.job` shows `voice-calls-sweep` every
       minute; sign up a user and see a `public.users` row appear; then `/db-types` and commit
       `packages/db/src/database.ts`. Also check whether `DB-1` reproduces on the project's image.
+
+- [x] REL-2 · Part 5: the live checklist of `docs/plan/05-voice-worker.md` §10 ran on 2026-10-29
+      (`docs/VOICE.md` → The live checklist): worker, greeting, answers, rows, hang-up, bench and
+      latency all verified; barge-in 7/7 in `vad` mode and 5/5 (slower) in `stt`, short of the
+      20-try count. Still open: the full 20 tries once a take reliably provokes a long answer, and
+      the bench against a database that has the demo tables (`CORE-2`).
 
 ## Resolved
 
