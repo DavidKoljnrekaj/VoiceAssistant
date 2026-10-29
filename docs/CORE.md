@@ -279,9 +279,11 @@ the output is safe to read aloud (no ids spoken, ≤ 5 items, plain numbers). Ev
 | `get_item`     | demo | admin, member | yes      | chat, voice | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                              |
 | `create_note`  | demo | admin, member | no       | chat        | attaches a user-written note to an item (`demo_notes`)                                                              |
 
-`demo_items` and `demo_notes` exist only in the fakes (`CORE-2`): the demo pack narrows the user
-client to a hand-written type in `demo-db.ts`. A real pack reads tables that are in the
-generated `Database` and needs no cast.
+`demo_items` and `demo_notes` have a migration (`20261029100000_demo_tables.sql`, `docs/DB.md`)
+and the local seed carries the nine items the fakes do; the demo pack still narrows the user
+client to a hand-written type in `demo-db.ts` until the migration is applied to a project and
+`/db-types` regenerates the types (`REL-3`). A real pack reads tables that are in the generated
+`Database` and needs no cast.
 
 ### How to add a tool
 

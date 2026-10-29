@@ -70,11 +70,13 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 
 ## Data
 
-Four tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
+Six tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
 picks the presentation), `ai_sessions` (one conversation per row; `channel` already allows
 chat, voice, whatsapp and phone), `ai_messages` (one Anthropic message per row, a tree through
 `parent_id`; `turn_kind` separates real user turns from tool results) and `voice_calls` (the
-caller's JWT handed to the voice worker by an opaque token, service role only). Signed-in users
+caller's JWT handed to the voice worker by an opaque token, service role only), plus the example
+pack's `demo_items` (a company-wide catalogue, read by every signed-in user) and `demo_notes`
+(owner-scoped). Signed-in users
 read their own sessions and messages; every write goes through the API with the service role.
 `ai_session_history(leaf, max_rows)` is the bounded history read. Details, grants and the seed
 users are in `docs/DB.md`.
