@@ -1,0 +1,68 @@
+{
+  "app": {
+    "name": "Asistent"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "rename": "Rename",
+    "retry": "Try again",
+    "loading": "Loading…",
+    "load_error_title": "Could not load data",
+    "load_error_description": "Check your connection and try again.",
+    "sign_out": "Sign out",
+    "language": "Language",
+    "menu": "Menu"
+  },
+  "auth": {
+    "title": "Sign in",
+    "subtitle": "Sign in with your company account.",
+    "email": "Email",
+    "password": "Password",
+    "sign_in": "Sign in",
+    "signing_in": "Signing in…",
+    "email_required": "Enter your email.",
+    "password_required": "Enter your password.",
+    "error_invalid_credentials": "Wrong email or password.",
+    "error_too_many_requests": "Too many attempts. Try again in a few minutes.",
+    "error_network": "Cannot reach the server.",
+    "error_no_profile": "Your account has no user profile. Contact an administrator.",
+    "error_unknown": "Sign-in failed. Try again."
+  },
+  "chat": {
+    "conversations": "Conversations",
+    "new_conversation": "New conversation",
+    "no_conversations": "No conversations yet.",
+    "untitled": "Untitled",
+    "open_sessions": "Open the conversation list",
+    "close_sessions": "Close the conversation list",
+    "placeholder": "Send a message…",
+    "send": "Send",
+    "stop": "Stop",
+    "empty_title": "Ask a question",
+    "empty_description": "The assistant answers in Croatian and uses the company's tools.",
+    "interrupted": "Answer interrupted.",
+    "provisional": "Not saved",
+    "rename_title": "Conversation title",
+    "delete_title": "Delete this conversation?",
+    "delete_message": "The conversation and all of its messages will be deleted permanently.",
+    "session_actions": "Conversation actions"
+  },
+  "call": {
+    "start": "Voice call",
+    "connecting": "Connecting the call…",
+    "live": "Call in progress",
+    "mute": "Mute microphone",
+    "unmute": "Unmute microphone",
+    "end": "End call",
+    "mic_denied": "The microphone is not available. Allow microphone access in your browser.",
+    "start_failed": "The voice call failed. Try again.",
+    "banner": "Call in progress. Talk to the assistant; the call is saved as a separate conversation."
+  },
+  "lang": {
+    "hr": "Hrvatski",
+    "en": "English"
+  }
+}

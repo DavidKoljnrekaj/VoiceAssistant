@@ -5,8 +5,9 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "rootDir": "src",
-    "outDir": "dist"
+    "types": ["vite/client", "node"],
+    "declaration": false,
+    "sourceMap": false
   },
   "include": ["src"]
 }
