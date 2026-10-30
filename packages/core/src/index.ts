@@ -10,7 +10,7 @@ export { errorReason, log, REASON_MAX_CHARS } from './log.js'
 export type { LogLevel } from './log.js'
 export { dispatchTool, dispatchToolWithTimeout } from './loop/dispatch.js'
 export type { ToolOutcome } from './loop/dispatch.js'
-export { applyMessageCacheBreakpoint, assembleHistory } from './loop/history.js'
+export { applyMessageCacheBreakpoint, assembleHistory, withoutToolBlocks } from './loop/history.js'
 export type { AssembleOptions, HistoryRow } from './loop/history.js'
 export { runOrchestrationLoop, TRUNCATED_HR } from './loop/orchestrator.js'
 export type {

@@ -151,6 +151,25 @@ export function injectSummaryBanner(message: InMemoryMessage, summaryText: strin
 }
 
 /**
+ * The history without its tool rounds, for a request that advertises no tools: the API rejects
+ * `tool_use` and `tool_result` blocks when `tools` is absent (after a role downgrade, a tool
+ * leaving the registry or an allowlist, or a channel with no tools for the role). Tool blocks
+ * are dropped, a message left empty goes with them, and neighbours of the same role are merged
+ * so the shape stays conventional. In memory only; the rows keep their tool rounds.
+ */
+export function withoutToolBlocks(messages: readonly InMemoryMessage[]): InMemoryMessage[] {
+  const out: InMemoryMessage[] = []
+  for (const m of messages) {
+    const content = m.content.filter((b) => b.type !== 'tool_use' && b.type !== 'tool_result')
+    if (content.length === 0) continue
+    const last = out.at(-1)
+    if (last && last.role === m.role) last.content = [...last.content, ...content]
+    else out.push({ role: m.role, content })
+  }
+  return out
+}
+
+/**
  * Moves the message-array cache breakpoint to the last block of the last message, clearing any
  * earlier one, so the conversation so far is a cacheable prefix for the next call.
  */

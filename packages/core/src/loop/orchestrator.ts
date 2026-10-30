@@ -17,7 +17,7 @@ import type { AuthContext } from '../auth.js'
 import { MESSAGES_HR } from '../errors.js'
 import { log } from '../log.js'
 import { modelProfile } from '../model.js'
-import { applyMessageCacheBreakpoint } from './history.js'
+import { applyMessageCacheBreakpoint, withoutToolBlocks } from './history.js'
 import { streamModelTurn } from './model-call.js'
 import type {
   EventSink,
@@ -49,6 +49,9 @@ export async function runOrchestrationLoop(
   const ids = { userId: ctx.userId, sessionId, requestId: extras.requestId }
   let lastInsertedId = input.lastInsertedId
   let lastUsage: Usage = { input_tokens: 0, output_tokens: 0 }
+
+  // No tools advertised: the API rejects a history that still holds tool rounds (CORE-7).
+  if (config.tools.length === 0) messages.splice(0, messages.length, ...withoutToolBlocks(messages))
 
   for (let iteration = 0; iteration < settings.maxIterations; iteration++) {
     // Iteration boundary: nothing is sent to the model once the request is cancelled.

@@ -46,21 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-7 · Medium · `tools` is omitted when none is advertised while the history still holds tool blocks, and the API answers 400 (R-C3)
-
-- **Check:** Confirmed (R-C3, verified 2026-10-30)
-- **Where:** `packages/core/src/loop/model-call.ts` (no `tools` when `config.tools` is empty);
-  `apps/api/src/chat/stream.ts` fills `config.tools` from `registry.anthropicTools(ctx, 'chat')`;
-  nothing in `history.ts` strips tool blocks; `apps/voice/src/warm.ts` has the same conditional
-- **What happens:** the Messages API rejects a request whose `messages` hold `tool_use` or
-  `tool_result` blocks but defines no tools. After a role downgrade, a tool leaving the registry
-  or the voice allowlist, or a channel with no tools for that role, every later turn of a session
-  that already has tool rounds fails `model_bad_request`. Inherited from Landmark; the fake's
-  `validateConversation` does not enforce the rule, so no test sees it
-- **Fix direction:** when the advertised tools are empty, history assembly drops every `tool_use`
-  block and every `tool_result` message (removing messages left empty); teach the fake the rule;
-  an `E` scenario
-
 ### CORE-8 · Low · Abort after the model call: the terminal paths ignore the signal and the dispatch timer keeps running (R-C4, R-C5)
 
 - **Check:** Confirmed (R-C4, R-C5)
@@ -122,6 +107,11 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-7 · Medium · `tools` is omitted when none is advertised while the history still holds tool blocks, and the API answers 400 (R-C3)
+
+Resolved in `fix(core)` for CORE-7: the fake enforces the API rule (`F10`) and the loop applies
+`withoutToolBlocks` to the history when no tool is advertised (`E34`).
 
 ### CORE-6 · Medium · The loop mutates arrays it has already handed to the store (R-C2)
 

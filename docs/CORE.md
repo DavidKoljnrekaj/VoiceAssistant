@@ -123,7 +123,12 @@ synthetic `is_error` results (`interrupted before the tool returned`), appended 
 'user'`; a session summary whose boundary is on the branch replaces the turns up to it and is
 folded into the first kept message as a banner; above the ceiling (chars / 4) whole oldest turns
 are dropped, at least one kept. `applyMessageCacheBreakpoint` moves the message breakpoint to the
-last block of the last message before every call. The compaction writer is not built (`CORE-3`).
+last block of the last message before every call. When the request advertises no tools (a role
+downgrade, a tool gone from the registry or an allowlist, a channel with no tools for the role)
+the loop first applies `withoutToolBlocks`: the API rejects `tool_use` and `tool_result` blocks
+without `tools`, so they are dropped from the in-memory history, empty messages with them, and
+same-role neighbours merged; the rows keep their tool rounds (`E34`). The compaction writer is
+not built (`CORE-3`).
 
 ## Sinks
 

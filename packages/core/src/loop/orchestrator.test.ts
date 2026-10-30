@@ -485,6 +485,34 @@ describe('orchestration loop', () => {
   )
 
   scenario(
+    'E34 CORE-7: a session with tool rounds continues when no tool is advertised: the history is sent without tool blocks, the rows stay',
+    async () => {
+      anthropic.script(answer('Nastavljam bez alata.'))
+      const ctx = await authAs('member')
+      const before = sessionMessages(SESSION_MEMBER_CHAT).length
+      const run = await runChat(ctx, 'nastavi', {
+        packs: [],
+        allowlist: { chat: 'all', voice: [] },
+        sessionId: SESSION_MEMBER_CHAT,
+        parentId: MSG_TOOL_RESULT,
+      })
+      expect(run.sink.errorEvent).toBeNull()
+      expect(anthropic.rejections).toEqual([])
+      const call = anthropic.calls[0]!
+      expect(call.body.tools).toBeUndefined()
+      expect(call.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
+      expect(
+        call.body.messages.flatMap((m) => [...blocksOf(m.content, 'tool_use'), ...blocksOf(m.content, 'tool_result')]),
+      ).toEqual([])
+      expect(blocksOf(call.body.messages[1]!.content, 'text').map((b) => b.text)).toEqual(['Provjeravam.'])
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+      expect(sessionMessages(SESSION_MEMBER_CHAT)).toHaveLength(before + 2)
+      expect(run.rows().find((r) => r.id === run.userRowId)!.parent_id).toBe(MSG_TOOL_RESULT)
+      expect(blocksOf(sessionMessages(SESSION_MEMBER_CHAT)[1]!.content, 'tool_use')).toHaveLength(1)
+    },
+  )
+
+  scenario(
     'E26 a refusal stop runs no tools: the row is persisted, done carries refusal, onComplete runs',
     async () => {
       anthropic.script(refusal())
