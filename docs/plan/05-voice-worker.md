@@ -15,6 +15,12 @@ including the latency figures from the bench if keys were available and a clear 
 
 Can be split: **5a** worker, providers, call lifecycle, LLM adapter with tests; **5b** scripts (`llm-bench`, `call-test`), live tuning, measurements.
 
+> **As built (2026-10-28/29, `docs/VOICE.md` is current):** design A (`llmNode`) was chosen
+> (decision 0010); `paragraph-agent.ts` was not written (a `FlushSentinel` in the `llmNode` stream
+> ends the TTS segment instead); and `toAnthropicMessages(chatCtx)` became `userTurnOf` plus
+> `callHistory` over the call's own rows (decision 0011), with no same-role merging. The
+> deliverables, §3's message assembly and the W04 line below read as the plan, not the code.
+
 ## Goal
 
 A worker that takes a dispatched call, resolves the caller's identity from the opaque token, listens

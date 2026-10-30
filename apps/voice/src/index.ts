@@ -1,6 +1,7 @@
 // @va/voice: the LiveKit Agents worker. The process entry is `src/agent.ts` (the agent
 // definition is its default export, as LiveKit requires); nothing imports this package. What
-// is exported here is the LiveKit-free surface the bench scripts and tests use.
+// is exported here is the LiveKit-free surface, for a later consumer; the bench scripts and the
+// tests import `../src/*.js` directly.
 export const PACKAGE_NAME = '@va/voice'
 
 export { CallIdentity, sha256Hex } from './call.js'
