@@ -2,7 +2,7 @@
 // and two scenarios through the real loop (D10, D11).
 import { describe, expect, it } from 'vitest'
 
-import { CHANNEL_ALLOWLIST, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
+import { type ChannelAllowlist, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
 import {
   anthropic,
   answer,
@@ -20,21 +20,21 @@ import {
 
 import { demoPack, createNote, getItem, searchItems } from './index.js'
 
+/** As the apps compose the pack: everything on chat, the two reads on voice. */
+const ALLOWLIST: ChannelAllowlist = { chat: 'all', voice: ['search_items', 'get_item'] }
 const extras: ToolHandlerExtras = { requestId: 'req-test', channel: 'chat' }
 const voice: ToolHandlerExtras = { requestId: 'req-test', channel: 'voice' }
 const signal = new AbortController().signal
 
 describe('@va/tools-demo', () => {
-  it('D01: the registry accepts the pack with the default allowlist; voice gets the two reads', () => {
-    const registry = new ToolRegistry([demoPack])
+  it('D01: the registry accepts the pack with the apps’ allowlist; voice gets the two reads', () => {
+    const registry = new ToolRegistry([demoPack], ALLOWLIST)
     expect(registry.select({ role: 'member' }, 'chat').map((t) => t.name)).toEqual([
       'create_note',
       'get_item',
       'search_items',
     ])
-    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(
-      [...CHANNEL_ALLOWLIST.voice].sort(),
-    )
+    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(['get_item', 'search_items'])
     expect(registry.find({ role: 'admin' }, 'create_note', 'voice')).toBeUndefined()
   })
 
@@ -170,7 +170,7 @@ describe('@va/tools-demo', () => {
       const ctx = await authAs('member')
       const run = await runChat(ctx, 'Koji stolovi postoje?', {
         packs: [demoPack],
-        allowlist: CHANNEL_ALLOWLIST,
+        allowlist: ALLOWLIST,
       })
       expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual([
         'create_note',
@@ -198,7 +198,7 @@ describe('@va/tools-demo', () => {
       const run = await runChat(ctx, 'Zabilježi nešto', {
         channel: 'voice',
         packs: [demoPack],
-        allowlist: CHANNEL_ALLOWLIST,
+        allowlist: ALLOWLIST,
       })
       expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual(['get_item', 'search_items'])
       expect(run.sink.toolResults[0]!.output).toEqual({

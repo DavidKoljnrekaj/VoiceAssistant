@@ -19,7 +19,7 @@ packages/core/src/
 ├── log.ts                one JSON line per event ({ ts, tag, event, …fields }), never content; errorReason() cuts a
 │                         third party's message to 200 chars; log-fields.test.ts lints every call site (docs/OPS.md)
 ├── prompts/              DOMAIN_RULES_HR, chat and voice blocks, buildStaticSystemPrompt, buildUserContext
-├── tools/                defineTool, ToolRegistry, CHANNEL_ALLOWLIST, toAnthropicTool
+├── tools/                defineTool, ToolRegistry, ChannelAllowlist, toAnthropicTool
 ├── loop/                 ports, orchestrator, model-call, tool-round, dispatch, history
 ├── sinks/                BufferedSink, SpokenTextSink, speakable
 └── test/                 fake-anthropic, fake-supabase, fixtures, tools, harness → exported as @va/core/test
@@ -267,8 +267,8 @@ defineTool({
 output for that channel through `extras.channel`: on voice no ids or timestamps, at most five
 items, short text (the demo pack's two reads are the pattern).
 
-A pack is `{ name, tools, domainRules? }`. `ToolRegistry(packs, allowlist = CHANNEL_ALLOWLIST)`
-throws on a duplicate name and on an allowlist that names an unknown or a write tool.
+A pack is `{ name, tools, domainRules? }`. `ToolRegistry(packs, allowlist)` throws on a
+duplicate name and on an allowlist that names an unknown or a write tool.
 `select(ctx, channel)` is role ∩ channel, sorted by name; `find(ctx, name, channel)` resolves a
 name through the same filter (undefined for unknown and forbidden alike; `refusalReason` says
 which: `unknown_tool`, `not_permitted_for_role`, `not_permitted_on_channel`); `anthropicTools(ctx,
@@ -289,10 +289,15 @@ result with the issues and the handler is not called. A handler that returns `{ 
 
 ### Channel allowlist
 
-`CHANNEL_ALLOWLIST = { chat: 'all', voice: ['search_items', 'get_item'] }`. Chat gets every
-registered tool its role allows; voice only what is named, in a reviewed diff that says why
-the output is safe to read aloud (no ids spoken, ≤ 5 items, plain numbers). Every voice tool is
-`readOnly: true`, asserted when the registry is built and by test `T02`.
+`ChannelAllowlist` is `Partial<Record<Channel, 'all' | readonly string[]>>`: `'all'` opens a
+channel to every registered tool its role allows, a list names what it gets, and a channel
+absent from the record gets nothing (`T08`). Core ships no allowlist: the app that composes the
+packs supplies it, so core never names a pack's tools (`tools-* → core`, never back). The API
+(`apps/api/src/tools.ts`, `API_ALLOWLIST = { chat: 'all' }`) serves chat; the worker
+(`apps/voice/src/tools.ts`, `VOICE_ALLOWLIST = { voice: ['search_items', 'get_item'] }`) names
+what a caller may reach by voice, in a reviewed diff that says why the output is safe to read
+aloud (no ids spoken, ≤ 5 items, plain numbers). Every voice tool is `readOnly: true`, asserted
+when the registry is built (`T02`, `W20`).
 
 ### Catalogue
 
@@ -312,16 +317,17 @@ client to a hand-written type in `demo-db.ts` until the migration is applied to 
 
 `/new-tool <pack> <name> <one line>` walks it: the `defineTool` block in
 `packages/<pack>/src/tools/<name>.ts`, registration in the pack's `tools` array, the voice
-allowlist decision (with the reason in the commit), a scenario test through the loop (`runChat`,
-as `D10` in the demo pack) and
+allowlist decision (`VOICE_ALLOWLIST` in `apps/voice/src/tools.ts`, with the reason in the
+commit), a scenario test through the loop (`runChat`, as `D10` in the demo pack) and
 the `tool-security-reviewer` agent. Escape `\\`, `%` and `_` before any `ilike` and reject `*` in the schema (PostgREST reads `*` as `%` and cannot be made to take it literally; `escapeLike` and `NO_STAR` in the demo pack are the pattern), never interpolate raw input into `.or()`, cap lists in the query itself (not only in the schema), and update the catalogue above.
 
 ### How to add a channel
 
-Add it to `Channel`, a row to `CHANNEL_DEFAULTS` (and env override names), an entry to
-`CHANNEL_ALLOWLIST` (default-deny: start with `[]`), intro and presentation blocks in
-`prompts/`, a sink and a store in the owning app, and a settings test. The loop, the registry
-and the gate need no change.
+Add it to `Channel`, a row to `CHANNEL_DEFAULTS` (and env override names), an allowlist in
+the app that will serve it (default-deny: a channel its app does not name gets nothing; start
+with `[]` and add tools in reviewed diffs), intro and presentation blocks in `prompts/`, a sink
+and a store in the owning app, and a settings test. The loop, the registry and the gate need no
+change.
 
 ## Testing
 

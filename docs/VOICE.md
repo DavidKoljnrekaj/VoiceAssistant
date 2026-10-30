@@ -31,6 +31,7 @@ apps/voice/
 │   ├── call.ts             CallIdentity: token → voice_calls → authenticateToken; 60 s cache; touch(); end()
 │   ├── config.ts           VoiceDeps, voiceLoopConfig(deps, ctx): the LoopConfig of one caller; dateLine
 │   ├── messages.ts         userTurnOf (the new user turn from LiveKit's context), callHistory (the call's own rows → messages)
+│   ├── tools.ts            createRegistry(): the demo pack with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
 │   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, chained saves, the timing line, settle()
 │   ├── session-options.ts  turn handling as data: Soniox end of turn, VAD barge-in, no preemptive generation, no recording
@@ -329,6 +330,7 @@ scenario's deferred rows never land in the next one's world.
 | W17        | a failed save is logged without the text; the next turn still saves; no log line carries the words                                                                                                      |
 | W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                            |
 | W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                               |
+| W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat |
 
 ```
 pnpm exec vitest run apps/voice

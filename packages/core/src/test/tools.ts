@@ -198,7 +198,7 @@ export const EDGE_PACK: ToolPack = {
   tools: [nothing, bigint, ignoresSignal] as ToolPack['tools'],
 }
 
-export const TEST_ALLOWLIST: ChannelAllowlist = {
+export const TEST_ALLOWLIST = {
   chat: 'all',
   voice: ['echo', 'whoami', 'gate'],
-}
+} as const satisfies ChannelAllowlist

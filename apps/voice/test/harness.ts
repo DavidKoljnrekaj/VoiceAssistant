@@ -6,14 +6,7 @@ import type { ReadableStream } from 'node:stream/web'
 
 import { ChatContext, isFlushSentinel } from '@livekit/agents'
 
-import {
-  CHANNEL_ALLOWLIST,
-  type ChannelAllowlist,
-  type ChannelSettings,
-  channelSettings,
-  type ToolPack,
-  ToolRegistry,
-} from '@va/core'
+import { type ChannelAllowlist, type ChannelSettings, channelSettings, type ToolPack, ToolRegistry } from '@va/core'
 import { anthropicClient, db, scenario as coreScenario, USERS, uuid } from '@va/core/test'
 import { createServiceClient } from '@va/db'
 import { demoPack } from '@va/tools-demo'
@@ -23,6 +16,7 @@ import { CallIdentity, type CallIdentityOptions, sha256Hex } from '../src/call.j
 import type { VoiceDeps } from '../src/config.js'
 import { GREETING_HR } from '../src/greeting.js'
 import { CallSession, type CallSessionOptions } from '../src/session.js'
+import { VOICE_ALLOWLIST } from '../src/tools.js'
 
 export { anthropic, db, logs, TOKENS, USERS, uuid } from '@va/core/test'
 
@@ -65,7 +59,7 @@ export interface DepsOptions {
 export function deps(opts: DepsOptions = {}): VoiceDeps {
   return {
     anthropic: anthropicClient(),
-    registry: new ToolRegistry(opts.packs ?? [demoPack], opts.allowlist ?? CHANNEL_ALLOWLIST),
+    registry: new ToolRegistry(opts.packs ?? [demoPack], opts.allowlist ?? VOICE_ALLOWLIST),
     settings: { ...channelSettings('voice', {}), ...opts.settings },
     clock: () => new Date(NOW),
   }

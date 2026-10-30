@@ -14,6 +14,7 @@ apps/api/src/
 ├── index.ts            env → deps → serve() on PORT; SIGINT/SIGTERM close the server
 ├── app.ts              createApp(deps): middleware order, routes, 405 / 404 / error handlers
 ├── deps.ts             AppDeps (anthropic, registry, env, livekit | null, clock) and the request variables
+├── tools.ts            createRegistry(): the demo pack with API_ALLOWLIST ({ chat: 'all' }; voice is the worker's)
 ├── env.ts              zod env (see .env.example)
 ├── errors.ts           the flat envelope and the status table
 ├── rate-limit.ts       chat burst/daily, voice calls per day and concurrent calls
@@ -22,7 +23,7 @@ apps/api/src/
 ├── chat/               prepare (pre-stream pipeline), stream (worker and abort sources), store, route-context
 ├── routes/             health, chat, sessions, voice
 └── voice/              calls (start / refresh / end), livekit (injectable wrapper over livekit-server-sdk)
-apps/api/test/          harness (app.request + fakes + FakeLiveKit), prestream (P), stream (C), voice (V)
+apps/api/test/          harness (app.request + fakes + FakeLiveKit), prestream (P), stream (C), voice (V), tools (R)
 ```
 
 Dependencies: `hono`, `@hono/node-server`, `livekit-server-sdk`, `@anthropic-ai/sdk`, `zod`,

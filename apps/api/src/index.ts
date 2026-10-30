@@ -2,11 +2,11 @@
 import { serve } from '@hono/node-server'
 import Anthropic from '@anthropic-ai/sdk'
 
-import { log, ToolRegistry } from '@va/core'
-import { demoPack } from '@va/tools-demo'
+import { log } from '@va/core'
 
 import { createApp } from './app.js'
 import { parseApiEnv } from './env.js'
+import { createRegistry } from './tools.js'
 import { createLiveKit } from './voice/livekit.js'
 
 const env = parseApiEnv(process.env)
@@ -15,7 +15,7 @@ const app = createApp({
     apiKey: env.ANTHROPIC_API_KEY,
     ...(env.ANTHROPIC_BASE_URL ? { baseURL: env.ANTHROPIC_BASE_URL } : {}),
   }),
-  registry: new ToolRegistry([demoPack]),
+  registry: createRegistry(),
   env,
   livekit: createLiveKit(env),
   clock: () => new Date(),

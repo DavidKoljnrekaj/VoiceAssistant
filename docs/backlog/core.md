@@ -46,17 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-10 · Low · The registry hardcodes the demo pack's voice allowlist (R-C7)
-
-- **Check:** Confirmed (R-C7)
-- **Where:** `packages/core/src/tools/registry.ts` `CHANNEL_ALLOWLIST` names `search_items` and
-  `get_item`, which `@va/tools-demo` owns; `new ToolRegistry([], CHANNEL_ALLOWLIST)` throws
-  (`T02` asserts it)
-- **What happens:** core depends on a pack by name against the `tools-* → core` direction, and an
-  app composed without the demo pack dies at load
-- **Fix direction:** the app that composes the packs (`apps/api`, `apps/voice`) supplies the
-  allowlist, the registry keeps the read-only assertion; `T02` moves with it
-
 ### CORE-11 · Low · A summary boundary inside a turn yields a history the API rejects (R-C8)
 
 - **Check:** Confirmed (R-C8, verified 2026-10-30)
@@ -84,6 +73,12 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-10 · Low · The registry hardcodes the demo pack's voice allowlist (R-C7)
+
+Resolved in `fix(core,api,voice)` for CORE-10: `ChannelAllowlist` is partial (an absent channel
+gets nothing), `CHANNEL_ALLOWLIST` is gone from core, and each app composes the packs with its
+own list (`API_ALLOWLIST`, `VOICE_ALLOWLIST`); `T08`, `W20`, `R01`.
 
 ### CORE-9 · Low · A `model_bad_request` is logged without its reason (R-C6)
 

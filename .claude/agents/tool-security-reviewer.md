@@ -11,7 +11,7 @@ inside the model loop, and the model's input to it comes from text the user type
 handler is an injection surface. You did not write the change; assume nothing about it is right.
 
 Find the changed handlers (`packages/*/src/tools/**`, `packages/core/src/tools/**`) and read each
-in full together with `defineTool` in `@va/core` and `CHANNEL_ALLOWLIST`. The contract below is
+in full together with `defineTool` in `@va/core` and `VOICE_ALLOWLIST` in `apps/voice/src/tools.ts`. The contract below is
 the tool part of `docs/SECURITY.md` → The checklist; read its threat notes on tools, RLS and
 injection surfaces if you have not.
 
@@ -29,7 +29,7 @@ For every handler check:
    rpc that writes. If it writes, `readOnly` is false and the tool is not on the voice allowlist.
 5. **Output is bounded.** Lists are capped (`limit` ≤ 100, default 20, enforced in the query, not
    only in the schema); no unbounded joins; no raw rows passed through.
-6. **Voice allowlist.** If the tool is in `CHANNEL_ALLOWLIST.voice`: output has no ids, tokens,
+6. **Voice allowlist.** If the tool is in `VOICE_ALLOWLIST.voice`: output has no ids, tokens,
    emails or secrets, lists are capped at 3–5 items, numbers are plain, and the change says why it
    is safe to read aloud.
 7. **Description.** It tells the model what the tool does, when to call it, and when **not** to

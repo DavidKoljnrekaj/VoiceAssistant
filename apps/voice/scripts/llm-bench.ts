@@ -19,11 +19,11 @@ import { fileURLToPath } from 'node:url'
 
 import Anthropic from '@anthropic-ai/sdk'
 
-import { authenticateToken, type AuthContext, channelSettings, ToolRegistry } from '@va/core'
-import { demoPack } from '@va/tools-demo'
+import { authenticateToken, type AuthContext, channelSettings } from '@va/core'
 
 import { type VoiceDeps } from '../src/config.js'
 import { createMetrics } from '../src/metrics.js'
+import { createRegistry } from '../src/tools.js'
 import { runVoiceTurn, type VoiceTurnResult } from '../src/turn.js'
 import { warm } from '../src/warm.js'
 
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
   const ctx = await signIn()
   const deps: VoiceDeps = {
     anthropic: new Anthropic({ apiKey: env('ANTHROPIC_API_KEY') }),
-    registry: new ToolRegistry([demoPack]),
+    registry: createRegistry(),
     settings: channelSettings('voice', process.env),
     clock: () => new Date(),
   }
