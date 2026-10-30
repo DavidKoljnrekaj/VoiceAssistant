@@ -20,7 +20,7 @@ import {
   sessionMessages,
   toolResultSentToModel,
 } from '../test/harness.js'
-import { handlerEvents, openGate, TEST_ALLOWLIST } from '../test/tools.js'
+import { handlerEvents, ODD_OUTPUT_PACK, openGate, TEST_ALLOWLIST, TEST_PACK } from '../test/tools.js'
 import { BufferedSink } from '../sinks/buffered.js'
 import { TRUNCATED_HR } from './orchestrator.js'
 import { TRUNCATED_RESULT } from './tool-round.js'
@@ -399,6 +399,46 @@ describe('orchestration loop', () => {
     const run = await runChat(ctx, 'x')
     expect(run.sink.errorEvent).toEqual({ code: 'model_unreachable', message: MESSAGES_HR.model_unreachable })
   })
+
+  scenario(
+    'E31 CORE-5: a handler that resolves undefined is persisted as a null result and the loop continues',
+    async () => {
+      anthropic.script(callTools(toolUse('nothing', {})), answer('Ništa.'))
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, ODD_OUTPUT_PACK] })
+      expect(run.sink.errorEvent).toBeNull()
+      expect(run.sink.toolResults[0]).toMatchObject({ tool: 'nothing', isError: false, output: null })
+      expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      const block = blocksOf(run.rows()[2]!.content, 'tool_result')[0]!
+      expect(block).toMatchObject({ content: 'null', is_error: false })
+      expect(toolResultSentToModel(1, run.sink.toolCalls[0]!.id)).toBeNull()
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+      expect(run.completed).toBe(1)
+    },
+  )
+
+  scenario(
+    'E32 CORE-5: a handler whose output JSON cannot serialise becomes an is_error result; the row is written, no bare tool_use',
+    async () => {
+      anthropic.script(callTools(toolUse('bigint', {})), answer('Ne mogu pročitati.'))
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, ODD_OUTPUT_PACK] })
+      expect(run.sink.errorEvent).toBeNull()
+      expect(run.sink.toolResults[0]).toMatchObject({
+        tool: 'bigint',
+        isError: true,
+        output: { error: expect.stringMatching(/not serialisable/) },
+      })
+      expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      const block = blocksOf(run.rows()[2]!.content, 'tool_result')[0]!
+      expect(block.is_error).toBe(true)
+      expect(toolResultSentToModel(1, run.sink.toolCalls[0]!.id)).toEqual({
+        error: expect.stringMatching(/not serialisable/),
+      })
+      expect(logs.some((l) => l.line.includes('tool output not serialisable'))).toBe(true)
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
 
   scenario(
     'E26 a refusal stop runs no tools: the row is persisted, done carries refusal, onComplete runs',

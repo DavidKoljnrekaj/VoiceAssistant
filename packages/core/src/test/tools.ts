@@ -149,9 +149,38 @@ export const writeNote = defineTool({
   },
 })
 
+/** Resolves `undefined`: a `Promise<void>` handler type-checks against the contract. */
+export const nothing = defineTool({
+  name: 'nothing',
+  description: 'Returns nothing.',
+  input: z.object({}),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler() {},
+})
+
+/** Resolves a value JSON cannot serialise. */
+export const bigint = defineTool({
+  name: 'bigint',
+  description: 'Returns a BigInt.',
+  input: z.object({}),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler() {
+    return { total: 9007199254740993n }
+  },
+})
+
 export const TEST_PACK: ToolPack = {
   name: 'test',
   tools: [echo, whoami, gateTool, fail, boom, adminOnly, writeNote] as ToolPack['tools'],
+}
+
+/** Handlers whose output the engine must survive (CORE-5); a separate pack so the request
+ * shape E02 pins stays the same. */
+export const ODD_OUTPUT_PACK: ToolPack = {
+  name: 'odd',
+  tools: [nothing, bigint] as ToolPack['tools'],
 }
 
 export const TEST_ALLOWLIST: ChannelAllowlist = {

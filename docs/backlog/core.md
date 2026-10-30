@@ -46,20 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-5 · High · A handler that resolves `undefined` crashes the loop after a malformed row is written; a `BigInt` output leaves a bare `tool_use` (R-C1)
-
-- **Check:** Confirmed (review 2026-10-30, R-C1)
-- **Where:** `packages/core/src/loop/tool-round.ts` (`content: JSON.stringify(results[i].output)`,
-  then `JSON.parse(block.content)` for the sink); `tools/define.ts` (`handler(): Promise<unknown>`
-  lets a `Promise<void>` handler type-check, so a real pack will hit it)
-- **What happens:** `JSON.stringify(undefined)` is `undefined`, the persisted `tool_result` block
-  has no `content`, the re-parse throws `SyntaxError`, and `runOrchestrationLoop` rejects with no
-  `done` and no `error` event. A `BigInt` in the output throws before the row is written, so the
-  branch ends on a bare `tool_use` (invariant 3)
-- **Fix direction:** normalise `output ?? null` and stringify inside a try whose failure becomes
-  an `is_error` result; hand `results[i].output` to the sink instead of re-parsing; an `E`
-  scenario for each
-
 ### CORE-6 · Medium · The loop mutates arrays it has already handed to the store (R-C2)
 
 - **Check:** Confirmed (R-C2)
@@ -150,6 +136,12 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-5 · High · A handler that resolves `undefined` crashes the loop after a malformed row is written; a `BigInt` output leaves a bare `tool_use` (R-C1)
+
+Resolved in `fix(core)` for CORE-5: dispatch persists `undefined` as `null` and an output JSON
+cannot serialise as an `is_error` envelope; the sink gets the outcome, not a re-parse of the row
+(`E31`, `E32`).
 
 ### CORE-2 · Low · `demo_items` and `demo_notes` exist only in the fakes
 

@@ -69,19 +69,20 @@ export async function runToolRound(
     hooks.mark?.('tools_done')
   }
   const aborted = cancelledBefore || signal.aborted || (await hooks.isCancelled())
-  const blocks = toolResultBlocks(toolUses, results)
-  return await persistThenEmit(input, blocks, aborted, sink, store)
+  return await persistThenEmit(input, results, aborted, sink, store)
 }
 
-/** Persists the single `tool_result` row, then emits one `toolResult` per block unless the
- * request was aborted (silent return: the request owner decides what to say). */
+/** Persists the single `tool_result` row (blocks in `tool_use` order), then emits one
+ * `toolResult` per outcome unless the request was aborted (silent return: the request owner
+ * decides what to say). The sink gets the outcome itself, the value the row's `content` holds. */
 export async function persistThenEmit(
   input: Pick<ToolRoundInput, 'ctx' | 'config' | 'toolUses' | 'parentId' | 'sessionId' | 'iteration'>,
-  blocks: ToolResultBlock[],
+  results: readonly ToolOutcome[],
   aborted: boolean,
   sink: EventSink,
   store: MessageStore,
 ): Promise<ToolRound> {
+  const blocks = toolResultBlocks(input.toolUses, results)
   const toolResultRow: MessageRow = {
     role: 'user',
     turn_kind: 'tool_result',
@@ -103,13 +104,15 @@ export async function persistThenEmit(
   }
   if (!aborted) {
     for (const [i, tu] of input.toolUses.entries()) {
-      const block = blocks[i]!
-      await sink.toolResult(tu.name, JSON.parse(block.content), tu.id, block.is_error)
+      const { output, isError } = results[i]!
+      await sink.toolResult(tu.name, output, tu.id, isError)
     }
   }
   return { kind: 'persisted', rowId: row.id, blocks, aborted }
 }
 
+/** Every outcome here serialises: dispatch guarantees it (`serialisableOutcome`) and the
+ * synthetic results are constants. */
 export function toolResultBlocks(
   toolUses: readonly ToolUseBlock[],
   results: readonly ToolOutcome[],

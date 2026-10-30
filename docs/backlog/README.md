@@ -50,11 +50,10 @@ ranking. Never reuse or renumber an id: tests and commits quote them.
 Rank by what goes wrong if the item is left, then by how small the job is.
 
 1. `WEB-4` / `WEB-5` a failed turn wipes the typed text; an hourly refresh hiccup signs the user out
-2. `CORE-5` a handler resolving `undefined` crashes the loop and leaves a malformed row
-3. `CORE-1` native review of every Croatian string before a user hears or reads one
-4. `CORE-7` / `API-4` a session with tool rounds that loses its tools fails every turn; a failed
+2. `CORE-1` native review of every Croatian string before a user hears or reads one
+3. `CORE-7` / `API-4` a session with tool rounds that loses its tools fails every turn; a failed
    call start leaves a live credential
-5. `OPS-3` / `VOICE-1` decide where the API, the worker and the PWA run before the first user trial
-6. `OPS-4` / `OPS-5` retention for voice rows and the DPA list, both needed before a trial under GDPR
-7. `VOICE-6` / `VOICE-7` / `VOICE-8` the latency figures the bench needs, and the first-sound lever
-8. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)
+4. `OPS-3` / `VOICE-1` decide where the API, the worker and the PWA run before the first user trial
+5. `OPS-4` / `OPS-5` retention for voice rows and the DPA list, both needed before a trial under GDPR
+6. `VOICE-6` / `VOICE-7` / `VOICE-8` the latency figures the bench needs, and the first-sound lever
+7. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)

@@ -29,7 +29,7 @@ import type {
   ToolUseBlock,
   Usage,
 } from './ports.js'
-import { persistThenEmit, runToolRound, toolResultBlocks, TRUNCATED_RESULT } from './tool-round.js'
+import { persistThenEmit, runToolRound, TRUNCATED_RESULT } from './tool-round.js'
 
 /** <!-- needs native review --> */
 export const TRUNCATED_HR = 'Odgovor nije dovršen. Pokušajte ponovno.'
@@ -153,13 +153,9 @@ export async function runOrchestrationLoop(
         stopReason,
         toolCount: toolUses.length,
       })
-      const blocks = toolResultBlocks(
-        toolUses,
-        toolUses.map(() => ({ output: TRUNCATED_RESULT, isError: true })),
-      )
       const round = await persistThenEmit(
         { ctx, config, toolUses, parentId: lastInsertedId, sessionId, iteration },
-        blocks,
+        toolUses.map(() => ({ output: TRUNCATED_RESULT, isError: true })),
         false,
         sink,
         store,
