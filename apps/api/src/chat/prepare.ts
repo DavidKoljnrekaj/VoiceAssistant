@@ -14,7 +14,8 @@ export const MAX_MESSAGE_LENGTH = 4000
 export const HARD_CEILING_TOKENS = 130_000
 
 export const chatBodySchema = z.object({
-  session_id: z.uuid().nullable().optional(),
+  // Required: `null` opens a session, a missing field is a 400 (a client that drops it would fork a session per turn).
+  session_id: z.uuid().nullable(),
   message: z.string(),
   parent_message_id: z.uuid().nullable().optional(),
   client_context: z.object({ route: z.string().optional() }).optional(),

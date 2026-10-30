@@ -215,6 +215,18 @@ describe('POST /chat before the stream', () => {
     },
   )
 
+  scenario(
+    'P19 (API-7) a body without session_id is 400 bad_request: no session is forked, nothing written',
+    async () => {
+      const before = snapshot()
+      const res = await call('/chat', { message: 'x' })
+      expect(await flatError(res)).toMatchObject({ status: 400, code: 'bad_request' })
+      expect(snapshot()).toEqual(before)
+      expect(db.requestsTo('ai_sessions', 'POST')).toHaveLength(0)
+      expect(anthropic.calls).toHaveLength(0)
+    },
+  )
+
   scenario('P17 a body over 64 KB is 413 payload_too_large', async () => {
     const res = await call('/chat', { session_id: null, message: 'x', padding: 'p'.repeat(65 * 1024) })
     expect(await flatError(res)).toMatchObject({ status: 413, code: 'payload_too_large' })
