@@ -46,7 +46,7 @@ Meta Cloud API webhook into `apps/api` (`POST /webhooks/whatsapp`, signature ver
 `users.phone_e164`, session keyed by `(channel 'whatsapp', external_id = wa_id)`, a `TextSink` that
 buffers the answer into one message (no streaming on WhatsApp), voice notes transcribed with the same
 Soniox adapter, rate limits per phone, the 24-hour customer-service window respected. The loop and the
-tools are unchanged; `CHANNEL_ALLOWLIST.whatsapp` starts empty.
+tools are unchanged; the API's allowlist (`apps/api/src/tools.ts`) names `whatsapp` with `[]` to start.
 
 ## 4. Phone number (PSTN)
 

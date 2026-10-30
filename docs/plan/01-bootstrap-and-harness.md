@@ -204,7 +204,7 @@ Write every file in full. The content below is the required substance; sessions 
 - `defineTool` contract: zod input, `description` written for the model (what / when / non-obvious constraints), `requiredRoles`, `readOnly` truthful, handler `(input, ctx, extras, signal)`.
 - Reads through `ctx.userClient`; explicit scoping wherever RLS is permissive; never interpolate raw input into PostgREST `.or()` filters; escape `%` and `_` in `ilike`.
 - Output shape: small, stable, numbers raw, dates ISO; cap list sizes (`limit` ≤ 100, default 20); voice variants cap at 3–5 items.
-- A new tool reaches voice only by editing `CHANNEL_ALLOWLIST.voice`; the diff must say why it is safe to speak aloud.
+- A new tool reaches voice only by editing the worker's `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`); the diff must say why it is safe to speak aloud.
 - Every tool ships with a scenario test through the loop (not only a handler unit test).
 - Run the `tool-security-reviewer` agent on a new or changed handler before committing.
 

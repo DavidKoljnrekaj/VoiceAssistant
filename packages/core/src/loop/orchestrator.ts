@@ -17,7 +17,7 @@ import type { AuthContext } from '../auth.js'
 import { MESSAGES_HR } from '../errors.js'
 import { log } from '../log.js'
 import { modelProfile } from '../model.js'
-import { applyMessageCacheBreakpoint } from './history.js'
+import { applyMessageCacheBreakpoint, withoutToolBlocks } from './history.js'
 import { streamModelTurn } from './model-call.js'
 import type {
   EventSink,
@@ -29,7 +29,7 @@ import type {
   ToolUseBlock,
   Usage,
 } from './ports.js'
-import { persistThenEmit, runToolRound, toolResultBlocks, TRUNCATED_RESULT } from './tool-round.js'
+import { persistThenEmit, runToolRound, TRUNCATED_RESULT } from './tool-round.js'
 
 /** <!-- needs native review --> */
 export const TRUNCATED_HR = 'Odgovor nije dovršen. Pokušajte ponovno.'
@@ -50,6 +50,9 @@ export async function runOrchestrationLoop(
   let lastInsertedId = input.lastInsertedId
   let lastUsage: Usage = { input_tokens: 0, output_tokens: 0 }
 
+  // No tools advertised: the API rejects a history that still holds tool rounds (CORE-7).
+  if (config.tools.length === 0) messages.splice(0, messages.length, ...withoutToolBlocks(messages))
+
   for (let iteration = 0; iteration < settings.maxIterations; iteration++) {
     // Iteration boundary: nothing is sent to the model once the request is cancelled.
     if (signal.aborted || (await hooks.isCancelled())) return
@@ -67,6 +70,7 @@ export async function runOrchestrationLoop(
           iteration,
           errorClass: turn.errorClass,
           code: turn.mapped.code,
+          reason: turn.reason,
         })
       }
       await sink.error(turn.mapped.code, turn.mapped.message)
@@ -94,7 +98,9 @@ export async function runOrchestrationLoop(
       return
     }
     lastInsertedId = assistantRow.id
-    messages.push({ role: 'assistant', content: response.content })
+    // A copy: the store may serialise its row later (voice defers persistence) and the cache
+    // breakpoint is moved inside the loop's own array only.
+    messages.push({ role: 'assistant', content: [...response.content] })
 
     // Content-block order. Thinking, fallback and unknown block types stay in the row only.
     const toolUses: ToolUseBlock[] = []
@@ -108,6 +114,24 @@ export async function runOrchestrationLoop(
     }
 
     const stopReason = response.stop_reason ?? 'end_turn'
+    const terminal = stopReason !== 'tool_use' || toolUses.length === 0
+
+    // An abort that landed during the assistant-row insert: the row stands, nothing more is
+    // said. The tool path checks for itself in runToolRound; a truncation still closes its
+    // tool calls out (invariant 3), silently.
+    if (terminal && (signal.aborted || (await hooks.isCancelled()))) {
+      log('info', logTag, 'aborted after model call', { ...ids, iteration, toolCount: toolUses.length })
+      if (toolUses.length > 0) {
+        await persistThenEmit(
+          { ctx, config, toolUses, parentId: lastInsertedId, sessionId, iteration },
+          toolUses.map(() => ({ output: TRUNCATED_RESULT, isError: true })),
+          true,
+          sink,
+          store,
+        )
+      }
+      return
+    }
 
     // A refusal runs no tools; the sinks decide what to say.
     if (stopReason === 'refusal') {
@@ -122,7 +146,7 @@ export async function runOrchestrationLoop(
       return
     }
 
-    if (stopReason === 'tool_use') {
+    if (!terminal) {
       const round = await runToolRound(
         { ctx, config, toolUses, parentId: lastInsertedId, sessionId, iteration, extras },
         sink,
@@ -135,7 +159,7 @@ export async function runOrchestrationLoop(
         return
       }
       lastInsertedId = round.rowId
-      messages.push({ role: 'user', content: round.blocks })
+      messages.push({ role: 'user', content: [...round.blocks] })
       if (round.aborted) {
         log('info', logTag, 'tool round aborted', { ...ids, iteration })
         return
@@ -153,13 +177,9 @@ export async function runOrchestrationLoop(
         stopReason,
         toolCount: toolUses.length,
       })
-      const blocks = toolResultBlocks(
-        toolUses,
-        toolUses.map(() => ({ output: TRUNCATED_RESULT, isError: true })),
-      )
       const round = await persistThenEmit(
         { ctx, config, toolUses, parentId: lastInsertedId, sessionId, iteration },
-        blocks,
+        toolUses.map(() => ({ output: TRUNCATED_RESULT, isError: true })),
         false,
         sink,
         store,

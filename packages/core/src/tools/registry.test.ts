@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Role } from '../auth.js'
 import type { Channel } from '../channel.js'
 import { defineTool, type ToolPack } from './define.js'
-import { CHANNEL_ALLOWLIST, ToolRegistry } from './registry.js'
+import { ToolRegistry } from './registry.js'
 import { toAnthropicTool } from './schema.js'
 
 const ROLES: Role[] = ['admin', 'member']
@@ -64,7 +64,6 @@ describe('ToolRegistry', () => {
     expect(() => new ToolRegistry([pack], { chat: 'all', voice: ['create_thing'] })).toThrow(
       /writes: create_thing/,
     )
-    expect(() => new ToolRegistry([], CHANNEL_ALLOWLIST)).toThrow(/unknown tool/)
   })
 
   it('T03: every registered tool is strict: closed objects, required lists, only strict-mode keywords', () => {
@@ -167,7 +166,14 @@ describe('ToolRegistry', () => {
     expect(() => defineTool({ ...search, name: 'SearchThings' })).toThrow(/snake_case/)
   })
 
-  it('T08: the default allowlist names the demo pack’s read-only tools and nothing else', () => {
-    expect(CHANNEL_ALLOWLIST).toEqual({ chat: 'all', voice: ['search_items', 'get_item'] })
+  it('T08 CORE-10: a channel absent from the allowlist gets no tools, and core names no pack of its own', async () => {
+    const registry = new ToolRegistry([pack], { chat: 'all' })
+    expect(registry.select({ role: 'admin' }, 'voice')).toEqual([])
+    expect(registry.anthropicTools({ role: 'admin' }, 'voice')).toEqual([])
+    expect(registry.refusalReason({ role: 'admin' }, 'search_things', 'voice')).toBe('not_permitted_on_channel')
+    expect(() => new ToolRegistry([], {})).not.toThrow()
+    // The allowlist is the composing app's: core exports none (tools-* → core, never back).
+    const core = await import('../index.js')
+    expect(core).not.toHaveProperty('CHANNEL_ALLOWLIST')
   })
 })

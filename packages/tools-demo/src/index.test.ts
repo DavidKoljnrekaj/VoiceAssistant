@@ -1,8 +1,8 @@
 // The demo pack against the fakes, as the user: the handlers, the strict schemas, the allowlist,
-// and two scenarios through the real loop (D10, D11).
+// and one scenario per tool through the real loop (D10, D12, D13; D11 is the voice refusal).
 import { describe, expect, it } from 'vitest'
 
-import { CHANNEL_ALLOWLIST, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
+import { type ChannelAllowlist, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
 import {
   anthropic,
   answer,
@@ -14,27 +14,28 @@ import {
   reset,
   runChat,
   scenario,
+  toolResultSentToModel,
   toolUse,
   USERS,
 } from '@va/core/test'
 
 import { demoPack, createNote, getItem, searchItems } from './index.js'
 
+/** As the apps compose the pack: everything on chat, the two reads on voice. */
+const ALLOWLIST: ChannelAllowlist = { chat: 'all', voice: ['search_items', 'get_item'] }
 const extras: ToolHandlerExtras = { requestId: 'req-test', channel: 'chat' }
 const voice: ToolHandlerExtras = { requestId: 'req-test', channel: 'voice' }
 const signal = new AbortController().signal
 
 describe('@va/tools-demo', () => {
-  it('D01: the registry accepts the pack with the default allowlist; voice gets the two reads', () => {
-    const registry = new ToolRegistry([demoPack])
+  it('D01: the registry accepts the pack with the apps’ allowlist; voice gets the two reads', () => {
+    const registry = new ToolRegistry([demoPack], ALLOWLIST)
     expect(registry.select({ role: 'member' }, 'chat').map((t) => t.name)).toEqual([
       'create_note',
       'get_item',
       'search_items',
     ])
-    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(
-      [...CHANNEL_ALLOWLIST.voice].sort(),
-    )
+    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(['get_item', 'search_items'])
     expect(registry.find({ role: 'admin' }, 'create_note', 'voice')).toBeUndefined()
   })
 
@@ -170,7 +171,7 @@ describe('@va/tools-demo', () => {
       const ctx = await authAs('member')
       const run = await runChat(ctx, 'Koji stolovi postoje?', {
         packs: [demoPack],
-        allowlist: CHANNEL_ALLOWLIST,
+        allowlist: ALLOWLIST,
       })
       expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual([
         'create_note',
@@ -188,6 +189,58 @@ describe('@va/tools-demo', () => {
   )
 
   scenario(
+    'D12 through the loop: get_item reads one item as the user; the item reaches the model, the tool_result row and the sink',
+    async () => {
+      anthropic.script(callTools(toolUse('get_item', { item_id: ITEMS.laptop.id })), answer('Košta 1299 eura.'))
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'Koliko košta prijenosno računalo?', { packs: [demoPack], allowlist: ALLOWLIST })
+      const read = db.requestsTo('demo_items', 'GET')[0]!
+      expect(clientOf(read)).toBe('user')
+      expect(read.params.get('id')).toBe(`eq.${ITEMS.laptop.id}`)
+      expect(read.params.get('select')).toBe('id,name,category,price,description,updated_at')
+      const expected = {
+        id: ITEMS.laptop.id,
+        name: ITEMS.laptop.name,
+        category: 'it',
+        price: 1299,
+        description: `Opis: ${ITEMS.laptop.name}`,
+        updated_at: '2026-10-01T08:00:00.000Z',
+      }
+      expect(run.sink.toolResults[0]).toMatchObject({ tool: 'get_item', isError: false, output: expected })
+      expect(toolResultSentToModel(1, run.sink.toolCalls[0]!.id)).toEqual(expected)
+      expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
+
+  scenario(
+    'D13 through the loop: create_note writes as the user with the caller’s user_id; the note id reaches the model',
+    async () => {
+      anthropic.script(
+        callTools(toolUse('create_note', { item_id: ITEMS.desk.id, text: 'Naručiti dva.' })),
+        answer('Zabilježeno.'),
+      )
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'Zabilježi: naručiti dva radna stola', {
+        packs: [demoPack],
+        allowlist: ALLOWLIST,
+      })
+      const write = db.requestsTo('demo_notes', 'POST')[0]!
+      expect(clientOf(write)).toBe('user')
+      expect(write.body).toEqual({ user_id: USERS.member.id, item_id: ITEMS.desk.id, text: 'Naručiti dva.' })
+      const notes = db.rows('demo_notes')
+      expect(notes).toHaveLength(1)
+      expect(notes[0]).toMatchObject({ user_id: USERS.member.id, item_id: ITEMS.desk.id, text: 'Naručiti dva.' })
+      const sent = toolResultSentToModel(1, run.sink.toolCalls[0]!.id) as { id: string; created_at: string }
+      expect(sent.id).toBe(notes[0]!.id)
+      expect(sent).toHaveProperty('created_at')
+      expect(run.sink.toolResults[0]).toMatchObject({ tool: 'create_note', isError: false, output: { id: notes[0]!.id } })
+      expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
+
+  scenario(
     'D11 through the loop on voice: create_note is not advertised and is refused at dispatch',
     async () => {
       anthropic.script(
@@ -198,7 +251,7 @@ describe('@va/tools-demo', () => {
       const run = await runChat(ctx, 'Zabilježi nešto', {
         channel: 'voice',
         packs: [demoPack],
-        allowlist: CHANNEL_ALLOWLIST,
+        allowlist: ALLOWLIST,
       })
       expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual(['get_item', 'search_items'])
       expect(run.sink.toolResults[0]!.output).toEqual({

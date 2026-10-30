@@ -22,9 +22,8 @@ import {
 import { RoomEvent } from '@livekit/rtc-node'
 import Anthropic from '@anthropic-ai/sdk'
 
-import { channelSettings, errorReason, log, ToolRegistry } from '@va/core'
+import { channelSettings, errorReason, log } from '@va/core'
 import { createServiceClient } from '@va/db'
-import { demoPack } from '@va/tools-demo'
 
 import { AssistantAgent } from './assistant-llm.js'
 import { CallIdentity } from './call.js'
@@ -40,6 +39,7 @@ import { loadVad } from './providers/vad.js'
 import { installStdoutRedaction } from './redact.js'
 import { CallSession } from './session.js'
 import { startOptions, turnHandlingOptions, vadFor } from './session-options.js'
+import { createRegistry } from './tools.js'
 import { warm } from './warm.js'
 
 // No `lk.pii.*` key leaves this process (invariant 9): installed before anything logs.
@@ -53,7 +53,7 @@ const deps: VoiceDeps = {
     apiKey: env.ANTHROPIC_API_KEY,
     ...(env.ANTHROPIC_BASE_URL ? { baseURL: env.ANTHROPIC_BASE_URL } : {}),
   }),
-  registry: new ToolRegistry([demoPack]),
+  registry: createRegistry(),
   settings: channelSettings('voice', {
     AI_VOICE_MODEL: env.AI_VOICE_MODEL,
     AI_VOICE_EFFORT: env.AI_VOICE_EFFORT,

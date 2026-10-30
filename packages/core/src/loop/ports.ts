@@ -96,7 +96,8 @@ export interface MessageStore {
 export type LoopMark = 'model_call' | 'first_event' | 'tools_start' | 'tools_done'
 
 export interface LoopHooks {
-  /** Checked before each model call, between the model call and dispatch, and after dispatch. */
+  /** Checked before each model call, after the assistant row is persisted (before the turn's
+   * terminal events), between the model call and dispatch, and after dispatch. */
   isCancelled(): Promise<boolean>
   /** After a terminal answer: not after an error, not after a cancel. */
   onComplete(): Promise<void>
@@ -119,7 +120,9 @@ export interface LoopConfig {
 
 export interface LoopInput {
   sessionId: string
-  /** The assembled history plus the user turn just persisted. Mutated by the loop. */
+  /** The assembled history plus the user turn just persisted. The loop appends to it and moves
+   * the cache breakpoint inside it; what it hands the store is never touched afterwards, so a
+   * store may serialise its rows after the loop has returned. */
   messages: InMemoryMessage[]
   /** The row the next one chains off: the user turn just persisted. */
   lastInsertedId: string

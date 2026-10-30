@@ -41,7 +41,7 @@ one is red.
   layout or a dependency edge changed; `docs/API.md` if an event or endpoint changed
 - **Migrations:** written, not applied; each listed as an unticked "Apply …" item in
   `docs/backlog/release.md` with the check to run after applying
-- **Allowlist:** a tool added to `CHANNEL_ALLOWLIST.voice` has the reason in the commit message
+- **Allowlist:** a tool added to `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`) has the reason in the commit message
 - **Backlog:** anything found and not fixed has an entry (`/backlog`); anything fixed is closed
 
 ## 3. Report

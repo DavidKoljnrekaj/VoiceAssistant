@@ -19,7 +19,7 @@ packages/core/src/
 ├── log.ts                one JSON line per event ({ ts, tag, event, …fields }), never content; errorReason() cuts a
 │                         third party's message to 200 chars; log-fields.test.ts lints every call site (docs/OPS.md)
 ├── prompts/              DOMAIN_RULES_HR, chat and voice blocks, buildStaticSystemPrompt, buildUserContext
-├── tools/                defineTool, ToolRegistry, CHANNEL_ALLOWLIST, toAnthropicTool
+├── tools/                defineTool, ToolRegistry, ChannelAllowlist, toAnthropicTool
 ├── loop/                 ports, orchestrator, model-call, tool-round, dispatch, history
 ├── sinks/                BufferedSink, SpokenTextSink, speakable
 └── test/                 fake-anthropic, fake-supabase, fixtures, tools, harness → exported as @va/core/test
@@ -62,6 +62,7 @@ loop   ┌──▶ hooks.isCancelled? ── yes ──▶ return (silent)
        │      abort while streaming ──▶ log, return (silent)      SDK error ──▶ sink.error(mapped), return
        │    store.insert(assistant row)              failure ──▶ sink.error(persistence_error), return
        │    blocks in order: text → sink.textBlock(text, rowId); tool_use → sink.toolCall
+       │    terminal stop and cancelled ──▶ log, synthetic results if truncated, return (silent)
        │    refusal ──▶ sink.done('refusal'), onComplete, return
        │    tool_use:
        │      cancelled before dispatch ──▶ synthetic results for every tool
@@ -81,13 +82,19 @@ order → dispatch the turn's tools concurrently, each with its own timeout and 
 → persist the single `tool_result` row (blocks in `tool_use` order) → emit the results → loop.
 Token deltas are the one provisional exception; the `turn` event that follows is canonical. The
 `tool_result` insert is retried once: that row is what keeps the branch from ending on a bare
-`tool_use`.
+`tool_use`. What the loop hands the store it never touches again: the message array it pushes
+onto and moves the cache breakpoint in holds copies, so a store that serialises after the loop
+(voice's `DeferredStore`) writes the rows exactly as the model and the tools produced them
+(`E33`).
 
-Abort is checked before each model call, between the model call and dispatch, and after
-dispatch. On abort the loop persists synthetic `is_error` results for tools that did not finish
-(`cancelled before the tool ran` / `cancelled before the tool returned`; finished tools keep
-their real output), emits no result event and returns silently; the request owner decides
-whether to emit `error`. A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
+Abort is checked before each model call, after the assistant row is persisted (before the
+turn's terminal events), between the model call and dispatch, and after dispatch. On abort the
+loop persists synthetic `is_error` results for tools that did not finish (`cancelled before the
+tool ran` / `cancelled before the tool returned`; finished tools keep their real output), emits
+no result event and returns silently; the request owner decides whether to emit `error`. An
+abort that lands during the assistant-row insert of a terminal turn leaves the row, emits no
+`done` and runs no `onComplete` (`aborted after model call`; a truncation still closes its tool
+calls out, `E35`, `E35b`). A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
 fallback and unknown block types are persisted verbatim and never emitted. A terminal stop with
 `tool_use` blocks (truncation) persists synthetic results and one Croatian explanation row
 (`TRUNCATED_HR`). The manual loop over `messages.stream` is a decision (`docs/decisions/0009`),
@@ -101,9 +108,15 @@ resolves the name through `registry.find` (an unknown or forbidden name throws w
 `{ error: 'tool execution failed: tool refused: <reason>' }`), re-validates the input with the
 tool's zod schema (`{ error: 'invalid tool input', issues }` without calling the handler), and
 runs the handler with a child signal (`AbortSignal.any` of the loop signal and the timeout). The
-timer is cleared on every exit; a timeout is `{ error: 'tool execution failed: tool_timeout' }`
+timer is cleared on every exit, the loop's abort included (a handler that ignores its signal
+leaves no timer behind, `E36`); a timeout is `{ error: 'tool execution failed: tool_timeout' }`
 and the handler is told to stop through its signal. A handler's `{ error }` return is an error
-result too; a throw becomes `{ error: 'tool execution failed: <message>' }`.
+result too; a throw becomes `{ error: 'tool execution failed: <message>' }`. The outcome always
+serialises: a handler that resolves `undefined` (a `Promise<void>` handler type-checks) is
+persisted as `null`, and an output `JSON.stringify` rejects (a BigInt, a cycle) becomes
+`{ error: 'tool output not serialisable: …' }` with a `tool output not serialisable` log line,
+so the `tool_result` row can always be written (`E31`, `E32`). The sink receives the outcome
+itself, the same value the row's `content` holds.
 
 ### History assembly
 
@@ -112,10 +125,16 @@ returns (root → leaf) and builds the message array: rows with no content block
 dropped; an assistant row whose `tool_use` ids are not all answered by the next row gets
 synthetic `is_error` results (`interrupted before the tool returned`), appended to the existing
 `tool_result` message or inserted as a new one, in memory only; turns split at `turn_kind:
-'user'`; a session summary whose boundary is on the branch replaces the turns up to it and is
-folded into the first kept message as a banner; above the ceiling (chars / 4) whole oldest turns
+'user'`; a session summary whose boundary is on the branch replaces everything up to the next
+user turn after it and is folded into that turn's text as a banner (a boundary inside the last
+turn is ignored, so the first message is always a user text, `H09`); above the ceiling (chars / 4) whole oldest turns
 are dropped, at least one kept. `applyMessageCacheBreakpoint` moves the message breakpoint to the
-last block of the last message before every call. The compaction writer is not built (`CORE-3`).
+last block of the last message before every call. When the request advertises no tools (a role
+downgrade, a tool gone from the registry or an allowlist, a channel with no tools for the role)
+the loop first applies `withoutToolBlocks`: the API rejects `tool_use` and `tool_result` blocks
+without `tools`, so they are dropped from the in-memory history, empty messages with them, and
+same-role neighbours merged; the rows keep their tool rounds (`E34`). The compaction writer is
+not built (`CORE-3`).
 
 ## Sinks
 
@@ -203,7 +222,9 @@ SDK's typed errors into a code, a message and a `shouldLog` flag: 429 → `model
 connection timeout → `model_timeout` (checked before the connection error, its superclass),
 connection failure → `model_unreachable`, 400 → `model_bad_request`, 401 → `model_auth_failed`,
 529 (overloaded) → `model_rate_limited`, anything else → `model_error`. Operational states are
-not logged loudly; our-fault errors and the fall-through are.
+not logged loudly; our-fault errors and the fall-through are, as `model call failed` with
+`errorClass`, `code` and `reason` (`errorReason(err)`: the SDK's message cut to 200 chars, which
+names the rejected field of a bad request; `E37`).
 
 ## Prompts
 
@@ -247,8 +268,8 @@ defineTool({
 output for that channel through `extras.channel`: on voice no ids or timestamps, at most five
 items, short text (the demo pack's two reads are the pattern).
 
-A pack is `{ name, tools, domainRules? }`. `ToolRegistry(packs, allowlist = CHANNEL_ALLOWLIST)`
-throws on a duplicate name and on an allowlist that names an unknown or a write tool.
+A pack is `{ name, tools, domainRules? }`. `ToolRegistry(packs, allowlist)` throws on a
+duplicate name and on an allowlist that names an unknown or a write tool.
 `select(ctx, channel)` is role ∩ channel, sorted by name; `find(ctx, name, channel)` resolves a
 name through the same filter (undefined for unknown and forbidden alike; `refusalReason` says
 which: `unknown_tool`, `not_permitted_for_role`, `not_permitted_on_channel`); `anthropicTools(ctx,
@@ -269,10 +290,15 @@ result with the issues and the handler is not called. A handler that returns `{ 
 
 ### Channel allowlist
 
-`CHANNEL_ALLOWLIST = { chat: 'all', voice: ['search_items', 'get_item'] }`. Chat gets every
-registered tool its role allows; voice only what is named, in a reviewed diff that says why
-the output is safe to read aloud (no ids spoken, ≤ 5 items, plain numbers). Every voice tool is
-`readOnly: true`, asserted when the registry is built and by test `T02`.
+`ChannelAllowlist` is `Partial<Record<Channel, 'all' | readonly string[]>>`: `'all'` opens a
+channel to every registered tool its role allows, a list names what it gets, and a channel
+absent from the record gets nothing (`T08`). Core ships no allowlist: the app that composes the
+packs supplies it, so core never names a pack's tools (`tools-* → core`, never back). The API
+(`apps/api/src/tools.ts`, `API_ALLOWLIST = { chat: 'all' }`) serves chat; the worker
+(`apps/voice/src/tools.ts`, `VOICE_ALLOWLIST = { voice: ['search_items', 'get_item'] }`) names
+what a caller may reach by voice, in a reviewed diff that says why the output is safe to read
+aloud (no ids spoken, ≤ 5 items, plain numbers). Every voice tool is `readOnly: true`, asserted
+when the registry is built (`T02`, `W20`).
 
 ### Catalogue
 
@@ -292,16 +318,17 @@ client to a hand-written type in `demo-db.ts` until the migration is applied to 
 
 `/new-tool <pack> <name> <one line>` walks it: the `defineTool` block in
 `packages/<pack>/src/tools/<name>.ts`, registration in the pack's `tools` array, the voice
-allowlist decision (with the reason in the commit), a scenario test through the loop (`runChat`,
-as `D10` in the demo pack) and
+allowlist decision (`VOICE_ALLOWLIST` in `apps/voice/src/tools.ts`, with the reason in the
+commit), a scenario test through the loop (`runChat`, as `D10` in the demo pack) and
 the `tool-security-reviewer` agent. Escape `\\`, `%` and `_` before any `ilike` and reject `*` in the schema (PostgREST reads `*` as `%` and cannot be made to take it literally; `escapeLike` and `NO_STAR` in the demo pack are the pattern), never interpolate raw input into `.or()`, cap lists in the query itself (not only in the schema), and update the catalogue above.
 
 ### How to add a channel
 
-Add it to `Channel`, a row to `CHANNEL_DEFAULTS` (and env override names), an entry to
-`CHANNEL_ALLOWLIST` (default-deny: start with `[]`), intro and presentation blocks in
-`prompts/`, a sink and a store in the owning app, and a settings test. The loop, the registry
-and the gate need no change.
+Add it to `Channel`, a row to `CHANNEL_DEFAULTS` (and env override names), an allowlist in
+the app that will serve it (default-deny: a channel its app does not name gets nothing; start
+with `[]` and add tools in reviewed diffs), intro and presentation blocks in `prompts/`, a sink
+and a store in the owning app, and a settings test. The loop, the registry and the gate need no
+change.
 
 ## Testing
 
@@ -312,14 +339,17 @@ Supabase env for `@va/db`, routes `globalThis.fetch` for `fake-anthropic.test` a
 - `FakeAnthropic`: `script(...turns)` with `answer`, `callTools`, `toolUse`, `text`, `refusal`,
   `{ error }`, `{ connectionError }`, `{ hangUntilAborted }` or a function of the captured
   request; serves `messages.create`, `messages.stream` and the beta endpoint identically;
-  rejects conversations the real API rejects; counts unscripted calls.
+  rejects conversations the real API rejects (a non-user first message, an unanswered
+  `tool_use`, an orphan `tool_result`, tool blocks on a request without `tools`); counts
+  unscripted calls.
 - `FakeSupabase`: GoTrue `/auth/v1/user` by token, a PostgREST subset (selects, embeds, filters,
   order, limit, count, single, insert/update/delete, `rpc/`), `fault`, `hold`, `onRequest`,
   recorded requests with the client that made them (`clientOf`).
 - `fixtures`: `seedWorld(db)` with an admin and a member (`TOKENS`, `USERS`), the member's chat
   session (three-row chain), nine `demo_items`, and the `ai_session_history` RPC.
-- `tools`: `TEST_PACK` (`echo`, `whoami`, `gate`, `fail`, `boom`, `admin_only`, `write_note`)
-  and `TEST_ALLOWLIST`; `openGate(key, value)` releases a running `gate` handler,
+- `tools`: `TEST_PACK` (`echo`, `whoami`, `gate`, `fail`, `boom`, `admin_only`, `write_note`),
+  `EDGE_PACK` (`nothing`, `bigint`, `ignores_signal`: what the engine must survive) and
+  `TEST_ALLOWLIST`; `openGate(key, value)` releases a running `gate` handler,
   `awaitHandlerEvent('start:key' | 'end:key' | 'aborted:key')` waits for one, `handlerEvents`
   lists them.
 - `harness`: `scenario(name, fn)` (fresh world, fails on an unscripted or unused model turn),
@@ -339,6 +369,7 @@ VA_TEST_LOGS=1 pnpm exec vitest run packages/core/src/auth.test.ts
 
 Suites: `C` settings, `M` model profiles, `X` errors (through the real SDK), `A` identity, `P`
 prompts, `T` registry and schema, `F` fake Anthropic, `G` fake Supabase (GoTrue and PostgREST),
-`D` the demo pack (handlers, and `D10`/`D11` through the loop), `E` the loop
+`D` the demo pack (handlers, and one scenario per tool through the loop: `D10`, `D12`, `D13`,
+plus the voice refusal `D11`), `E` the loop
 (`loop/orchestrator.test.ts`, `loop/abort.test.ts`), `H` history assembly, `S` the spoken sink
 and `speakable` (`sinks/spoken.test.ts`).

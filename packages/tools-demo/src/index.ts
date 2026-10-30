@@ -1,5 +1,6 @@
 // @va/tools-demo: the example pack, and the contract every real pack follows. Two read-only tools
-// (on the voice allowlist in @va/core) and one write tool (chat only).
+// (the voice worker names them in its allowlist, `apps/voice/src/tools.ts`) and one write tool
+// (chat only). A pack names no channel: the app that composes it decides.
 import type { ToolPack } from '@va/core'
 
 import { createNote } from './tools/create-note.js'

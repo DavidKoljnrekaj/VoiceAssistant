@@ -26,10 +26,11 @@ item says so in its description.
       `escapeLike` and `NO_STAR` in `@va/tools-demo` are the pattern (`docs/CORE.md` → Tools).
       Tests: the pack's scenarios, `demo_tables.test.sql` (pgTAP).
 - [ ] **The voice allowlist is read-only; dispatch re-applies the gate; speech is untrusted
-      input.** `CHANNEL_ALLOWLIST` with the `readOnly` assertion at module load
-      (`packages/core/src/tools/registry.ts`); `dispatchTool` resolves the name through the same
-      role-and-channel filter and answers an `is_error` result (invariants 4 and 5). Tests:
-      `T02`, `T05`, `T08`, `E08`–`E10`, `W06`.
+      input.** `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`, the only place a tool is named for
+      voice) with the `readOnly` assertion at module load (`packages/core/src/tools/registry.ts`);
+      `dispatchTool` resolves the name through the same role-and-channel filter and answers an
+      `is_error` result (invariants 4 and 5). Tests: `T02`, `T05`, `T08`, `E08`–`E10`, `W06`,
+      `W20`, `R01`.
 - [ ] **The JWT never leaves our side.** LiveKit job metadata carries only the opaque call token
       and the session id; the browser gets only a LiveKit room token; the `voice_calls` row holds
       the JWT under the token's SHA-256 (`docs/API.md` → Voice call lifecycle). Tests: `V01`,

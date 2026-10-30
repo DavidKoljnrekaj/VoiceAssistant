@@ -149,12 +149,56 @@ export const writeNote = defineTool({
   },
 })
 
+/** Resolves `undefined`: a `Promise<void>` handler type-checks against the contract. */
+export const nothing = defineTool({
+  name: 'nothing',
+  description: 'Returns nothing.',
+  input: z.object({}),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler() {},
+})
+
+/** Resolves a value JSON cannot serialise. */
+export const bigint = defineTool({
+  name: 'bigint',
+  description: 'Returns a BigInt.',
+  input: z.object({}),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler() {
+    return { total: 9007199254740993n }
+  },
+})
+
 export const TEST_PACK: ToolPack = {
   name: 'test',
   tools: [echo, whoami, gateTool, fail, boom, adminOnly, writeNote] as ToolPack['tools'],
 }
 
-export const TEST_ALLOWLIST: ChannelAllowlist = {
+/** A handler that never looks at its signal: waits for its gate, whatever the loop does. */
+export const ignoresSignal = defineTool({
+  name: 'ignores_signal',
+  description: 'Waits for the gate with this key and ignores the abort signal.',
+  input: z.object({ key: z.string().describe('Gate key.') }),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler(input) {
+    record(`start:${input.key}`)
+    const value = await gate(input.key).promise
+    record(`end:${input.key}`)
+    return value
+  },
+})
+
+/** Handlers the engine must survive (CORE-5, CORE-8); a separate pack so the request shape E02
+ * pins stays the same. */
+export const EDGE_PACK: ToolPack = {
+  name: 'edge',
+  tools: [nothing, bigint, ignoresSignal] as ToolPack['tools'],
+}
+
+export const TEST_ALLOWLIST = {
   chat: 'all',
   voice: ['echo', 'whoami', 'gate'],
-}
+} as const satisfies ChannelAllowlist

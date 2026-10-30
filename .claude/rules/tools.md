@@ -15,8 +15,9 @@ paths:
   `.or()` filter; escape `%` and `_` before any `ilike`.
 - **Output shape:** small and stable; numbers raw (no formatting), dates ISO strings; list sizes
   capped (`limit` ≤ 100, default 20). Voice variants cap at 3–5 items and carry no ids.
-- **Reaching voice:** a tool reaches voice only by editing `CHANNEL_ALLOWLIST.voice`, and the diff
-  (commit message or PR) says why its output is safe to read aloud.
+- **Reaching voice:** a tool reaches voice only by editing `VOICE_ALLOWLIST` in
+  `apps/voice/src/tools.ts` (the app composes the packs; core names no pack's tools), and the
+  diff (commit message or PR) says why its output is safe to read aloud.
 - **Tests:** every tool ships with a scenario test through the loop using the fakes (seeded
   fixtures), not only a handler unit test. The test asserts the request the handler sent and the
   result the model received.

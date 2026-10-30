@@ -7,17 +7,14 @@ import type { Channel } from '../channel.js'
 import type { ToolDefinition, ToolPack } from './define.js'
 import { toAnthropicTool } from './schema.js'
 
-export type ChannelAllowlist = Record<Channel, 'all' | readonly string[]>
-
 /**
- * Default-deny per channel: chat gets every registered tool; voice only what is named here, in
- * a reviewed diff that says why the output is safe to read aloud. Every voice tool is read-only,
- * asserted when the registry is built.
+ * Default-deny per channel: `'all'` opens a channel to every registered tool its role allows, a
+ * list names the tools it gets, and a channel absent from the record gets none. The app that
+ * composes the packs supplies it (`apps/api/src/tools.ts`, `apps/voice/src/tools.ts`): core
+ * names no pack's tools. Every tool named for a spoken channel is read-only, asserted when the
+ * registry is built.
  */
-export const CHANNEL_ALLOWLIST: ChannelAllowlist = {
-  chat: 'all',
-  voice: ['search_items', 'get_item'],
-}
+export type ChannelAllowlist = Partial<Record<Channel, 'all' | readonly string[]>>
 
 export type RefusalReason = 'unknown_tool' | 'not_permitted_for_role' | 'not_permitted_on_channel'
 
@@ -26,7 +23,7 @@ export class ToolRegistry {
   private readonly allowlist: ChannelAllowlist
   private readonly advertised = new Map<string, Anthropic.Tool[]>()
 
-  constructor(packs: readonly ToolPack[], allowlist: ChannelAllowlist = CHANNEL_ALLOWLIST) {
+  constructor(packs: readonly ToolPack[], allowlist: ChannelAllowlist) {
     for (const pack of packs) {
       for (const tool of pack.tools) {
         if (this.byName.has(tool.name)) throw new Error(`duplicate tool name: ${tool.name}`)
@@ -49,7 +46,7 @@ export class ToolRegistry {
 
   /** The tools this role may use on this channel (role ∩ channel), sorted by name. */
   select(ctx: Pick<AuthContext, 'role'>, channel: Channel): ToolDefinition<unknown>[] {
-    const allowed = this.allowlist[channel]
+    const allowed = this.allowlist[channel] ?? []
     return this.all().filter(
       (t) => t.requiredRoles.includes(ctx.role) && (allowed === 'all' || allowed.includes(t.name)),
     )
@@ -85,7 +82,8 @@ export class ToolRegistry {
   }
 }
 
-/** Throws when an allowlist names a tool that is not registered or that writes. */
+/** Throws when an allowlist names a tool that is not registered or that writes, so a bad
+ * composition fails at load, not at the first call. */
 export function assertAllowlist(
   tools: ReadonlyMap<string, ToolDefinition<unknown>>,
   allowlist: ChannelAllowlist,
@@ -94,8 +92,8 @@ export function assertAllowlist(
     if (names === 'all') continue
     for (const name of names) {
       const tool = tools.get(name)
-      if (!tool) throw new Error(`CHANNEL_ALLOWLIST.${channel} names an unknown tool: ${name}`)
-      if (!tool.readOnly) throw new Error(`CHANNEL_ALLOWLIST.${channel} names a tool that writes: ${name}`)
+      if (!tool) throw new Error(`allowlist.${channel} names an unknown tool: ${name}`)
+      if (!tool.readOnly) throw new Error(`allowlist.${channel} names a tool that writes: ${name}`)
     }
   }
 }

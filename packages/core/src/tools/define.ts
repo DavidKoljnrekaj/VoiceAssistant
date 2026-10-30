@@ -22,8 +22,10 @@ export interface ToolDefinition<I> {
   input: z.ZodType<I>
   requiredRoles: readonly Role[]
   /** True only when the handler never inserts, updates, deletes or calls a writing RPC. Every
-   * tool on the voice allowlist must be read-only; the registry asserts it at construction. */
+   * tool an app names for voice must be read-only; the registry asserts it at construction. */
   readOnly: boolean
+  /** The result the model reads, as JSON. `undefined` is persisted as `null`; a value JSON
+   * cannot hold (a BigInt, a cycle) becomes an `is_error` result at dispatch. */
   handler(input: I, ctx: AuthContext, extras: ToolHandlerExtras, signal: AbortSignal): Promise<unknown>
 }
 

@@ -23,9 +23,9 @@ Existing tools in the pack:
      interpolating raw input into `.or()`
    - output small and stable: numbers raw, dates ISO, lists capped
 3. Register it in the pack's `src/index.ts` (the pack's `tools` array).
-4. **Decide and state whether it goes on the voice allowlist** (`CHANNEL_ALLOWLIST.voice` in
-   `@va/core`) and why its output is safe to read aloud (no ids, no secrets, ≤ 5 items). If it
-   goes on, say so in the commit message.
+4. **Decide and state whether it goes on the voice allowlist** (`VOICE_ALLOWLIST` in
+   `apps/voice/src/tools.ts`; core names no pack's tools) and why its output is safe to read
+   aloud (no ids, no secrets, ≤ 5 items). If it goes on, say so in the commit message.
 5. Add a scenario test through the loop using the fakes (`fixtures` seeded, a scripted model turn
    that calls the tool), asserting the request the handler sent and the `tool_result` the model
    received. Give it a scenario id.

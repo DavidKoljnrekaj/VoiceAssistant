@@ -59,9 +59,17 @@ describe('mapAnthropicError', () => {
     })
   })
 
-  it('X05: every code has a non-empty Croatian message', () => {
+  it('X05: every code has its own Croatian sentence: trimmed, ending in a full stop, distinct, and the one the mapping emits', () => {
     const codes = Object.keys(MESSAGES_HR) as ErrorCode[]
-    expect(codes).toHaveLength(22)
-    for (const code of codes) expect(MESSAGES_HR[code].length).toBeGreaterThan(5)
+    const messages = codes.map((code) => MESSAGES_HR[code])
+    for (const message of messages) {
+      expect(message).toBe(message.trim())
+      expect(message).toMatch(/^\p{Lu}.*\.$/u)
+      expect(message.length).toBeGreaterThan(5)
+    }
+    expect(new Set(messages).size).toBe(messages.length)
+    // The mapping never invents text: a mapped error carries the catalogue's message for its code.
+    const mapped = mapAnthropicError(new Error('boom'))
+    expect(mapped.message).toBe(MESSAGES_HR[mapped.code])
   })
 })

@@ -1,13 +1,12 @@
 // Runs the real Hono app in-process against the @va/core fakes. Importing `@va/core/test` sets
 // the Supabase and Anthropic env for the process and routes `globalThis.fetch` to the fakes;
 // nothing in the app is stubbed. `app.request()` takes ordinary Request objects: no port.
-import { ToolRegistry } from '@va/core'
 import { anthropicClient, scenario as coreScenario, TOKENS } from '@va/core/test'
-import { demoPack } from '@va/tools-demo'
 
 import { createApp } from '../src/app.js'
 import type { AppDeps } from '../src/deps.js'
 import { parseApiEnv } from '../src/env.js'
+import { createRegistry } from '../src/tools.js'
 import type { JoinTokenInput, LiveKitPort } from '../src/voice/livekit.js'
 
 export { anthropic, db, logs, reset as resetWorld, TOKENS, USERS } from '@va/core/test'
@@ -51,7 +50,7 @@ export const env = parseApiEnv({
 export function buildApp(overrides: Partial<AppDeps> = {}) {
   return createApp({
     anthropic: anthropicClient(),
-    registry: new ToolRegistry([demoPack]),
+    registry: createRegistry(),
     env,
     livekit,
     clock: () => new Date(),

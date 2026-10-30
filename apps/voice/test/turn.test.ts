@@ -3,7 +3,7 @@
 // and the requests sent; the loop itself is tested in @va/core.
 import { describe, expect } from 'vitest'
 
-import { CHANNEL_ALLOWLIST, FALLBACK_BETA, MESSAGES_HR } from '@va/core'
+import { FALLBACK_BETA, MESSAGES_HR } from '@va/core'
 import {
   answer,
   awaitHandlerEvent,
@@ -20,6 +20,7 @@ import {
 import { demoPack } from '@va/tools-demo'
 
 import { MAX_TURNS_PER_CALL } from '../src/session.js'
+import { VOICE_ALLOWLIST } from '../src/tools.js'
 
 import {
   anthropic,
@@ -72,7 +73,7 @@ describe('a spoken turn', () => {
   scenario(
     'W06 a tool outside the voice allowlist is refused at dispatch even when the model names it',
     async () => {
-      expect(CHANNEL_ALLOWLIST.voice).not.toContain('create_note')
+      expect(VOICE_ALLOWLIST.voice).not.toContain('create_note')
       anthropic.script(
         callTools(toolUse('create_note', { item_id: uuid(501), text: 'zapamti' })),
         answer('To ne mogu u glasovnom razgovoru.'),

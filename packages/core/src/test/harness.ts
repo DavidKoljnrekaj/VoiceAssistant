@@ -161,6 +161,8 @@ export interface RunChatOptions {
   modelText?: string
   /** A sink the test owns, to inspect while the loop runs. */
   sink?: BufferedSink
+  /** A store the test owns (a deferred one, say); `serviceStore` otherwise. */
+  store?: MessageStore
 }
 
 export interface RunChatResult {
@@ -263,7 +265,7 @@ export async function runChat(
     },
     { sessionId, messages, lastInsertedId: userRow.id, extras },
     sink,
-    serviceStore(ctx, sessionId),
+    opts.store ?? serviceStore(ctx, sessionId),
     hooks,
     controller.signal,
   )
