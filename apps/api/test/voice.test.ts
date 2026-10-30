@@ -151,6 +151,21 @@ describe('voice call lifecycle', () => {
     },
   )
 
+  scenario(
+    'V18 (API-11) a failed delete of the previous call is 500 internal_error, logged, and nothing is written',
+    async () => {
+      db.fault((r) => r.table === 'voice_calls' && r.method === 'DELETE', { status: 500 })
+      const res = await call('/voice/sessions')
+      expect(await flatError(res)).toMatchObject({ status: 500, code: 'internal_error' })
+      expect(calls()).toHaveLength(0)
+      expect(voiceSessions()).toHaveLength(0)
+      expect(livekit.dispatches).toHaveLength(0)
+      expect(
+        logs.some((l) => l.level === 'error' && l.line.includes('"event":"previous call cleanup failed"')),
+      ).toBe(true)
+    },
+  )
+
   scenario('V05 a failed dispatch is 502 voice_dispatch_failed and both rows are removed', async () => {
     livekit.failNextDispatch = true
     const res = await call('/voice/sessions')
