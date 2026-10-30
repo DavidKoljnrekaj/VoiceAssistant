@@ -86,9 +86,20 @@ export async function startCall(
     return { ok: false, code: 'internal_error' }
   }
   const scoped = { ...ids, session_id: session.id }
+  // Undoes what this request created. Best-effort: a failed delete is logged with the table and
+  // carried on, so a stuck credential row never goes unnoticed and the session delete still runs.
   const rollback = async () => {
-    await service.from('voice_calls').delete().eq('session_id', session.id).eq('user_id', ctx.userId)
-    await service.from('ai_sessions').delete().eq('id', session.id).eq('user_id', ctx.userId)
+    const calls = await service
+      .from('voice_calls')
+      .delete()
+      .eq('session_id', session.id)
+      .eq('user_id', ctx.userId)
+    if (calls.error)
+      log('error', '[api]', 'rollback failed', { ...scoped, table: 'voice_calls', code: calls.error.code })
+    const sessions = await service.from('ai_sessions').delete().eq('id', session.id).eq('user_id', ctx.userId)
+    if (sessions.error) {
+      log('error', '[api]', 'rollback failed', { ...scoped, table: 'ai_sessions', code: sessions.error.code })
+    }
   }
 
   const callToken = randomBytes(32).toString('base64url')
@@ -121,12 +132,23 @@ export async function startCall(
     return { ok: false, code: 'voice_dispatch_failed' }
   }
 
-  const token = await deps.livekit.joinToken({
-    identity: ctx.userId,
-    ...(ctx.email ? { name: ctx.email } : {}),
-    room,
-    ttlSeconds: CALL_CAP_MS / 1000,
-  })
+  // The dispatch cannot be undone; without a row the worker refuses the token at lookup (`apps/voice/src/call.ts`).
+  let token: string
+  try {
+    token = await deps.livekit.joinToken({
+      identity: ctx.userId,
+      ...(ctx.email ? { name: ctx.email } : {}),
+      room,
+      ttlSeconds: CALL_CAP_MS / 1000,
+    })
+  } catch (err) {
+    log('error', '[api]', 'join token failed', {
+      ...scoped,
+      reason: err instanceof Error ? err.constructor.name : typeof err,
+    })
+    await rollback()
+    return { ok: false, code: 'internal_error' }
+  }
   log('info', '[api]', 'call started', { ...scoped, room })
   return { ok: true, value: { url: deps.livekit.url, token, room, session_id: session.id } }
 }

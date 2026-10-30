@@ -5,7 +5,18 @@ import { describe, expect } from 'vitest'
 import { uuid } from '@va/core/test'
 
 import { CALL_CAP_MS, sha256Hex } from '../src/voice/calls.js'
-import { buildApp, call, db, flatError, livekit, memberJwt, scenario, TOKENS, USERS } from './harness.js'
+import {
+  buildApp,
+  call,
+  db,
+  flatError,
+  livekit,
+  logs,
+  memberJwt,
+  scenario,
+  TOKENS,
+  USERS,
+} from './harness.js'
 
 const M = USERS.member
 const calls = () => db.rows('voice_calls')
@@ -102,6 +113,36 @@ describe('voice call lifecycle', () => {
     const res = await call('/voice/sessions')
     expect(await flatError(res)).toMatchObject({ status: 502, code: 'voice_dispatch_failed' })
     expect(calls()).toHaveLength(0)
+    expect(voiceSessions()).toHaveLength(0)
+  })
+
+  scenario(
+    'V11 (API-4) a failed join token is 500 internal_error and both rows are removed; the dispatch stays and is logged',
+    async () => {
+      livekit.failNextJoinToken = true
+      const res = await call('/voice/sessions')
+      expect(await flatError(res)).toMatchObject({ status: 500, code: 'internal_error' })
+      expect(calls()).toHaveLength(0)
+      expect(voiceSessions()).toHaveLength(0)
+      expect(livekit.dispatches).toHaveLength(1)
+      const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"join token failed"'))
+      expect(line?.line).toContain('"session_id"')
+      expect(line?.line).not.toContain(TOKENS.member)
+    },
+  )
+
+  scenario('V12 (API-4) a rollback whose delete fails logs the failure with the session id', async () => {
+    livekit.failNextDispatch = true
+    db.fault((r) => r.table === 'voice_calls' && r.method === 'DELETE' && r.params.has('session_id'), {
+      status: 500,
+    })
+    const res = await call('/voice/sessions')
+    expect(await flatError(res)).toMatchObject({ status: 502, code: 'voice_dispatch_failed' })
+    const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"rollback failed"'))
+    expect(line?.line).toContain('"table":"voice_calls"')
+    expect(line?.line).toContain('"code":"XX000"')
+    expect(line?.line).toContain('"session_id"')
+    // The session delete still ran: a failed first delete does not skip the second.
     expect(voiceSessions()).toHaveLength(0)
   })
 
