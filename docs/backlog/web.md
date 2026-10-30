@@ -34,18 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-10 · Low · `useVoiceCall`: a closed tab never ends the call; tracks are removed without `detach()`; `TrackUnsubscribed` is unhandled (R-W7)
-
-- **Check:** Confirmed (R-W7, verified 2026-10-30)
-- **Where:** `apps/web/src/components/Chat/hooks/useVoiceCall.ts` (`teardown`, the room event
-  handlers)
-- **What happens:** closing the tab leaves the `voice_calls` row to the 15-minute cap and the
-  sweep; audio elements are removed without `track.detach()`; an unsubscribed track keeps its
-  element. A `room.connect` failure after `live.current` is set runs teardown twice, which the
-  `live.current = null` guard makes harmless
-- **Fix direction:** a `pagehide` listener that calls the end endpoint with `keepalive: true`;
-  `detach()` before `remove()`; a `TrackUnsubscribed` handler
-
 ### WEB-11 · Low · No stall detection on the chat stream (R-W8)
 
 - **Check:** Confirmed (R-W8, verified 2026-10-30)
@@ -127,3 +115,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-9 · Low · Stopping or leaving a brand-new conversation plants the interrupted marker in the fresh view (R-W6)
 
 - Fixed 2026-10-30 on fix/web-review: the store counts view replacements (new conversation, select, user change) and a stream whose view was replaced ends without touching it; a plain stop still leaves the typed row and the marker. Tests `WEB-9` in `useChatStore.test.ts`.
+
+### WEB-10 · Low · `useVoiceCall`: a closed tab never ends the call; tracks are removed without `detach()`; `TrackUnsubscribed` is unhandled (R-W7)
+
+- Fixed 2026-10-30 on fix/web-review: a `pagehide` listener ends the call through `endVoiceCall(id, { keepalive: true })`; tracks are kept and `detach()`ed before their elements are removed; `TrackUnsubscribed` detaches its track. Tests `WEB-10` in `useVoiceCall.test.ts` (livekit-client is a scripted module there: WebRTC has no wire a fetch fake could answer).

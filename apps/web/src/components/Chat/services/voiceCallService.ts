@@ -14,9 +14,15 @@ export async function refreshVoiceCall(sessionId: string): Promise<void> {
   await apiJson<{ ok: true }>(`/voice/sessions/${sessionId}/refresh`, { method: 'POST' })
 }
 
-/** Deletes the call's stored credential. The session row and its messages stay. */
-export async function endVoiceCall(sessionId: string): Promise<void> {
-  await apiJson<{ ok: true }>(`/voice/sessions/${sessionId}/end`, { method: 'POST' })
+/**
+ * Deletes the call's stored credential. The session row and its messages stay. `keepalive` lets
+ * the request outlive the page (the `pagehide` hang-up).
+ */
+export async function endVoiceCall(sessionId: string, options: { keepalive?: boolean } = {}): Promise<void> {
+  await apiJson<{ ok: true }>(`/voice/sessions/${sessionId}/end`, {
+    method: 'POST',
+    keepalive: options.keepalive === true,
+  })
 }
 
 /** Calls back whenever supabase-js refreshes the access token; returns the unsubscribe. */

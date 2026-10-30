@@ -4,6 +4,7 @@
 // supabase-js and the real `lib/api.ts` run on top (the rule: fakes stand in for the services,
 // never for the SDKs). Every request is recorded so tests assert on what was sent.
 import { env } from '../lib/env'
+import { supabase } from '../lib/supabase'
 
 export interface RecordedRequest {
   method: string
@@ -183,6 +184,19 @@ export function fakeGoTrue(backend: FakeBackend, user: FakeAuthUser): FakeGoTrue
   backend.route('GET', origin, '/auth/v1/user', () => json(authUser()))
   backend.route('POST', origin, '/auth/v1/logout', () => new Response(null, { status: 204 }))
   return state
+}
+
+/** Routes GoTrue for `user` and signs the real client in, so `lib/api.ts` has a bearer token. */
+export async function signInTestUser(backend: FakeBackend, user: FakeAuthUser): Promise<FakeGoTrue> {
+  const gotrue = fakeGoTrue(backend, user)
+  const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: 'pw' })
+  if (error) throw error
+  return gotrue
+}
+
+/** Forgets the client's session without a request (the fake backend may already be gone). */
+export async function signOutTestUser(): Promise<void> {
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------------------------
