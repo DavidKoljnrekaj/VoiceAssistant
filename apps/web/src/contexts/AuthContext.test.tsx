@@ -3,6 +3,7 @@
 // (sign-in, refresh, sign-out), with `profileService` scripted per case. Assertions are on what
 // the routes see (`session`, `profile`, `loading`, `authError`) and on the requests made.
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '../i18n'
@@ -42,6 +43,11 @@ afterEach(async () => {
 afterAll(() => supabase.auth.stopAutoRefresh())
 
 const render = () => renderHook(() => useAuth(), { wrapper: AuthProvider })
+// 300 ms: longer than waitFor's 50 ms poll, so the state before the retry is observable.
+const QuickRetry = ({ children }: { children: ReactNode }) => (
+  <AuthProvider profileRetryDelaysMs={[300]}>{children}</AuthProvider>
+)
+const renderQuickRetry = () => renderHook(() => useAuth(), { wrapper: QuickRetry })
 
 describe('AuthContext', () => {
   it('A01: with no stored session, loading ends signed out', async () => {
@@ -121,5 +127,64 @@ describe('AuthContext', () => {
     expect(updateLanguage).toHaveBeenCalledWith('user-1', 'en')
     expect(i18n.language).toBe('en')
     expect(result.current.profile?.language).toBe('en')
+  })
+
+  it('WEB-5: a transient profile read failure at token refresh keeps the profile and retries', async () => {
+    await supabase.auth.signInWithPassword({ email: 'ana@example.com', password: 'pw' })
+    const { result } = renderQuickRetry()
+    await waitFor(() => expect(result.current.profile?.id).toBe('user-1'))
+    const before = vi.mocked(loadProfile).mock.calls.length
+    vi.mocked(loadProfile).mockRejectedValueOnce(new Error('Failed to fetch'))
+    await act(async () => {
+      await supabase.auth.refreshSession()
+    })
+    await waitFor(() => expect(vi.mocked(loadProfile).mock.calls.length).toBe(before + 1))
+    // Still signed in: the GoTrue session is valid and the profile did not change.
+    expect(result.current.session?.access_token).toBe(gotrue.tokens.at(-1))
+    expect(result.current.profile?.id).toBe('user-1')
+    expect(result.current.authError).toBeNull()
+    // The read is retried and succeeds.
+    await waitFor(() => expect(vi.mocked(loadProfile).mock.calls.length).toBe(before + 2))
+    expect(result.current.profile?.id).toBe('user-1')
+  })
+
+  it('WEB-5: a transient failure on the first load keeps the session, says network, and recovers on retry', async () => {
+    await supabase.auth.signInWithPassword({ email: 'ana@example.com', password: 'pw' })
+    vi.mocked(loadProfile).mockRejectedValueOnce(new Error('Failed to fetch'))
+    const { result } = renderQuickRetry()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.session).not.toBeNull()
+    expect(result.current.profile).toBeNull()
+    expect(result.current.authError).toBe('network')
+    await waitFor(() => expect(result.current.profile?.id).toBe('user-1'))
+    expect(result.current.authError).toBeNull()
+    expect(backend.sent('POST', '/auth/v1/logout')).toEqual([])
+  })
+
+  it('WEB-5: a sign-in whose profile read fails reports network, not no_profile, and is not signed out', async () => {
+    vi.mocked(loadProfile).mockRejectedValueOnce(new Error('Failed to fetch'))
+    const { result } = renderQuickRetry()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    let outcome!: Awaited<ReturnType<typeof result.current.signIn>>
+    await act(async () => {
+      outcome = await result.current.signIn('ana@example.com', 'pw')
+    })
+    expect(outcome).toEqual({ ok: false, code: 'network' })
+    expect(backend.sent('POST', '/auth/v1/logout')).toEqual([])
+    await waitFor(() => expect(result.current.profile?.id).toBe('user-1'))
+  })
+
+  it('WEB-5: only a missing profile at refresh signs the user out', async () => {
+    await supabase.auth.signInWithPassword({ email: 'ana@example.com', password: 'pw' })
+    const { result } = renderQuickRetry()
+    await waitFor(() => expect(result.current.profile?.id).toBe('user-1'))
+    vi.mocked(loadProfile).mockResolvedValue(null)
+    await act(async () => {
+      await supabase.auth.refreshSession()
+    })
+    await waitFor(() => expect(result.current.session).toBeNull())
+    expect(result.current.profile).toBeNull()
+    expect(result.current.authError).toBe('no_profile')
+    await waitFor(() => expect(backend.sent('POST', '/auth/v1/logout').length).toBeGreaterThan(0))
   })
 })

@@ -34,19 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-5 · High · A transient profile re-read failure at token refresh signs the user out of the UI (R-W2)
-
-- **Check:** Confirmed (R-W2)
-- **Where:** `apps/web/src/contexts/AuthContext.tsx` (`resolve()` on `TOKEN_REFRESHED` and
-  `USER_UPDATED`; the catch keeps `session` but sets `profile = null`, no retry);
-  `ProtectedRoute.tsx` redirects on `!profile`; `useChatStore.ts` resets sessions and aborts the
-  stream when `userId` goes null. The comment at `AuthContext.tsx:67` ("show nothing until a
-  retry") describes a retry that does not exist (R-W13)
-- **What happens:** every hour, a flaky network at the refresh moment drops the user to `/login`
-  with a valid GoTrue session and no message, and aborts an open stream
-- **Fix direction:** keep the previous profile on a transient error and retry; only `no_profile`
-  (403) signs out; fix the comment
-
 ### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
 
 - **Check:** Confirmed (R-W3)
@@ -166,3 +153,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-4 · High · A failed turn on an existing conversation is wiped, with the typed text (R-W1)
 
 - Fixed 2026-10-30 on fix/web-review: the post-stream reload appends the stream's client-only tail (its error rows, and the typed row when no event arrived) after the canonical rows; tests `WEB-4` in `useChatStore.test.ts`.
+
+### WEB-5 · High · A transient profile re-read failure at token refresh signs the user out of the UI (R-W2)
+
+- Fixed 2026-10-30 on fix/web-review: a failed profile read keeps the session and the previous profile and is retried with a backoff (5 s, 15 s, 60 s); without a previous profile the form says `network`; only a missing row signs out. Tests `WEB-5` in `AuthContext.test.tsx`.
