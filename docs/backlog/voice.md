@@ -76,13 +76,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** at least a line in 0011's consequences and `docs/VOICE.md`; a code fix needs
   the played-text length from the speech handle to cut the persisted row
 
-### VOICE-14 · Low · `connected` logs a random `request_id` (R-V9)
-
-- **Check:** Confirmed (R-V9, verified 2026-10-30)
-- **Where:** `apps/voice/src/agent.ts` (`request_id: randomUUID()` on the `connected` line)
-- **What happens:** a correlation id that correlates with nothing
-- **Fix direction:** drop the field; the call's `session_id` is the correlation key
-
 ### VOICE-15 · Low · Untested worker paths (R-V11)
 
 - **Check:** Confirmed (R-V11)
@@ -139,3 +132,7 @@ TTS failure) and `HangUp` ends the call; the session's `close` event hangs up to
 
 Resolved on `fix/voice-review`: the window is at most 20 rows from a user row (the newest turn
 always whole); `W04e` with three-row turns.
+
+### VOICE-14 · Low · `connected` logs a random `request_id` (R-V9)
+
+Resolved on `fix/voice-review`: the field is gone; `session_id` is the correlation key.

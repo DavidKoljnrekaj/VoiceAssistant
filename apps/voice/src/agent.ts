@@ -4,7 +4,6 @@
 // rows after each answer and deletes the call's credential on hang-up. Ported from Landmark's
 // `tools/voice-prototype/src/agent.ts` with its `voice-llm` function folded in; the stub LLM
 // is not here (it is a script-only tuning aid).
-import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -231,7 +230,7 @@ export default defineAgent<UserData>({
       ...startOptions(env),
     })
     await ctx.connect()
-    log('info', LOG_TAG, 'connected', { ...ids, request_id: randomUUID() })
+    log('info', LOG_TAG, 'connected', ids)
     session.say(GREETING_HR)
   },
 })
