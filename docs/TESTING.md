@@ -70,7 +70,8 @@ Two suites read the source tree instead of running it. `L04` (`packages/core/src
 finds every `log(` call under `apps/*` and `packages/*` and fails on a field named `text`,
 `message`, `content`, `transcript`, `token` or `jwt` (invariant 9; `docs/OPS.md` → Logging).
 `X01`–`X03` (`env-matrix.test.ts` in each app) fail when the first column of the matrix in
-`docs/OPS.md` does not name a variable an `env.ts` validates. Both exist so a rule in a doc cannot drift from the code silently.
+`docs/OPS.md` does not name a variable an `env.ts` validates, and `X01b`–`X03b` when the matrix
+names one for an app whose `env.ts` does not validate it. Both exist so a rule in a doc cannot drift from the code silently.
 
 ## The Playwright smoke
 

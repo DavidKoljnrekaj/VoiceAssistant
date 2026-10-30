@@ -27,7 +27,8 @@ for the three Supabase variables). A missing or malformed variable fails the pro
 variable's name and never its value. Nothing else reads `process.env`
 (`.claude/rules/architecture.md`). `apps/<app>/.env.example` lists every variable with a one-line
 comment and no values; `X01`–`X03` (`env-matrix.test.ts` in each app) read the first column of
-the matrix below and fail when it misses a variable an `env.ts` validates.
+the matrix below and fail when it misses a variable an `env.ts` validates, or names one for an
+app whose `env.ts` does not validate it (`X01b`–`X03b`).
 
 ### Where values are set
 
@@ -73,8 +74,10 @@ value. "CI" is blank when CI never needs it.
 | `ENDPOINT_LATENCY_LEVEL`, `ENDPOINT_DELAY_MS`, `TURN_MIN_DELAY_MS`, `INTERRUPT_ON`, `INTERRUPT_MIN_MS`, `OUTPUT_QUEUE_MS`, `VAD_THRESHOLD`, `VAD_MIN_SPEECH_MS` | voice            | no (Landmark's measured defaults)                              | default; the bench and `call-test` vary them          |                                                             | config; change only with a measurement (`docs/VOICE.md` → Settings) |
 | `IDENTITY_CACHE_MS`                                                                                                                                             | voice            | no (60000, the schema's cap)                                   | default                                               |                                                             | config                                                              |
 | `VOICE_LOGS_DIR`                                                                                                                                                | voice            | no (`apps/voice/logs`)                                         | default                                               |                                                             | a writable volume (compose mounts `voice-logs`)                     |
-| `LOG_LEVEL`                                                                                                                                                     | voice            | no (`info` for `start`, `debug` for `dev`)                     | default                                               |                                                             | `info`; read by LiveKit's own logger, not by `env.ts`               |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`                                                                                                   | web (build time) | yes                                                            | `apps/web/.env`                                       | `test.yml` placeholders; `e2e.yml` from the `E2E_*` secrets | build args of the image, or the static host's build environment     |
+
+`LOG_LEVEL` is read by LiveKit's own CLI logger in the worker (`info` for `start`, `debug` for
+`dev`; set `info` in dev and prod), not by any `env.ts`, so it is not in the matrix.
 
 Script-only variables, never read by an app: the bench (`VA_BENCH_EMAIL`, `VA_BENCH_PASSWORD`,
 `LABEL`, `SHOW_ANSWERS`), the scripted caller (`VA_API_URL`, `VA_EMAIL`, `VA_PASSWORD`) and the
