@@ -60,7 +60,11 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   29 Oct live run gave 2.36–3.33 s and p50 4.2 s
 - **Fix direction:** in order of expected gain, each measured before and after: release the held
   sentence after a short timer as well as on the next sentence; drop the announcement heuristic
-  for the filler-less case; collapse paragraph breaks inside the answer. Further levers from the
+  for the filler-less case; collapse paragraph breaks inside the answer. On 2026-10-30 the bench
+  could not run (Docker Desktop was off, so the local Supabase stack the keys file points at was
+  down); the first and third lever are written with their sink tests on `exp/voice-latency`
+  (stacked on `fix/voice-review`), unmeasured and not to be merged before `/bench-voice` runs
+  on each commit against the baseline at the branch's base. Further levers from the
   review: Landmark's entity list in the per-user block (saves a round, ~1.3 s on lookups);
   refresh the 60 s identity off the hot path from the keepalive timer (~0.25 s on the turn that
   crosses 60 s); build to `dist` (`VOICE-4` / `OPS-1`)
