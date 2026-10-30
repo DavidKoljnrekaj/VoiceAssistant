@@ -18,7 +18,8 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 ### VOICE-2 · Low · Croatian voice text in the worker has not had a native review
 
 - **Check:** Confirmed (the two user-facing files are marked)
-- **Where:** `GREETING_HR` in `apps/voice/src/greeting.ts`, `apps/voice/bench/questions.hr.txt`
+- **Where:** `GREETING_HR` and `CALL_ENDED_HR` (the goodbye on the cap, added 2026-10-30) in
+  `apps/voice/src/greeting.ts`, `apps/voice/bench/questions.hr.txt`
   and the bench's session title in `scripts/llm-bench.ts`; `apps/voice/hints/hr.txt` is
   speech-to-text vocabulary, not spoken, and needs a check for spelling only; the filler and
   the refusal line are `CORE-1`
