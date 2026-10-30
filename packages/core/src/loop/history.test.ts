@@ -117,6 +117,31 @@ describe('history assembly', () => {
     expect(JSON.stringify(ignored)).not.toContain('SAŽETAK')
   })
 
+  it('H09 CORE-11: a summary boundary inside a turn keeps the chain from the next user turn, so the first message is a user text and the banner lands in it', () => {
+    const rows = [
+      user('u1', 'stari'),
+      assistant('a1', 'gledam', 't1'),
+      toolResult('r1', 't1'),
+      assistant('a2', 'odgovor'),
+      user('u2', 'novi'),
+      assistant('a3', 'x'),
+    ]
+    for (const boundary of ['a1', 'r1']) {
+      const applied = assembleHistory(rows, { ...opts, summary: { text: 'SAŽETAK', throughMessageId: boundary } })
+      expect(validateConversation(applied), boundary).toBeNull()
+      expect(applied.map((m) => m.role), boundary).toEqual(['user', 'assistant'])
+      const first = applied[0]!.content[0] as unknown as { type: string; text: string }
+      expect(first.type).toBe('text')
+      expect(first.text).toContain('SAŽETAK')
+      expect(first.text).toMatch(/novi$/)
+      expect(JSON.stringify(applied)).not.toContain('tool_result')
+    }
+    // A boundary inside the last turn: nothing after it starts a turn, so the summary is ignored.
+    const last = assembleHistory(rows, { ...opts, summary: { text: 'SAŽETAK', throughMessageId: 'u2' } })
+    expect(last).toHaveLength(6)
+    expect(JSON.stringify(last)).not.toContain('SAŽETAK')
+  })
+
   it('H05: the hard ceiling drops whole oldest turns and keeps at least one', () => {
     const big = 'x'.repeat(4000) // ≈ 1000 tokens
     const rows = [

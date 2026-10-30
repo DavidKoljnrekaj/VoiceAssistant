@@ -46,19 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-11 · Low · A summary boundary inside a turn yields a history the API rejects (R-C8)
-
-- **Check:** Confirmed (R-C8, verified 2026-10-30)
-- **Where:** `history.ts` `selectKeptChain` slices after `summary_through_message_id` with no
-  turn-boundary check; `injectSummaryBanner` unshifts a text block into whatever message comes
-  first
-- **What happens:** a boundary on an assistant row makes the first kept message an `assistant`
-  or `tool_result` message ("first message must use the user role"), or the banner lands inside
-  a `tool_result` message. Unreachable until the compaction writer exists (`CORE-3`), but the
-  reader is production code and `H04` tests only a boundary on a turn's last row
-- **Fix direction:** after slicing, advance to the next `turn_kind === 'user'` row; one `H` test
-  for a mid-turn boundary; do it with `CORE-3`
-
 ### CORE-12 · Low · Test gaps in core and the demo pack (R-C9)
 
 - **Check:** Confirmed (R-C9)
@@ -73,6 +60,11 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-11 · Low · A summary boundary inside a turn yields a history the API rejects (R-C8)
+
+Resolved in `fix(core)` for CORE-11: `selectKeptChain` keeps the chain from the next user turn
+after the boundary and ignores a boundary inside the last turn (`H09`).
 
 ### CORE-10 · Low · The registry hardcodes the demo pack's voice allowlist (R-C7)
 

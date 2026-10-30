@@ -125,8 +125,9 @@ returns (root → leaf) and builds the message array: rows with no content block
 dropped; an assistant row whose `tool_use` ids are not all answered by the next row gets
 synthetic `is_error` results (`interrupted before the tool returned`), appended to the existing
 `tool_result` message or inserted as a new one, in memory only; turns split at `turn_kind:
-'user'`; a session summary whose boundary is on the branch replaces the turns up to it and is
-folded into the first kept message as a banner; above the ceiling (chars / 4) whole oldest turns
+'user'`; a session summary whose boundary is on the branch replaces everything up to the next
+user turn after it and is folded into that turn's text as a banner (a boundary inside the last
+turn is ignored, so the first message is always a user text, `H09`); above the ceiling (chars / 4) whole oldest turns
 are dropped, at least one kept. `applyMessageCacheBreakpoint` moves the message breakpoint to the
 last block of the last message before every call. When the request advertises no tools (a role
 downgrade, a tool gone from the registry or an allowlist, a channel with no tools for the role)

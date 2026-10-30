@@ -104,15 +104,23 @@ export function splitTurns(chain: readonly ChainMessage[]): ChainMessage[][] {
   return turns
 }
 
-/** The chain after the summary boundary when that boundary is on this branch; otherwise the
- * whole chain and no summary (the branch diverged before the boundary). */
+/**
+ * The chain from the first user turn after the summary boundary, when that boundary is on this
+ * branch and a turn starts after it; otherwise the whole chain and no summary (the branch
+ * diverged before the boundary, or the boundary sits inside the last turn). Cutting on a turn
+ * boundary keeps the first message a user text, as the API requires, and gives the banner a
+ * text block to land in rather than a `tool_result` message.
+ */
 export function selectKeptChain(
   chain: readonly ChainMessage[],
   summary: AssembleOptions['summary'],
 ): { kept: ChainMessage[]; summaryText: string | null } {
   if (summary) {
     const idx = chain.findIndex((m) => m.id === summary.throughMessageId)
-    if (idx >= 0 && idx < chain.length - 1) return { kept: chain.slice(idx + 1), summaryText: summary.text }
+    if (idx >= 0) {
+      const start = chain.findIndex((m, i) => i > idx && m.turn_kind === 'user')
+      if (start >= 0) return { kept: chain.slice(start), summaryText: summary.text }
+    }
   }
   return { kept: [...chain], summaryText: null }
 }
