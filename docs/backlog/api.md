@@ -1,6 +1,6 @@
 # Backlog — api
 
-Ids: API-12 (next free)
+Ids: API-13 (next free)
 
 The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpoints.
 
@@ -46,6 +46,18 @@ The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpo
   Cloudflare) may reject or strip the header
 - **Fix direction:** abort every open stream's controller on shutdown, then close; set
   `Connection` only on HTTP/1, or drop it (the proxy owns it)
+
+### API-12 · Low · The voice and sessions routes run their queries outside the pre-stream deadline
+
+- **Check:** Code reading (left open by the `API-9` fix)
+- **Where:** `apps/api/src/voice/calls.ts` (`startCall`, `refreshCall`, `endCall`),
+  `apps/api/src/routes/sessions.ts`; only authentication runs under `PRE_STREAM_TIMEOUT_MS` on
+  these routes (`apps/api/src/middleware/auth.ts`)
+- **What happens:** a hung PostgREST holds a `POST /voice/sessions` (up to six round trips plus
+  the LiveKit dispatch) or a `PATCH /sessions/:id` open for ever, as `/chat` did before `API-9`
+- **Fix direction:** hand the remaining budget's signal into these functions as `prepareChat`
+  takes it (`.abortSignal` on each query; the LiveKit calls raced with `withDeadline`); a `V`
+  test with a hung `ai_sessions` insert
 
 ## Resolved
 
