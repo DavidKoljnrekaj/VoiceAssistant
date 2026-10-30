@@ -34,19 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
-
-- **Check:** Confirmed (R-W4, verified 2026-10-30)
-- **Where:** `chatService.ts` `loadSession` returns `[]` under RLS; `useChatStore.ts`
-  `loadRows('select')` sets `ready` with no rows; `ChatPanel.tsx` shows "Bez naslova" and the
-  empty prompt
-- **What happens:** `/c/<someone else's or a deleted id>` looks like a new conversation; a send
-  gets the API's 404, which `WEB-4` then wipes. The same class as invariant 10: an RLS-filtered
-  empty result is not "not found"
-- **Fix direction:** when the rows are empty, select the `ai_sessions` row by id (`maybeSingle`)
-  and show a not-found state when it is null (an owned but empty session is possible after a
-  failed first persist, so check the session row, not the row count)
-
 ### WEB-8 · Low · The call banner says "Poziv u tijeku" twice (R-W5)
 
 - **Check:** Confirmed (R-W5)
@@ -148,3 +135,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
 
 - Fixed 2026-10-30 on fix/web-review: `listSessions` and `loadSession` page with `range()` (1000 per page) until a short page, ordered by `updated_at desc, id desc` and `created_at asc, id asc`; the API's bounded history was not used because it is the model's 200-row context window behind a service-role-only function, not what a reader of the conversation should see. Tests `WEB-6` in `chatService.test.ts`.
+
+### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
+
+- Fixed 2026-10-30 on fix/web-review: when a selected session has no rows the store reads the `ai_sessions` row by id (`findSession`, `maybeSingle`) and a null is `messagesStatus = 'not_found'`, rendered as a not-found state with the composer disabled; an owned empty session stays ready. Tests `WEB-7` in `useChatStore.test.ts` and `chatService.test.ts`.

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import ErrorState from '../ui/ErrorState'
 import MarkdownView from '../ui/MarkdownView'
 import Spinner from '../ui/Spinner'
-import type { LoadStatus } from './hooks/useChatStore'
+import type { MessagesStatus } from './hooks/useChatStore'
 import type { RenderMessage } from './lib/normalizeMessages'
 import Message from './Message'
 
@@ -12,7 +12,7 @@ interface MessageListProps {
   messages: RenderMessage[]
   /** The assistant block being streamed, rendered live below the last row. */
   pendingText: string | null
-  status: LoadStatus
+  status: MessagesStatus
   isStreaming: boolean
   onRetry: () => void
 }
@@ -39,6 +39,15 @@ export default function MessageList({
     )
   }
   if (status === 'error') return <ErrorState onRetry={onRetry} className="flex-1" />
+  if (status === 'not_found') {
+    return (
+      <ErrorState
+        title={t('chat.not_found_title')}
+        description={t('chat.not_found_description')}
+        className="flex-1"
+      />
+    )
+  }
 
   if (messages.length === 0 && pendingText === null) {
     return (

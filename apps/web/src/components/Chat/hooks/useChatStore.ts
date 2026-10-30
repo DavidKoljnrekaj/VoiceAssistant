@@ -21,6 +21,7 @@ import {
 } from '../lib/normalizeMessages'
 import {
   deleteSession as deleteSessionService,
+  findSession,
   listSessions,
   loadSession,
   renameSession as renameSessionService,
@@ -29,6 +30,8 @@ import {
 } from '../services/chatService'
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
+/** A selected conversation: `not_found` when RLS shows no such session (another user's, deleted). */
+export type MessagesStatus = LoadStatus | 'not_found'
 
 export interface ChatStore {
   sessions: SessionSummary[]
@@ -37,7 +40,7 @@ export interface ChatStore {
   messages: RenderMessage[]
   /** Deltas of the assistant block being streamed, shown provisionally until its `turn`. */
   pendingText: string | null
-  messagesStatus: LoadStatus
+  messagesStatus: MessagesStatus
   isStreaming: boolean
   fetchSessions: () => Promise<void>
   newConversation: () => void
@@ -66,7 +69,7 @@ export function useChatStore(): ChatStore {
   const [sessionsStatus, setSessionsStatus] = useState<LoadStatus>('idle')
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [view, setView] = useState<ChatView>(EMPTY_VIEW)
-  const [messagesStatus, setMessagesStatus] = useState<LoadStatus>('ready')
+  const [messagesStatus, setMessagesStatus] = useState<MessagesStatus>('ready')
   const [isStreaming, setIsStreaming] = useState(false)
 
   // Refs mirror the state for closure-safe reads inside the async send path.
@@ -158,6 +161,15 @@ export function useChatStore(): ChatStore {
       if (mode === 'select') setMessagesStatus('loading')
       try {
         const rows = await loadSession(sessionId)
+        if (currentSessionIdRef.current !== sessionId) return
+        // No rows under RLS is not a conversation: check the session row itself (an owned session
+        // can be empty after a failed first persist, so the row count alone does not decide).
+        if (rows.length === 0 && mode === 'select' && (await findSession(sessionId)) === null) {
+          if (currentSessionIdRef.current !== sessionId) return
+          setView(EMPTY_VIEW)
+          setMessagesStatus('not_found')
+          return
+        }
         if (currentSessionIdRef.current !== sessionId) return
         leafIdRef.current = computeLeaf(rows)
         setView((prev) => ({

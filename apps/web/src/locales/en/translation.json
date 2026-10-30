@@ -36,6 +36,8 @@
     "new_conversation": "New conversation",
     "no_conversations": "No conversations yet.",
     "untitled": "Untitled",
+    "not_found_title": "Conversation not found",
+    "not_found_description": "This conversation does not exist or you do not have access to it.",
     "open_sessions": "Open the conversation list",
     "close_sessions": "Close the conversation list",
     "placeholder": "Send a message…",

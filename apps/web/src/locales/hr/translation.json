@@ -37,6 +37,8 @@
     "new_conversation": "Novi razgovor",
     "no_conversations": "Još nema razgovora.",
     "untitled": "Bez naslova",
+    "not_found_title": "Razgovor nije pronađen",
+    "not_found_description": "Razgovor ne postoji ili mu nemate pristup.",
     "open_sessions": "Otvori popis razgovora",
     "close_sessions": "Zatvori popis razgovora",
     "placeholder": "Pošaljite poruku…",

@@ -56,6 +56,21 @@ export async function loadSession(sessionId: string): Promise<MessageRow[]> {
   )
 }
 
+/**
+ * One session by id, or null when there is none the caller may see. RLS turns another user's or
+ * a deleted conversation into an empty read, which is "not found", never an empty conversation
+ * (WEB-7).
+ */
+export async function findSession(sessionId: string): Promise<SessionSummary | null> {
+  const { data, error } = await supabase
+    .from('ai_sessions')
+    .select('id, title, channel, created_at, updated_at')
+    .eq('id', sessionId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 export async function renameSession(sessionId: string, title: string): Promise<void> {
   await apiJson<{ ok: true }>(`/sessions/${sessionId}`, {
     method: 'PATCH',

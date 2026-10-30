@@ -22,6 +22,7 @@ vi.mock('../services/chatService', async () => {
     streamMessage: fakeChat.streamMessage,
     listSessions: fakeChat.listSessions,
     loadSession: fakeChat.loadSession,
+    findSession: fakeChat.findSession,
     renameSession: fakeChat.renameSession,
     deleteSession: fakeChat.deleteSession,
   }
@@ -250,7 +251,13 @@ describe('useChatStore', () => {
     const stream = await fakeChat.nextStream()
     // The server persisted the user row before the stream opened, then timed out.
     const persisted = persistedTurn()
-    const u2 = messageRow({ id: 'u2', session_id: S1, role: 'user', content: userText('Još jedno'), parent_id: 'a1' })
+    const u2 = messageRow({
+      id: 'u2',
+      session_id: S1,
+      role: 'user',
+      content: userText('Još jedno'),
+      parent_id: 'a1',
+    })
     fakeChat.loadSession.mockResolvedValue([...persisted, u2])
     await act(async () => {
       stream.emit({ type: 'session', session_id: S1 })
@@ -272,6 +279,29 @@ describe('useChatStore', () => {
     })
     const next = await fakeChat.nextStream()
     expect(next.args.parentMessageId).toBe('u2')
+  })
+
+  it('WEB-7: a conversation id that RLS hides or that was deleted is a not-found state, not an empty new conversation', async () => {
+    fakeChat.loadSession.mockResolvedValue([])
+    fakeChat.findSession.mockResolvedValue(null)
+    const { result } = renderHook(() => useChatStore())
+    await act(async () => {
+      await result.current.selectSession(S1)
+    })
+    expect(result.current.messagesStatus).toBe('not_found')
+    expect(result.current.messages).toEqual([])
+    expect(fakeChat.findSession).toHaveBeenCalledWith(S1)
+  })
+
+  it('WEB-7: an owned session with no rows yet is ready and empty', async () => {
+    fakeChat.loadSession.mockResolvedValue([])
+    fakeChat.findSession.mockResolvedValue(sessionSummary(S1))
+    const { result } = renderHook(() => useChatStore())
+    await act(async () => {
+      await result.current.selectSession(S1)
+    })
+    expect(result.current.messagesStatus).toBe('ready')
+    expect(result.current.messages).toEqual([])
   })
 
   it('H07: a sign-out empties the store and aborts the open stream', async () => {

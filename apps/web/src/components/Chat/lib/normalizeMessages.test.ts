@@ -74,9 +74,12 @@ describe('normalizeFromPersistedRows', () => {
     expect(computeLeaf(rows)).toBe('a2')
     const out = normalizeFromPersistedRows(rows)
     expect(out.map((m) => m.kind)).toEqual(['user', 'assistant', 'tool', 'assistant'])
-    expect(out.map((m) => (m.kind === 'tool' ? m.toolUseId : 'rowId' in m ? m.rowId : m.kind))).toEqual(
-      ['u1', 'a1', 'toolu_1', 'a2'],
-    )
+    expect(out.map((m) => (m.kind === 'tool' ? m.toolUseId : 'rowId' in m ? m.rowId : m.kind))).toEqual([
+      'u1',
+      'a1',
+      'toolu_1',
+      'a2',
+    ])
     expect(out.some((m) => m.kind === 'assistant' && m.text === 'Stara grana')).toBe(false)
   })
 

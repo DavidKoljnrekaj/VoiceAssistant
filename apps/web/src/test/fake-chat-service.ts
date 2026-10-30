@@ -54,6 +54,7 @@ class FakeChatService {
   })
   readonly listSessions = vi.fn<() => Promise<SessionSummary[]>>()
   readonly loadSession = vi.fn<(sessionId: string) => Promise<MessageRow[]>>()
+  readonly findSession = vi.fn<(sessionId: string) => Promise<SessionSummary | null>>()
   readonly renameSession = vi.fn<(sessionId: string, title: string) => Promise<void>>()
   readonly deleteSession = vi.fn<(sessionId: string) => Promise<void>>()
 
@@ -71,6 +72,7 @@ class FakeChatService {
     this.streamMessage.mockClear()
     this.listSessions.mockReset().mockResolvedValue([])
     this.loadSession.mockReset().mockResolvedValue([])
+    this.findSession.mockReset().mockResolvedValue(sessionSummary('unspecified'))
     this.renameSession.mockReset().mockResolvedValue(undefined)
     this.deleteSession.mockReset().mockResolvedValue(undefined)
   }

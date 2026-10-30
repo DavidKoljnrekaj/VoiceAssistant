@@ -18,7 +18,14 @@ import {
   sseResponse,
 } from '../../../test/fake-backend'
 import { ApiHttpError, type ChatEvent } from '../../../types/api'
-import { deleteSession, listSessions, loadSession, renameSession, streamMessage } from './chatService'
+import {
+  deleteSession,
+  findSession,
+  listSessions,
+  loadSession,
+  renameSession,
+  streamMessage,
+} from './chatService'
 
 const S1 = '11111111-1111-4111-8111-111111111111'
 
@@ -97,6 +104,18 @@ describe('chatService reads', () => {
   })
 })
 
+describe('chatService.findSession (WEB-7)', () => {
+  it('WEB-7: reads one session by id and answers null when RLS shows none', async () => {
+    fakeTable(backend, 'ai_sessions', [session(S1, 'chat', '2026-10-01T00:00:00Z')])
+    const found = await findSession(S1)
+    expect(found?.id).toBe(S1)
+    const [request] = backend.sent('GET', '/rest/v1/ai_sessions')
+    expect(request?.url.searchParams.get('id')).toBe(`eq.${S1}`)
+    expect(request?.headers.get('authorization')).toBe(`Bearer ${gotrue.tokens[0]}`)
+    expect(await findSession('22222222-2222-4222-8222-222222222222')).toBeNull()
+  })
+})
+
 describe('chatService paging (WEB-6)', () => {
   const at = (i: number) => new Date(Date.UTC(2026, 9, 1, 0, 0, 0) + i * 1000).toISOString()
 
@@ -120,7 +139,9 @@ describe('chatService paging (WEB-6)', () => {
   })
 
   it('WEB-6: the session list pages the same way, newest activity first', async () => {
-    const rows = Array.from({ length: 1001 }, (_, i) => session(`s${String(i).padStart(4, '0')}`, 'chat', at(i)))
+    const rows = Array.from({ length: 1001 }, (_, i) =>
+      session(`s${String(i).padStart(4, '0')}`, 'chat', at(i)),
+    )
     fakeTable(backend, 'ai_sessions', rows)
     const loaded = await listSessions()
     expect(loaded).toHaveLength(1001)

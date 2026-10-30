@@ -106,7 +106,11 @@ export default function ChatPanel() {
             )}
           </button>
           <h1 className="min-w-0 flex-1 truncate text-sm font-medium" data-testid="session-title">
-            {chat.currentSessionId ? (currentTitle ?? t('chat.untitled')) : t('chat.new_conversation')}
+            {chat.messagesStatus === 'not_found'
+              ? t('chat.not_found_title')
+              : chat.currentSessionId
+                ? (currentTitle ?? t('chat.untitled'))
+                : t('chat.new_conversation')}
           </h1>
           <button
             type="button"
