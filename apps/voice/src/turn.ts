@@ -37,8 +37,9 @@ export class DeferredStore implements MessageStore {
 
 /**
  * Writes the turn's rows: the user row hangs off the session's newest row, the rest chain as the
- * loop left them, with explicit increasing `created_at` so the next turn finds its parent as the
- * newest row. One insert; a failure throws.
+ * loop left them, with explicit increasing `created_at` (after the leaf's, so two saves within
+ * one millisecond still sort in order) and the next turn finds its parent as the newest row.
+ * One insert; a failure throws.
  */
 export async function persistTurn(
   service: DbClient,
@@ -49,13 +50,13 @@ export async function persistTurn(
 ): Promise<void> {
   const { data: leaf, error: leafError } = await service
     .from('ai_messages')
-    .select('id')
+    .select('id, created_at')
     .eq('session_id', sessionId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (leafError) throw new Error(`leaf lookup failed: ${leafError.code}`)
-  const base = Date.now()
+  const base = Math.max(Date.now(), leaf ? Date.parse(leaf.created_at) + 1 : 0)
   const all = [
     {
       id: userRowId,
@@ -93,13 +94,20 @@ export interface VoiceTurnInput {
   pickFiller?: () => string
 }
 
+/** A loop mark and when it fired, in ms since the turn started. */
+export interface TimedMark {
+  name: LoopMark
+  atMs: number
+}
+
 export interface VoiceTurnResult {
   outcome: TurnOutcome
   /** Everything spoken, after `speakable()`. */
   spoken: string
   firstTextMs: number | null
   totalMs: number
-  marks: LoopMark[]
+  /** The loop's marks in order, each with its time: model time against tool time. */
+  marks: TimedMark[]
   usage: UsageReport
   /** The turn's rows (the user row first, then the loop's), for the call's history. */
   rows: CallRow[]
@@ -125,12 +133,12 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   else signal.addEventListener('abort', () => cancel('cancelled'), { once: true })
   const timeout = setTimeout(() => cancel('request_timeout'), settings.requestTimeoutMs)
 
-  const marks: LoopMark[] = []
+  const marks: TimedMark[] = []
   const usage: UsageReport = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
   const hooks: LoopHooks = {
     isCancelled: async () => controller.signal.aborted,
     onComplete: async () => {},
-    mark: (m) => marks.push(m),
+    mark: (m) => marks.push({ name: m, atMs: Math.round(performance.now() - t0) }),
     usage: (u) => {
       usage.input += u.input
       usage.output += u.output

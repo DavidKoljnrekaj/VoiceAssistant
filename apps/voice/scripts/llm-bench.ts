@@ -123,7 +123,7 @@ async function ask(deps: VoiceDeps, ctx: AuthContext, sessionId: string, q: Ques
   return {
     first_text_ms: result.firstTextMs,
     total_ms: result.totalMs,
-    rounds: result.marks.filter((m) => m === 'model_call').length,
+    rounds: result.marks.filter((m) => m.name === 'model_call').length,
     cache_read_first: firstCacheRead,
     spoken_len: result.spoken.length,
     outcome: result.outcome,

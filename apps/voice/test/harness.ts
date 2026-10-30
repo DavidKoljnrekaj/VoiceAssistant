@@ -132,6 +132,7 @@ export async function openCall(opts: OpenCallOptions = {}): Promise<OpenedCall> 
   const session = new CallSession(d, identity, {
     pickFiller: () => FILLER,
     ...(opts.maxTurns !== undefined ? { maxTurns: opts.maxTurns } : {}),
+    ...(opts.onEnded ? { onEnded: opts.onEnded } : {}),
   })
   const call: OpenedCall = {
     identity,

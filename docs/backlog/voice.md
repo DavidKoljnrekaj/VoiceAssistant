@@ -18,7 +18,8 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 ### VOICE-2 · Low · Croatian voice text in the worker has not had a native review
 
 - **Check:** Confirmed (the two user-facing files are marked)
-- **Where:** `GREETING_HR` in `apps/voice/src/greeting.ts`, `apps/voice/bench/questions.hr.txt`
+- **Where:** `GREETING_HR` and `CALL_ENDED_HR` (the goodbye on the cap, added 2026-10-30) in
+  `apps/voice/src/greeting.ts`, `apps/voice/bench/questions.hr.txt`
   and the bench's session title in `scripts/llm-bench.ts`; `apps/voice/hints/hr.txt` is
   speech-to-text vocabulary, not spoken, and needs a check for spelling only; the filler and
   the refusal line are `CORE-1`
@@ -46,29 +47,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** build the workspace to `dist` (`OPS-1`) so the job process imports compiled
   JavaScript; then the timeout can go back to the default
 
-### VOICE-6 · Medium · `transcription_delay_ms` and `end_of_turn_delay_ms` are always null (R-V1)
-
-- **Check:** Confirmed (review 2026-10-30, R-V1)
-- **Where:** `apps/voice/src/metrics.ts` `turnEntry` reads them off the assistant item; in
-  `@livekit/agents` 1.9.2 they sit on the **user** message (`agent_activity.js` sets
-  `userMessage.metrics`); the assistant item carries only `llmNodeTtft`, `ttsNodeTtfb`,
-  `e2eLatency` and the playback fields
-- **What happens:** `turns.jsonl` never has the two Soniox figures; `docs/VOICE.md` (the live
-  checklist) blames the plugin; `VOICE-3` cannot be done. `W13` feeds a hand-built item with all
-  five fields, so it cannot catch this
-- **Fix direction:** read the user item's metrics too (one `timing` line per turn joining both);
-  a test built from the real item shapes; correct the explanation in `docs/VOICE.md`
-
-### VOICE-7 · Medium · The `timing` line's `marks` carry names but no times (R-V2)
-
-- **Check:** Confirmed (R-V2)
-- **Where:** `apps/voice/src/session.ts` joins `result.marks`; `LoopMark`
-  (`packages/core/src/loop/ports.ts`) is a four-literal union with no timestamp
-- **What happens:** `docs/OPS.md` (`name@ms`) and the comment in `session.ts` claim otherwise;
-  model time against tool time cannot be read from the logs, which the latency work needs
-- **Fix direction:** the hook receives `(mark, atMs)` or the loop stamps each mark; the line
-  prints `name@ms`; a `W` test on the line's shape
-
 ### VOICE-8 · Medium · First sound: the held first sentence waits for the next sentence, and every paragraph break opens a TTS segment (R-V3)
 
 - **Check:** Code reading (R-V3, verified 2026-10-30); measure before changing (`/bench-voice`)
@@ -83,24 +61,14 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   29 Oct live run gave 2.36–3.33 s and p50 4.2 s
 - **Fix direction:** in order of expected gain, each measured before and after: release the held
   sentence after a short timer as well as on the next sentence; drop the announcement heuristic
-  for the filler-less case; collapse paragraph breaks inside the answer. Further levers from the
+  for the filler-less case; collapse paragraph breaks inside the answer. On 2026-10-30 the bench
+  could not run (Docker Desktop was off, so the local Supabase stack the keys file points at was
+  down); the first and third lever are written with their sink tests on `exp/voice-latency`
+  (stacked on `fix/voice-review`), unmeasured and not to be merged before `/bench-voice` runs
+  on each commit against the baseline at the branch's base. Further levers from the
   review: Landmark's entity list in the per-user block (saves a round, ~1.3 s on lookups);
   refresh the 60 s identity off the hot path from the keepalive timer (~0.25 s on the turn that
   crosses 60 s); build to `dist` (`VOICE-4` / `OPS-1`)
-
-### VOICE-9 · Low · Overlapping turns race the save chain (R-V4)
-
-- **Check:** Confirmed (R-V4, verified 2026-10-30)
-- **Where:** `apps/voice/src/session.ts` (`persistAfter: this.saves` captured at turn start;
-  `saves` and `rows` updated only when `runVoiceTurn` returns); `assistant-llm.ts` (`cancel()`
-  returns at once while the loop is still unwinding); `turn.ts` `persistTurn` reads the leaf
-- **What happens:** when LiveKit starts the next `llmNode` while a cancelled turn's loop is still
-  unwinding (a handler ignoring its signal, up to the 6 s tool timeout), both turns read the same
-  leaf: two user rows with the same `parent_id`, and the new turn's history misses the cancelled
-  turn's rows. `docs/VOICE.md` §6 claims serialised saves; `W08` cancels but asks nothing afterwards
-- **Fix direction:** register the turn's save promise before `runVoiceTurn` resolves (a per-turn
-  deferred), or serialise `runTurn` on a mutex; a test that cancels during a stalled handler,
-  asks again and asserts one parent chain
 
 ### VOICE-10 · Low · After a barge-in the history says the caller heard the whole answer (R-V5)
 
@@ -109,58 +77,18 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   return it as history); decision 0011 reads only the worker's rows and its consequences do not
   mention it
 - **What happens:** LiveKit truncates its own context to what was played; the model's history
-  keeps the unheard rest, so it may refer to something the caller never heard
-- **Fix direction:** at least a line in 0011's consequences and `docs/VOICE.md`; a code fix needs
-  the played-text length from the speech handle to cut the persisted row
-
-### VOICE-11 · Low · After the 15-minute cap the call stays open and apologises on every question (R-V6)
-
-- **Check:** Confirmed (R-V6, verified 2026-10-30)
-- **Where:** `apps/voice/src/call.ts` (`liveRow` null → `ctx()` throws `call_ended`);
-  `session.ts` (mapped to `unauthorized` and spoken); `agent.ts` ends the call only on
-  `ParticipantDisconnected`, `Disconnected` and shutdown
-- **What happens:** past the cap every turn hears the refusal line; nothing calls `endCall` or
-  closes the session
-- **Fix direction:** on `call_ended` speak the line once, then an injected `onEnded` →
-  `endCall('expired')` and shutdown; a `W` test
-
-### VOICE-12 · Low · Call end paths: any participant's disconnect ends the call, an STT or TTS failure never does (R-V7, R-V8)
-
-- **Check:** Confirmed (R-V7, R-V8, verified 2026-10-30)
-- **Where:** `apps/voice/src/agent.ts` (the `ParticipantDisconnected` handler does not check the
-  identity; the `error` handler only logs; no `Closed` handler)
-- **What happens:** a recorder, egress or a browser reconnecting under a new identity ends a live
-  call; a Soniox or ElevenLabs outage leaves the caller silent (LiveKit closes the session after
-  `maxUnrecoverableErrors`; nothing speaks or ends the call). Model and identity failures are
-  spoken (`W11`, `W14b`, `W14c`)
-- **Fix direction:** compare `participant.identity` with the caller's; on an unrecoverable error
-  say `MESSAGES_HR.internal_error` where TTS still works, then `endCall('session_error')` and
-  shutdown; handle `Closed` the same way
-
-### VOICE-13 · Low · `callHistory` keeps at least 20 rows, not at most (R-V9)
-
-- **Check:** Confirmed (R-V9, verified 2026-10-30)
-- **Where:** `apps/voice/src/messages.ts` (the loop breaks at the first user row where
-  `rows.length - i >= maxMessages`)
-- **What happens:** the window is 20 rows plus the rest of the turn it starts in; `docs/VOICE.md`
-  and the plan say "last 20". `W04e` passes only because its turns are 4 rows (60 → exactly 20).
-  The other half of R-V9, a markdown link split across two chunks, is `CORE-4`
-- **Fix direction:** decide: break at the last user row with `rows.length - i <= maxMessages`
-  (at most 20, the plan's reading) or document "at least 20, cut on a turn boundary"; `W04e`
-  with a 3-row turn either way
-
-### VOICE-14 · Low · `connected` logs a random `request_id` (R-V9)
-
-- **Check:** Confirmed (R-V9, verified 2026-10-30)
-- **Where:** `apps/voice/src/agent.ts` (`request_id: randomUUID()` on the `connected` line)
-- **What happens:** a correlation id that correlates with nothing
-- **Fix direction:** drop the field; the call's `session_id` is the correlation key
+  keeps the unheard rest, so it may refer to something the caller never heard. Recorded as a
+  consequence in decision 0011 and in `docs/VOICE.md` (2026-10-30); the code is unchanged
+- **Fix direction:** the played-text length from LiveKit's speech handle (the assistant item's
+  `interrupted` flag and its truncated `textContent` arrive on `ConversationItemAdded`) to cut
+  the persisted assistant row, or a marker in it, so the next turn's history matches what was
+  heard
 
 ### VOICE-15 · Low · Untested worker paths (R-V11)
 
 - **Check:** Confirmed (R-V11)
 - **Where:** all of `agent.ts` (entry wiring, keepalive, the `endCall` paths, event handlers, the
-  warm fire-and-forget); `turnEntry` against a real LiveKit item (`VOICE-6`); `redact` against
+  warm fire-and-forget); `redact` against
   real pino (`W18b` uses a bare `Writable`); overlapping turns (`VOICE-9`); a `\n\n` inside an
   answer producing extra flushes; `request_timeout` during a tool round (`W16` hangs the model
   only); the 6 s tool timeout as a spoken outcome; a `persistTurn` leaf-read failure;
@@ -169,7 +97,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   chunks, cancel, flush) but not LiveKit's `performLLMInference` / `produceSegments`, which is
   why `VOICE-6` was not caught
 - **Fix direction:** a thin seam in `agent.ts` (handlers as named functions) and tests through
-  it; real item shapes captured from one live call for `turnEntry`
+  it
 
 ## Resolved
 
@@ -180,3 +108,39 @@ kept in worker memory by `CallSession` and assembled by `callHistory`; LiveKit's
 only the new user turn. A prompt line and filler stripping were tried live first and did not
 help. Confirmed live on 2026-10-29: the second question ("Koliko košta stolna lampa?") was
 answered directly from the first turn's tool result, no retraction, no new lookup.
+
+### VOICE-6 · Medium · `transcription_delay_ms` and `end_of_turn_delay_ms` are always null (R-V1)
+
+Resolved on `fix/voice-review`: `createTurnMetrics` joins the user item's Soniox delays with
+the reply that follows it (test `VOICE-6` builds both from real 1.9.2 `ChatMessage` items).
+
+### VOICE-7 · Medium · The `timing` line's `marks` carry names but no times (R-V2)
+
+Resolved on `fix/voice-review`: the worker stamps each mark as it arrives (`TimedMark`), the
+line prints `name@ms`; test `VOICE-7`.
+
+### VOICE-9 · Low · Overlapping turns race the save chain (R-V4)
+
+Resolved on `fix/voice-review`: `CallSession.turn` runs the turns one after another, so a turn
+started during a barge-in waits for the cancelled loop to unwind; test `VOICE-9`.
+
+### VOICE-11 · Low · After the 15-minute cap the call stays open and apologises on every question (R-V6)
+
+Resolved on `fix/voice-review`: `call_ended` speaks `CALL_ENDED_HR` once and fires `onEnded`;
+the worker's `HangUp` deletes the credential and shuts down after the agent has spoken it; test
+`VOICE-11`.
+
+### VOICE-12 · Low · Call end paths: any participant's disconnect ends the call, an STT or TTS failure never does (R-V7, R-V8)
+
+Resolved on `fix/voice-review`: `participantLeft` compares the identity with the caller's user
+id; `sessionErrorAction` speaks `internal_error` on an unrecoverable provider error (not after a
+TTS failure) and `HangUp` ends the call; the session's `close` event hangs up too.
+
+### VOICE-13 · Low · `callHistory` keeps at least 20 rows, not at most (R-V9)
+
+Resolved on `fix/voice-review`: the window is at most 20 rows from a user row (the newest turn
+always whole); `W04e` with three-row turns.
+
+### VOICE-14 · Low · `connected` logs a random `request_id` (R-V9)
+
+Resolved on `fix/voice-review`: the field is gone; `session_id` is the correlation key.

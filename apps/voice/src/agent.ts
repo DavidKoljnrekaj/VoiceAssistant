@@ -4,7 +4,6 @@
 // rows after each answer and deletes the call's credential on hang-up. Ported from Landmark's
 // `tools/voice-prototype/src/agent.ts` with its `voice-llm` function folded in; the stub LLM
 // is not here (it is a script-only tuning aid).
-import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -22,7 +21,7 @@ import {
 import { RoomEvent } from '@livekit/rtc-node'
 import Anthropic from '@anthropic-ai/sdk'
 
-import { channelSettings, errorReason, log } from '@va/core'
+import { channelSettings, errorReason, log, MESSAGES_HR } from '@va/core'
 import { createServiceClient } from '@va/db'
 
 import { AssistantAgent } from './assistant-llm.js'
@@ -31,7 +30,8 @@ import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
 import { acceptDispatchedJob, callTokenOf } from './job.js'
-import { createMetrics, turnEntry } from './metrics.js'
+import { HangUp, participantLeft, sessionErrorAction } from './lifecycle.js'
+import { createMetrics, createTurnMetrics } from './metrics.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
 import { createTts } from './providers/tts.js'
@@ -113,7 +113,33 @@ export default defineAgent<UserData>({
         })
       })
 
-    const call = new CallSession(deps, identity)
+    // A quiet caller is still a live call: the row's idle window (3 min) is kept open while the
+    // participant is connected, not only when a turn runs.
+    const keepalive = setInterval(() => identity.touch(), KEEPALIVE_MS)
+    let ended = false
+    const endCall = async (reason: string): Promise<void> => {
+      if (ended) return
+      log('info', LOG_TAG, 'call ending', { ...ids, reason })
+      clearInterval(keepalive)
+      await call.settle()
+      try {
+        await identity.end()
+        ended = true
+      } catch (err) {
+        // Not marked ended: the next path (room close, shutdown) tries the delete again.
+        log('error', LOG_TAG, 'call end failed', {
+          ...ids,
+          reason: errorReason(err),
+        })
+      }
+    }
+    // The credential goes when the caller leaves, when the room closes, on the call's cap and on
+    // shutdown; the API's `/end` and the sweep are the other paths. All idempotent. A hang-up
+    // that follows a spoken line (the goodbye) waits for the agent to finish it.
+    const hangUp = new HangUp((reason) => {
+      void endCall(reason).then(() => ctx.shutdown(reason))
+    })
+    const call = new CallSession(deps, identity, { onEnded: (reason) => hangUp.afterSpeech(reason) })
     const session = new voice.AgentSession({
       vad: vadFor(env, ctx.proc.userData.vad),
       stt: createStt(env, loadHints()),
@@ -121,9 +147,11 @@ export default defineAgent<UserData>({
       turnHandling: turnHandlingOptions(env),
     })
 
-    // The framework's own e2e figure per reply: user stopped speaking → the agent's first frame.
+    // The framework's own figures per turn: the Soniox delays off the user item, then the
+    // reply's model, synthesiser and e2e (user stopped speaking → the agent's first frame).
+    const turnMetrics = createTurnMetrics(TUNING)
     session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
-      const entry = turnEntry(ev.item as Parameters<typeof turnEntry>[0], TUNING)
+      const entry = turnMetrics.add(ev.item as Parameters<typeof turnMetrics.add>[0])
       if (entry) void metrics.write('turns.jsonl', { room, ...entry })
     })
 
@@ -148,6 +176,7 @@ export default defineAgent<UserData>({
       }
       if (ev.oldState === 'speaking' && ev.newState !== 'speaking') {
         agentSpeaking = false
+        hangUp.spoke()
         if (userStartedAt !== null) {
           void metrics.write('bargein.jsonl', {
             room,
@@ -161,39 +190,34 @@ export default defineAgent<UserData>({
         }
       }
     })
+    // A Soniox or ElevenLabs failure LiveKit cannot recover from would leave the caller silent:
+    // say the fallback where speech still works, then hang up. The session's own close (after
+    // LiveKit's unrecoverable-error limit, or its drain on shutdown) hangs up too.
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
+      const action = sessionErrorAction(ev.error)
       log('error', LOG_TAG, 'session error', {
         ...ids,
         source: ev.error.type,
         recoverable: 'recoverable' in ev.error ? ev.error.recoverable : null,
         reason: 'error' in ev.error ? (ev.error.error?.constructor.name ?? null) : null,
+        action,
       })
+      if (action === 'log') return
+      if (action === 'speak_and_hang_up') session.say(MESSAGES_HR.internal_error)
+      hangUp.afterSpeech('session_error')
+    })
+    session.on(voice.AgentSessionEventTypes.Close, (ev) => {
+      hangUp.now(`session_closed:${ev.reason}`)
     })
 
-    // The credential goes when the caller leaves, when the room closes and on shutdown; the
-    // API's `/end` and the sweep are the other paths. All idempotent.
-    // A quiet caller is still a live call: the row's idle window (3 min) is kept open while the
-    // participant is connected, not only when a turn runs.
-    const keepalive = setInterval(() => identity.touch(), KEEPALIVE_MS)
-    let ended = false
-    const endCall = async (reason: string): Promise<void> => {
-      if (ended) return
-      log('info', LOG_TAG, 'call ending', { ...ids, reason })
-      clearInterval(keepalive)
-      await call.settle()
-      try {
-        await identity.end()
-        ended = true
-      } catch (err) {
-        // Not marked ended: the next path (room close, shutdown) tries the delete again.
-        log('error', LOG_TAG, 'call end failed', {
-          ...ids,
-          reason: errorReason(err),
-        })
+    // Only the caller's own disconnect ends the call: the API's join token names the caller by
+    // the user id, and anyone else in the room (a recorder, an egress) leaving is logged.
+    ctx.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      if (participantLeft(participant.identity, identity.userId) === 'hang_up') {
+        hangUp.now('participant_disconnected')
+      } else {
+        log('info', LOG_TAG, 'other participant left', { ...ids, identity_len: participant.identity.length })
       }
-    }
-    ctx.room.on(RoomEvent.ParticipantDisconnected, () => {
-      void endCall('participant_disconnected').then(() => ctx.shutdown('participant left'))
     })
     ctx.room.on(RoomEvent.Disconnected, () => {
       void endCall('room_disconnected')
@@ -206,7 +230,7 @@ export default defineAgent<UserData>({
       ...startOptions(env),
     })
     await ctx.connect()
-    log('info', LOG_TAG, 'connected', { ...ids, request_id: randomUUID() })
+    log('info', LOG_TAG, 'connected', ids)
     session.say(GREETING_HR)
   },
 })

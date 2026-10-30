@@ -39,17 +39,17 @@ export function userTurnOf(items: readonly ChatItemLike[]): string | null {
 export type CallRow = MessageRow & { id: string }
 
 /**
- * The call's history for the model: the last `MAX_MESSAGES` rows cut on a turn boundary (a
- * `turn_kind: 'user'` row first), assembled by the engine (unanswered `tool_use` repaired,
- * empty rows dropped, oldest turns dropped above the ceiling).
+ * The call's history for the model: at most `MAX_MESSAGES` rows, cut on a turn boundary (a
+ * `turn_kind: 'user'` row first; the newest turn is always whole, even when it alone is longer),
+ * assembled by the engine (unanswered `tool_use` repaired, empty rows dropped, oldest turns
+ * dropped above the ceiling).
  */
 export function callHistory(rows: readonly CallRow[], maxMessages = MAX_MESSAGES): InMemoryMessage[] {
   let start = rows.length
   for (let i = rows.length - 1; i >= 0; i--) {
-    if (rows[i]!.turn_kind === 'user') {
-      start = i
-      if (rows.length - i >= maxMessages) break
-    }
+    if (rows[i]!.turn_kind !== 'user') continue
+    if (start < rows.length && rows.length - i > maxMessages) break
+    start = i
   }
   const kept: HistoryRow[] = rows.slice(start).map((r) => ({
     id: r.id,

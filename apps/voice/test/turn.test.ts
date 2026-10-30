@@ -19,6 +19,7 @@ import {
 } from '@va/core/test'
 import { demoPack } from '@va/tools-demo'
 
+import { CALL_ENDED_HR } from '../src/greeting.js'
 import { MAX_TURNS_PER_CALL } from '../src/session.js'
 import { VOICE_ALLOWLIST } from '../src/tools.js'
 
@@ -180,6 +181,32 @@ describe('a spoken turn', () => {
     },
   )
 
+  scenario(
+    'VOICE-9 a turn that starts while the cancelled one is still unwinding chains off its rows',
+    async () => {
+      anthropic.script(callTools(toolUse('gate', { key: 'g' })), answer('Drugi.'))
+      const call = await openCall({ packs: [TEST_PACK], allowlist: TEST_ALLOWLIST })
+      const first = await ask(call, 'Prvo.')
+      await awaitHandlerEvent('start:g')
+      await first.cancel()
+      // LiveKit starts the next llmNode at once; the first loop has not returned yet.
+      const second = await ask(call, 'Drugo.')
+      expect((await second.done).text).toBe('Drugi.')
+      await first.done
+      await call.session.settle()
+      const rows = rowsOf(call.sessionId)
+      expect(kinds(call.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'user', 'assistant'])
+      expect(rows[0]!.parent_id).toBeNull()
+      for (let i = 1; i < rows.length; i++) expect(rows[i]!.parent_id).toBe(rows[i - 1]!.id)
+      // The model saw the cut-short turn (its tool_use answered) before the new question.
+      expect(anthropic.calls).toHaveLength(2)
+      expect(anthropic.calls[1]!.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'user'])
+      expect(blocksOf(anthropic.calls[1]!.body.messages[2]!.content, 'tool_result')[0]).toMatchObject({
+        is_error: true,
+      })
+    },
+  )
+
   scenario('W10 the voice model profile is on every request', async () => {
     anthropic.script(callTools(toolUse('search_items', { query: 'a' })), answer('Da.'))
     const call = await openCall()
@@ -203,6 +230,22 @@ describe('a spoken turn', () => {
       expect(system[0]!.cache_control).toEqual({ type: 'ephemeral' })
       expect(system[2]!.text).toMatch(/^Danas je .*2026\.$/)
     }
+  })
+
+  scenario('VOICE-7 the timing line carries the marks with their times, name@ms, in order', async () => {
+    anthropic.script(callTools(toolUse('search_items', { query: 'a' })), answer('Da.'))
+    const call = await openCall()
+    await (await ask(call, 'Ima li artikala?')).done
+    await call.session.settle()
+    const timing = logs.find((l) => l.line.includes('"timing"') && l.line.includes('[voice]'))
+    const marks = /"marks":"([^"]*)"/.exec(timing?.line ?? '')?.[1]
+    expect(marks).toMatch(
+      /^model_call@\d+ first_event@\d+ tools_start@\d+ tools_done@\d+ model_call@\d+ first_event@\d+$/,
+    )
+    const times = marks!.split(' ').map((m) => Number(m.split('@')[1]))
+    expect(times).toEqual([...times].sort((a, b) => a - b))
+    const total = Number(/"total_ms":(\d+)/.exec(timing!.line)![1])
+    expect(times.at(-1)!).toBeLessThanOrEqual(total)
   })
 
   scenario('W11 a model error is spoken and the stream ends; only the user row is written', async () => {
@@ -245,6 +288,27 @@ describe('a spoken turn', () => {
     expect(out.text).toBe(MESSAGES_HR.unauthorized)
     expect(anthropic.calls).toHaveLength(0)
   })
+
+  scenario(
+    'VOICE-11 past the call cap the caller hears a goodbye once, the session reports the end, no model is called',
+    async () => {
+      const ended: string[] = []
+      const call = await openCall({ expiresInMs: 15 * 60_000, onEnded: (reason) => ended.push(reason) })
+      await call.identity.ctx()
+      // The 15-minute cap passes between two questions.
+      call.clock.ms += 16 * 60_000
+      const out = await (await ask(call, 'Halo?')).done
+      expect(out.text).toBe(CALL_ENDED_HR)
+      expect(ended).toEqual(['call_ended'])
+      expect(anthropic.calls).toHaveLength(0)
+      expect(logs.some((l) => l.line.includes('"call ended"') && l.line.includes('"turn":1'))).toBe(true)
+      // A question that still arrives before the hang-up lands hears nothing more.
+      const again = await (await ask(call, 'Halo?')).done
+      expect(again.text).toBe('')
+      expect(ended).toEqual(['call_ended'])
+      expect(anthropic.calls).toHaveLength(0)
+    },
+  )
 
   scenario('W14c a failed identity lookup is spoken as internal_error, not as "not signed in"', async () => {
     const call = await openCall()
