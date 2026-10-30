@@ -1,7 +1,7 @@
-// The demo tables, typed by hand. `demo_items` and `demo_notes` exist only in the fakes (no
-// migration, no generated type: see docs/backlog/core.md CORE-2), so the pack narrows the user
-// client to this shape. A real pack reads tables that are in `@va/db`'s generated `Database`
-// and needs no cast.
+// The demo tables, typed by hand. `demo_items` and `demo_notes` have a migration
+// (`20261029100000_demo_tables.sql`) but no generated type until it is applied to a project and
+// `/db-types` runs (docs/backlog/release.md REL-3), so the pack narrows the user client to this
+// shape. A real pack reads tables that are in `@va/db`'s generated `Database` and needs no cast.
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { AuthContext } from '@va/core'
