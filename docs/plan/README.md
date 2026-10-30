@@ -45,11 +45,16 @@ Roughly 10–12 sessions for the skeleton. Parallel work goes in git worktrees, 
 Tick when a part is merged to `main`.
 
 - [x] Part 1 — repository, tooling, Claude Code harness, CI (2026-10-26)
-- [ ] Part 2 — Supabase project, schema, RLS, pgTAP, generated types
-- [ ] Part 3a — core: types, tool registry, prompts, fakes
-- [ ] Part 3b — core: orchestration loop, history assembly
-- [ ] Part 3c — core: spoken-text sink
-- [ ] Part 4 — api: auth, chat SSE, sessions, voice session endpoints
-- [ ] Part 5 — voice worker on LiveKit with Soniox and ElevenLabs
-- [ ] Part 6 — web PWA: auth, chat panel, call button
-- [ ] Part 7 — ops: env, logging, CI hardening, deploy sketch, security checklist
+- [x] Part 2 — Supabase project, schema, RLS, pgTAP, generated types (2026-10-28; the migrations
+      are applied to no project yet, `REL-1`)
+- [x] Part 3a — core: types, tool registry, prompts, fakes (2026-10-28, #6)
+- [x] Part 3b — core: orchestration loop, history assembly (2026-10-28, #7)
+- [x] Part 3c — core: spoken-text sink (2026-10-28, #9)
+- [x] Part 4 — api: auth, chat SSE, sessions, voice session endpoints (2026-10-28, #8)
+- [x] Part 5 — voice worker on LiveKit with Soniox and ElevenLabs (2026-10-29, #10, #11)
+- [x] Part 6 — web PWA: auth, chat panel, call button (2026-10-29, #12; `REL-4`, `REL-5` open)
+- [x] Part 7 — ops: env, logging, CI hardening, deploy sketch, security checklist (2026-10-29,
+      #13; branch protection and the first `compose.dev.yml` run are `release.md`, `REL-6`)
+
+The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did not fix is in
+`docs/backlog/`.
