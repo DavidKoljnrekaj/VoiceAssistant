@@ -25,11 +25,11 @@ rules). The scope `@va` is a placeholder until the product has a name.
 | `pnpm --filter @va/web test:e2e` | Playwright smoke against the built PWA (`docs/TESTING.md`)                                  |
 | `pnpm test:db`                   | pgTAP tests against the local Supabase stack (needs `supabase start`)                       |
 | `pnpm db:types`                  | Regenerate `packages/db/src/database.ts` from the linked project (only through `/db-types`) |
-| `pnpm audit`                     | Production dependency audit, fails on high                                                  |
+| `pnpm run audit`                 | Production dependency audit, fails on high (what CI runs; bare `pnpm audit` is pnpm's own)  |
 | `pnpm format`                    | Prettier over the repo (a hook formats every file you edit anyway)                          |
 
 Before saying work is done run `/done`. CI runs audit, typecheck, lint, unit tests with coverage, the PWA
-build, a build of each container image and pgTAP on every push. A Stop hook runs typecheck and the related tests before a turn can end.
+build, a build of each container image and pgTAP on every push to `main` and every pull request. A Stop hook runs typecheck and the related tests before a turn can end.
 
 ## Stack
 

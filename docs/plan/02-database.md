@@ -168,6 +168,7 @@ ALTER TABLE public.ai_sessions
 -- (guard the ADD CONSTRAINT with a DO block checking pg_constraint, as Landmark does)
 
 -- Bounded history: walk parent_id from a leaf, newest first, at most max_rows, stopping after the summary boundary.
+-- As built: SECURITY INVOKER, not DEFINER (the service role bypasses RLS already; docs/DB.md says why).
 CREATE OR REPLACE FUNCTION public.ai_session_history(p_leaf_id uuid, p_max_rows integer DEFAULT 200)
 RETURNS SETOF public.ai_messages
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$

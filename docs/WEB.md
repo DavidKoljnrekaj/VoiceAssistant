@@ -11,9 +11,15 @@ A shell, props-driven and minimal; the final design comes later. The plan is
 ```
 apps/web/
 ├── index.html  vite.config.ts  public/icons/   (icon-192.png, icon-512.png: placeholders)
+├── vitest.config.ts  playwright.config.ts  tsconfig.e2e.json   the unit suites; the smoke (docs/TESTING.md)
+├── Dockerfile  nginx.conf      the static image (docs/OPS.md → Containers)
+├── .env.example                the three VITE_ variables, no values
+├── e2e/smoke.spec.ts           the Playwright smoke (E01–E03)
+├── e2e/support/                env.ts (loads the build's env), prod-safety.ts (the guard, G01–G04)
 ├── src/
 │   ├── main.tsx  App.tsx  i18n.ts  index.css  vite-env.d.ts
 │   ├── lib/env.ts              the three VITE_ variables, validated once with zod
+│   ├── lib/env-matrix.test.ts  X03 / X03b: env.ts and the matrix in docs/OPS.md agree
 │   ├── lib/supabase.ts         the one browser client (auth, RLS reads from services)
 │   ├── lib/api.ts              apiFetch / apiJson: Authorization from the session, ApiHttpError on a non-OK answer
 │   ├── lib/featureFlags.ts     VOICE_CALLS_ENABLED (compile-time constant)
@@ -33,7 +39,7 @@ apps/web/
 │   │   └── components/VoiceCallButton.tsx  hooks/useVoiceCall.ts  services/voiceCallService.ts
 │   ├── locales/hr/translation.json  locales/en/translation.json
 │   └── types/api.ts (the SSE events, ApiHttpError)  types/database.ts (re-exported from @va/db)
-└── src/**/*.test.ts            sse (S01–S07), normalizeMessages (N01–N07), labels (L01–L02)
+└── src/**/*.test.ts            sse (S01–S07), normalizeMessages (N01–N07), labels (L01–L02), env matrix (X03)
 ```
 
 Layers: components (props-driven) → hooks (state, call services) → services (`fetch` to the API,
@@ -178,7 +184,7 @@ Chunks: `vendor-react`, `vendor-supabase`, `vendor-livekit` (dynamic), `vendor-m
 
 ```
 supabase start                                   # the local stack (docs/DB.md)
-cp apps/web/.env.example apps/web/.env           # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (supabase status), VITE_API_URL
+cp apps/web/.env.example apps/web/.env           # then fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (supabase status), VITE_API_URL
 pnpm --filter @va/api dev                        # the API on :3000 (docs/API.md → Running locally)
 pnpm --filter @va/web dev                        # Vite on http://127.0.0.1:5173
 pnpm --filter @va/web build && pnpm --filter @va/web preview   # the production build with the service worker

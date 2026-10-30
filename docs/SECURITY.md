@@ -16,9 +16,11 @@ item says so in its description.
       every request (`apps/api/src/middleware/auth.ts`); the worker does the same per turn, cached
       at most 60 s (`IDENTITY_CACHE_MS`, invariant 7). Tests: `A01`–`A07`, `P03`, `P04`, `W03`.
 - [ ] **Service-role writes filtered by `user_id` / `session_id`; updates and deletes assert the
-      rows they touched.** `apps/api/src/chat/prepare.ts`, `routes/sessions.ts`, `voice/calls.ts`,
-      `apps/voice/src/call.ts`, `turn.ts`; the loop's `MessageStore` implementations carry the
-      session id. Tests: `V01`–`V10`, `W03b`, `W03c`, `W07`.
+      rows they touched where a row must exist.** `apps/api/src/chat/prepare.ts`,
+      `routes/sessions.ts`, `voice/calls.ts`, `apps/voice/src/call.ts`, `turn.ts`; the loop's
+      `MessageStore` implementations carry the session id. Best-effort by design, no assertion:
+      the delete of a caller's previous call before a new one, the cleanup after a failed start
+      and the end-of-call delete (`voice/calls.ts`). Tests: `V01`–`V10`, `W03b`, `W03c`, `W07`.
 - [ ] **Tools read as the user; permissive-RLS tables get explicit scoping; no raw input in
       `.or()`; `ilike` escaped.** `ctx.userClient` (anon key + the user's JWT) in every handler;
       `escapeLike` and `NO_STAR` in `@va/tools-demo` are the pattern (`docs/CORE.md` → Tools).
@@ -41,9 +43,10 @@ item says so in its description.
 - [ ] **No content in logs; error messages truncated.** `log()` and `errorReason()` in `@va/core`;
       `L04` scans every call site; the worker strips LiveKit's `lk.pii.*` keys (`W18`); the metrics
       writer refuses content keys (`W13`).
-- [ ] **Secrets only in env; `.env*` ignored and denied to Claude.** One `env.ts` per app;
-      `.gitignore`, `.dockerignore`, the `deny` list in `.claude/settings.json`; the matrix in
-      `docs/OPS.md` (`X01`–`X03`).
+- [ ] **Secrets only in env; `.env*` and `~/.config/va/` ignored and denied to Claude.** One
+      `env.ts` per app; `.gitignore`, `.dockerignore`, the `deny` list in `.claude/settings.json`
+      (`Read` at any depth, which also covers `Edit`, `Write` and best-effort `Grep` / `Glob`); the
+      matrix in `docs/OPS.md` (`X01`–`X03`, both directions).
 - [ ] **Dependencies pinned; audit in CI; Dependabot cooldown 14 days.** Exact versions in every
       `package.json`; `pnpm audit --prod --audit-level=high` in `test.yml`; `.github/dependabot.yml`.
 - [ ] **CORS limited to the PWA origin(s).** `CORS_ORIGINS` on the API (`*` is the local default
@@ -61,7 +64,17 @@ with a valid token. The voice worker's 60 s cache bounds how long a call keeps a
 **The service role.** The API and the worker hold the service-role key for persistence and
 identity lookups only. Nothing about those calls is protected by RLS, so the explicit
 `user_id` / `session_id` filter on every one of them is the authorisation. A new service-role
-query without such a filter is a finding, whatever it reads.
+query without such a filter is a finding, whatever it reads. The reviewed exceptions, each with
+the reason it needs no user filter:
+
+- `apps/api/src/rate-limit.ts`, the concurrent-call cap: a `head` count of `voice_calls` rows
+  with `expires_at` in the future across all users; it reads a number, no row.
+- `apps/voice/src/call.ts`, the call lookup: `voice_calls` by the opaque token's SHA-256 (and the
+  room) before the user is known; the hash is the credential and the filter.
+- `packages/core/src/auth.ts`, the profile re-read: `public.users` by `auth_user_id` from GoTrue's
+  answer; the identity it establishes is the filter for everything after it.
+- the `voice-calls-sweep` pg_cron job: deletes expired and idle rows of every user, inside the
+  database.
 
 **Tools and RLS.** A tool runs the model's input against the database with the user's own
 client, so RLS does the per-row gating; a table whose policy is `USING (true)` gets explicit
@@ -84,8 +97,9 @@ token's hash, valid 15 minutes from call start (never extended; `refresh` only r
 without the token refuses the job; a job for a room the token was not bound to is refused.
 
 **Abuse.** Rate limits are counted from the rows that exist, so a refused request writes
-nothing and a flaky count fails open (Anthropic's own limits and the request timeout are the
-backstop). The concurrent-call cap is global. The known check-then-act race bounds the excess by
+nothing and a flaky count fails open, the one sanctioned exception to invariant 10: a limiter
+that failed closed would take the product down with its database (Anthropic's own limits and the
+request timeout are the backstop). The concurrent-call cap is global. The known check-then-act race bounds the excess by
 what fits in one round trip (`API-1`).
 
 **Logs.** Content never enters a log line: ids, codes, timings, lengths and token counts only,

@@ -27,7 +27,8 @@ for the three Supabase variables). A missing or malformed variable fails the pro
 variable's name and never its value. Nothing else reads `process.env`
 (`.claude/rules/architecture.md`). `apps/<app>/.env.example` lists every variable with a one-line
 comment and no values; `X01`–`X03` (`env-matrix.test.ts` in each app) read the first column of
-the matrix below and fail when it misses a variable an `env.ts` validates.
+the matrix below and fail when it misses a variable an `env.ts` validates, or names one for an
+app whose `env.ts` does not validate it (`X01b`–`X03b`).
 
 ### Where values are set
 
@@ -40,8 +41,11 @@ the matrix below and fail when it misses a variable an `env.ts` validates.
 
 Secrets never sit in the repository: `.gitignore` keeps every `.env` and `.env.*` out except the
 `.example` files, `.dockerignore` keeps them out of the images, the Claude Code harness is denied
-`Read` on `.env*` (`.claude/settings.json`; never work around it), and the `session-context` hook
-prints only which env files exist. The service-role key reaches the API and the worker only;
+`Read` on `.env*` at any depth and on `~/.config/va/**` (`.claude/settings.json`; never work
+around it; the deny reaches `Edit`, `Write`, the file commands Claude Code recognises in Bash and,
+best-effort, `Grep` and `Glob`, which take no path rule of their own), and the `session-context`
+hook prints only which env files exist. The same deny covers the committed `.env.example` files,
+so a session cannot read or write them (`REL-6`). The service-role key reaches the API and the worker only;
 never the browser, never CI, never LiveKit metadata. Rotation is a dashboard action at the
 vendor (Supabase, Anthropic, LiveKit, Soniox, ElevenLabs), then the new value in the secret
 store and a restart; `IDENTITY_CACHE_MS` bounds how long a running call keeps an old JWT.
@@ -70,12 +74,15 @@ value. "CI" is blank when CI never needs it.
 | `ENDPOINT_LATENCY_LEVEL`, `ENDPOINT_DELAY_MS`, `TURN_MIN_DELAY_MS`, `INTERRUPT_ON`, `INTERRUPT_MIN_MS`, `OUTPUT_QUEUE_MS`, `VAD_THRESHOLD`, `VAD_MIN_SPEECH_MS` | voice            | no (Landmark's measured defaults)                              | default; the bench and `call-test` vary them          |                                                             | config; change only with a measurement (`docs/VOICE.md` → Settings) |
 | `IDENTITY_CACHE_MS`                                                                                                                                             | voice            | no (60000, the schema's cap)                                   | default                                               |                                                             | config                                                              |
 | `VOICE_LOGS_DIR`                                                                                                                                                | voice            | no (`apps/voice/logs`)                                         | default                                               |                                                             | a writable volume (compose mounts `voice-logs`)                     |
-| `LOG_LEVEL`                                                                                                                                                     | voice            | no (`info` for `start`, `debug` for `dev`)                     | default                                               |                                                             | `info`; read by LiveKit's own logger, not by `env.ts`               |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`                                                                                                   | web (build time) | yes                                                            | `apps/web/.env`                                       | `test.yml` placeholders; `e2e.yml` from the `E2E_*` secrets | build args of the image, or the static host's build environment     |
+
+`LOG_LEVEL` is read by LiveKit's own CLI logger in the worker (`info` for `start`, `debug` for
+`dev`; set `info` in dev and prod), not by any `env.ts`, so it is not in the matrix.
 
 Script-only variables, never read by an app: the bench (`VA_BENCH_EMAIL`, `VA_BENCH_PASSWORD`,
 `LABEL`, `SHOW_ANSWERS`), the scripted caller (`VA_API_URL`, `VA_EMAIL`, `VA_PASSWORD`) and the
-Playwright smoke (`E2E_EMAIL`, `E2E_PASSWORD`, `E2E_BASE_URL`). The CI secrets for `e2e.yml`:
+Playwright smoke (`E2E_EMAIL`, `E2E_PASSWORD`, `E2E_BASE_URL`, and `E2E_ALLOWED_SUPABASE_URL`
+for its prod-safety guard, `docs/TESTING.md` → The Playwright smoke). The CI secrets for `e2e.yml`:
 `E2E_SUPABASE_URL` and `E2E_SUPABASE_ANON_KEY`, optional `E2E_API_URL`, `E2E_EMAIL`,
 `E2E_PASSWORD`; the job refuses to run unless `E2E_SUPABASE_URL` equals the dev project URL
 hardcoded in the workflow, so moving it to another project is a reviewed commit, and each secret
@@ -89,7 +96,8 @@ Tags: `[api]`, `[core]`, `[core:auth]`, `[voice]`. Allowed fields are ids, codes
 numbers, durations, token counts and lengths. Never message text, transcripts, audio, tokens or
 JWTs (invariant 9). `L04` in `packages/core/src/log-fields.test.ts` scans every `log(` call site
 under `apps/*` and `packages/*` for a field named `text`, `message`, `content`, `transcript`,
-`token` or `jwt` and fails the build on one. A third party's error message goes through
+`token`, `jwt` or a variant that carries the same content (`callToken`, `access_token`, `prompt`,
+`answer`, `body`, `email`, `input`) and fails the build on one. A third party's error message goes through
 `errorReason(err)` (the class name and the message cut to 200 characters) before it is logged.
 The voice worker also strips LiveKit's own `lk.pii.*` keys from everything that reaches stdout
 (`docs/VOICE.md`).

@@ -1,8 +1,12 @@
 // The Playwright smoke (e2e/): the built PWA served by `vite preview`, driven in Chromium.
 // Locally: `pnpm --filter @va/web build && pnpm --filter @va/web test:e2e` with the three
 // VITE_ variables of the stack it should talk to. In CI it runs from .github/workflows/e2e.yml
-// against the dev Supabase project, gated on secrets (docs/OPS.md → CI).
+// against the dev Supabase project, gated on secrets (docs/OPS.md → CI). Importing
+// e2e/support/env.ts applies the prod-safety guard before any browser starts: the local stack
+// always runs; a hosted project only when it equals E2E_ALLOWED_SUPABASE_URL.
 import { defineConfig } from '@playwright/test'
+
+import './e2e/support/env.js'
 
 const PORT = 4173
 const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`

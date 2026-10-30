@@ -112,13 +112,13 @@ comments ignored, `data:` concatenation), `normalizeMessages` (rows → branch �
 
 ## Acceptance checklist
 
-- [ ] `pnpm --filter @va/web dev` serves the app; sign-in against the local Supabase stack works with the seed users.
-- [ ] A streamed turn renders deltas live, then the canonical text; tool chips go pending → done; stop aborts cleanly; refresh shows the persisted conversation identical to the live one.
-- [ ] Session list, rename, delete work; a failed list shows an error state.
-- [ ] The app installs as a PWA (Lighthouse "installable"); the service worker never caches API or Supabase responses (verify in DevTools).
-- [ ] Language switch persists; every visible string exists in hr and en.
-- [ ] Call button appears only with the flag on; with the worker running (Part 5) a call connects and the agent is heard (or stated as not tested).
-- [ ] `docs/WEB.md`: layout, state model, SSE handling, why the provider sits above the router, i18n rules, PWA caching rules, how to run.
+- [x] `pnpm --filter @va/web dev` serves the app; sign-in against the local Supabase stack works with the seed users. (2026-10-29, `docs/WEB.md` → Verified)
+- [x] A streamed turn renders deltas live, then the canonical text; tool chips go pending → done; stop aborts cleanly; refresh shows the persisted conversation identical to the live one. (2026-10-29)
+- [x] Session list, rename, delete work; a failed list shows an error state. (2026-10-29)
+- [ ] The app installs as a PWA (Lighthouse "installable"); the service worker never caches API or Supabase responses (verify in DevTools). (The built `sw.js` was inspected: shell precache, `NetworkOnly` for both origins. The Lighthouse audit and the DevTools check are `REL-4`.)
+- [ ] Language switch persists; every visible string exists in hr and en. (The switch persists through `users.language`. The tool-chip and client-side error labels in `labels.ts` are Croatian only, `WEB-3`.)
+- [x] Call button appears only with the flag on; with the worker running (Part 5) a call connects and the agent is heard (or stated as not tested). (Flag verified; the call itself was not tested, `REL-5`.)
+- [x] `docs/WEB.md`: layout, state model, SSE handling, why the provider sits above the router, i18n rules, PWA caching rules, how to run.
 
 ## Do not
 

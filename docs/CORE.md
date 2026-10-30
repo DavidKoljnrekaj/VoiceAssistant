@@ -38,7 +38,9 @@ unchanged from Landmark except where the plan says:
 - `EventSink`: `textDelta`, `toolStarting`, `textBlock(text, messageId)`, `toolCall`,
   `toolResult`, `done(stopReason, usage)`, `error(code, message)`. Chat's SSE sink emits deltas,
   blocks and tool events; the voice sink speaks text only; `BufferedSink` keeps everything.
-- `MessageStore`: `insert(row)` → `{ id | null, code? }`, never throws. A row carries `role`,
+- `MessageStore`: `insert(row)` → `{ id | null, code? }`; the contract is to report a failure
+  through `code`, not to throw (nothing enforces it: a store that throws propagates out of the
+  loop like any other fault, `CORE-12`). A row carries `role`,
   `turn_kind` (`user` | `assistant` | `tool_result`), `content`, `parent_id`, and for assistant
   rows the model, the four token counts and the stop reason. Chat inserts per row inside the
   loop; voice defers persistence until after the answer.
@@ -315,7 +317,7 @@ Supabase env for `@va/db`, routes `globalThis.fetch` for `fake-anthropic.test` a
   order, limit, count, single, insert/update/delete, `rpc/`), `fault`, `hold`, `onRequest`,
   recorded requests with the client that made them (`clientOf`).
 - `fixtures`: `seedWorld(db)` with an admin and a member (`TOKENS`, `USERS`), the member's chat
-  session (three-row chain), five `demo_items`, and the `ai_session_history` RPC.
+  session (three-row chain), nine `demo_items`, and the `ai_session_history` RPC.
 - `tools`: `TEST_PACK` (`echo`, `whoami`, `gate`, `fail`, `boom`, `admin_only`, `write_note`)
   and `TEST_ALLOWLIST`; `openGate(key, value)` releases a running `gate` handler,
   `awaitHandlerEvent('start:key' | 'end:key' | 'aborted:key')` waits for one, `handlerEvents`

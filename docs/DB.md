@@ -183,6 +183,7 @@ import type { Database, Tables } from '@va/db'
 | `ai_sessions_owner_scoped` | own sessions and messages only; no writes as authenticated; service role writes; message insert bumps the session; delete cascades; check constraints |
 | `ai_session_history`       | the 7-row chain with a sibling branch: whole branch, sibling branch, `p_max_rows`, summary boundary, unknown leaf; EXECUTE only for service_role      |
 | `voice_calls_service_only` | nothing for authenticated or anon; the service role runs the call lifecycle; one call per session; cascade; the sweep job where pg_cron exists        |
+| `demo_tables`              | a member reads the catalogue and writes only their own notes, never an item; anon nothing; the service role seeds; deleting an item deletes its notes |
 
 Each file is one transaction that rolls back. See `docs/TESTING.md` → Database tests for how to
 act as a role. One local-image quirk to know: calling a function without EXECUTE as `anon` or

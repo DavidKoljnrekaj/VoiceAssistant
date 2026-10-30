@@ -1,6 +1,6 @@
 # Backlog — core
 
-Ids: CORE-5 (next free)
+Ids: CORE-13 (next free)
 
 The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
@@ -45,6 +45,109 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 - **Fix direction:** hold the pending text while it contains an unclosed `[` or `(`, or apply
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
+
+### CORE-5 · High · A handler that resolves `undefined` crashes the loop after a malformed row is written; a `BigInt` output leaves a bare `tool_use` (R-C1)
+
+- **Check:** Confirmed (review 2026-10-30, R-C1)
+- **Where:** `packages/core/src/loop/tool-round.ts` (`content: JSON.stringify(results[i].output)`,
+  then `JSON.parse(block.content)` for the sink); `tools/define.ts` (`handler(): Promise<unknown>`
+  lets a `Promise<void>` handler type-check, so a real pack will hit it)
+- **What happens:** `JSON.stringify(undefined)` is `undefined`, the persisted `tool_result` block
+  has no `content`, the re-parse throws `SyntaxError`, and `runOrchestrationLoop` rejects with no
+  `done` and no `error` event. A `BigInt` in the output throws before the row is written, so the
+  branch ends on a bare `tool_use` (invariant 3)
+- **Fix direction:** normalise `output ?? null` and stringify inside a try whose failure becomes
+  an `is_error` result; hand `results[i].output` to the sink instead of re-parsing; an `E`
+  scenario for each
+
+### CORE-6 · Medium · The loop mutates arrays it has already handed to the store (R-C2)
+
+- **Check:** Confirmed (R-C2)
+- **Where:** `packages/core/src/loop/orchestrator.ts` persists `response.content` and then pushes
+  the same array onto `messages`; `tool-round.ts` persists `blocks` and the orchestrator pushes
+  the same array; `history.ts` writes `cache_control` into the last block of `messages` and
+  deletes it later
+- **What happens:** with the chat store nothing leaks (serialised at insert); with the voice
+  `DeferredStore` (`apps/voice/src/turn.ts`, serialised after the answer) the `cache_control`
+  marker lands in `ai_messages.content`. Replay strips it, so the damage is DB pollution, but
+  `ports.ts` ("only `messages` is mutated") is wrong
+- **Fix direction:** push copies (`[...response.content]`); a scenario with a deferred store that
+  asserts the persisted content carries no `cache_control`
+
+### CORE-7 · Medium · `tools` is omitted when none is advertised while the history still holds tool blocks, and the API answers 400 (R-C3)
+
+- **Check:** Confirmed (R-C3, verified 2026-10-30)
+- **Where:** `packages/core/src/loop/model-call.ts` (no `tools` when `config.tools` is empty);
+  `apps/api/src/chat/stream.ts` fills `config.tools` from `registry.anthropicTools(ctx, 'chat')`;
+  nothing in `history.ts` strips tool blocks; `apps/voice/src/warm.ts` has the same conditional
+- **What happens:** the Messages API rejects a request whose `messages` hold `tool_use` or
+  `tool_result` blocks but defines no tools. After a role downgrade, a tool leaving the registry
+  or the voice allowlist, or a channel with no tools for that role, every later turn of a session
+  that already has tool rounds fails `model_bad_request`. Inherited from Landmark; the fake's
+  `validateConversation` does not enforce the rule, so no test sees it
+- **Fix direction:** when the advertised tools are empty, history assembly drops every `tool_use`
+  block and every `tool_result` message (removing messages left empty); teach the fake the rule;
+  an `E` scenario
+
+### CORE-8 · Low · Abort after the model call: the terminal paths ignore the signal and the dispatch timer keeps running (R-C4, R-C5)
+
+- **Check:** Confirmed (R-C4, R-C5)
+- **Where:** `orchestrator.ts` truncation and terminal paths (`toolResult`, `textBlock`, `done`
+  and `hooks.onComplete()` still run after an abort during the assistant-row insert);
+  `dispatch.ts` `dispatchToolWithTimeout` (the timer runs up to `toolTimeoutMs` for a handler
+  that ignores its signal after the loop has returned)
+- **What happens:** a small window in which a cancelled turn still emits `done` and completes,
+  against `ports.ts` and `.claude/rules/engine.md`; a dangling timer per aborted tool. `E23`
+  does not assert `getTimerCount() === 0` the way `E25` does
+- **Fix direction:** check the signal after the insert and on the terminal paths; clear the
+  timer on abort; extend `E23`
+
+### CORE-9 · Low · A `model_bad_request` is logged without its reason (R-C6)
+
+- **Check:** Confirmed (R-C6)
+- **Where:** `orchestrator.ts` logs `errorClass` and `code` only; `errorReason()` in `log.ts` is
+  unused there
+- **What happens:** the rejected field of an our-fault request (such as `CORE-7`) cannot be read
+  from the logs. Landmark logged the message cut to 200 characters
+- **Fix direction:** add `reason: errorReason(err)` to the `model call failed` line (it truncates
+  and carries no content)
+
+### CORE-10 · Low · The registry hardcodes the demo pack's voice allowlist (R-C7)
+
+- **Check:** Confirmed (R-C7)
+- **Where:** `packages/core/src/tools/registry.ts` `CHANNEL_ALLOWLIST` names `search_items` and
+  `get_item`, which `@va/tools-demo` owns; `new ToolRegistry([], CHANNEL_ALLOWLIST)` throws
+  (`T02` asserts it)
+- **What happens:** core depends on a pack by name against the `tools-* → core` direction, and an
+  app composed without the demo pack dies at load
+- **Fix direction:** the app that composes the packs (`apps/api`, `apps/voice`) supplies the
+  allowlist, the registry keeps the read-only assertion; `T02` moves with it
+
+### CORE-11 · Low · A summary boundary inside a turn yields a history the API rejects (R-C8)
+
+- **Check:** Confirmed (R-C8, verified 2026-10-30)
+- **Where:** `history.ts` `selectKeptChain` slices after `summary_through_message_id` with no
+  turn-boundary check; `injectSummaryBanner` unshifts a text block into whatever message comes
+  first
+- **What happens:** a boundary on an assistant row makes the first kept message an `assistant`
+  or `tool_result` message ("first message must use the user role"), or the banner lands inside
+  a `tool_result` message. Unreachable until the compaction writer exists (`CORE-3`), but the
+  reader is production code and `H04` tests only a boundary on a turn's last row
+- **Fix direction:** after slicing, advance to the next `turn_kind === 'user'` row; one `H` test
+  for a mid-turn boundary; do it with `CORE-3`
+
+### CORE-12 · Low · Test gaps in core and the demo pack (R-C9)
+
+- **Check:** Confirmed (R-C9)
+- **Where:** `get_item` has no scenario through the loop and `create_note` only its voice refusal
+  (`.claude/rules/tools.md` asks for one per tool); `SpokenTextSink.textBlock` dedupe with two
+  text blocks where the second repeats a prefix; `X05` pins the error-code count (22); `H02b`,
+  `H03`, `H06` call internals instead of `assembleHistory`; nothing pins what a throwing
+  `MessageStore.insert` does (it propagates out of the loop)
+- **What happens:** a regression in any of these passes CI
+- **Fix direction:** one scenario per tool; a dedupe case; `X05` asserts the catalogue's shape,
+  not its length; the `H` tests through the public function; a scenario with a throwing store
+  that pins the outcome
 
 ## Resolved
 

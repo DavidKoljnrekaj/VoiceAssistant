@@ -58,7 +58,7 @@ jobs:
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
         run: |
           if [ "$E2E_SUPABASE_URL" != "$E2E_ALLOWED_SUPABASE_URL" ]; then
-            echo "::error::VITE_SUPABASE_URL is not the allowlisted dev URL; refusing to run."
+            echo "::error::E2E_SUPABASE_URL is not the allowlisted dev URL; refusing to run."
             exit 1
           fi
 
@@ -84,6 +84,9 @@ jobs:
 
       - name: Run the smoke
         env:
+          # The same guard runs inside Playwright (apps/web/e2e/support/env.ts), so the smoke
+          # step sees the project the build was made against.
+          VITE_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
         run: pnpm --filter @va/web test:e2e
