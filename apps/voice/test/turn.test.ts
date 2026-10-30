@@ -205,6 +205,22 @@ describe('a spoken turn', () => {
     }
   })
 
+  scenario('VOICE-7 the timing line carries the marks with their times, name@ms, in order', async () => {
+    anthropic.script(callTools(toolUse('search_items', { query: 'a' })), answer('Da.'))
+    const call = await openCall()
+    await (await ask(call, 'Ima li artikala?')).done
+    await call.session.settle()
+    const timing = logs.find((l) => l.line.includes('"timing"') && l.line.includes('[voice]'))
+    const marks = /"marks":"([^"]*)"/.exec(timing?.line ?? '')?.[1]
+    expect(marks).toMatch(
+      /^model_call@\d+ first_event@\d+ tools_start@\d+ tools_done@\d+ model_call@\d+ first_event@\d+$/,
+    )
+    const times = marks!.split(' ').map((m) => Number(m.split('@')[1]))
+    expect(times).toEqual([...times].sort((a, b) => a - b))
+    const total = Number(/"total_ms":(\d+)/.exec(timing!.line)![1])
+    expect(times.at(-1)!).toBeLessThanOrEqual(total)
+  })
+
   scenario('W11 a model error is spoken and the stream ends; only the user row is written', async () => {
     anthropic.script({ error: { status: 500, type: 'api_error', message: 'boom' } })
     const call = await openCall()

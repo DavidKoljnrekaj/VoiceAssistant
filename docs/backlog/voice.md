@@ -46,16 +46,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** build the workspace to `dist` (`OPS-1`) so the job process imports compiled
   JavaScript; then the timeout can go back to the default
 
-### VOICE-7 · Medium · The `timing` line's `marks` carry names but no times (R-V2)
-
-- **Check:** Confirmed (R-V2)
-- **Where:** `apps/voice/src/session.ts` joins `result.marks`; `LoopMark`
-  (`packages/core/src/loop/ports.ts`) is a four-literal union with no timestamp
-- **What happens:** `docs/OPS.md` (`name@ms`) and the comment in `session.ts` claim otherwise;
-  model time against tool time cannot be read from the logs, which the latency work needs
-- **Fix direction:** the hook receives `(mark, atMs)` or the loop stamps each mark; the line
-  prints `name@ms`; a `W` test on the line's shape
-
 ### VOICE-8 · Medium · First sound: the held first sentence waits for the next sentence, and every paragraph break opens a TTS segment (R-V3)
 
 - **Check:** Code reading (R-V3, verified 2026-10-30); measure before changing (`/bench-voice`)
@@ -172,3 +162,8 @@ answered directly from the first turn's tool result, no retraction, no new looku
 
 Resolved on `fix/voice-review`: `createTurnMetrics` joins the user item's Soniox delays with
 the reply that follows it (test `VOICE-6` builds both from real 1.9.2 `ChatMessage` items).
+
+### VOICE-7 · Medium · The `timing` line's `marks` carry names but no times (R-V2)
+
+Resolved on `fix/voice-review`: the worker stamps each mark as it arrives (`TimedMark`), the
+line prints `name@ms`; test `VOICE-7`.

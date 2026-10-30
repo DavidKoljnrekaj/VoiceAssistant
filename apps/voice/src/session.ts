@@ -102,14 +102,15 @@ export class CallSession {
     this.saves = result.persisted
     this.rows.push(...result.rows)
     // Where a turn's time goes: identity, then the model and tools until the first spoken text,
-    // then the rest of the answer.
+    // then the rest of the answer; the marks say when each model call and tool round started
+    // and ended (`docs/OPS.md` → log fields).
     log('info', LOG_TAG, 'timing', {
       ...ids,
       turn: this.turns,
       auth_ms: authMs,
       first_text_ms: result.firstTextMs,
       total_ms: result.totalMs,
-      marks: result.marks.join(' '),
+      marks: result.marks.map((m) => `${m.name}@${m.atMs}`).join(' '),
       spoken_len: result.spoken.length,
       input_tokens: result.usage.input,
       output_tokens: result.usage.output,
