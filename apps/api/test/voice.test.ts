@@ -4,13 +4,33 @@ import { describe, expect } from 'vitest'
 
 import { uuid } from '@va/core/test'
 
+import { CALL_IDLE_MS } from '../src/rate-limit.js'
 import { CALL_CAP_MS, sha256Hex } from '../src/voice/calls.js'
-import { buildApp, call, db, flatError, livekit, memberJwt, scenario, TOKENS, USERS } from './harness.js'
+import {
+  buildApp,
+  call,
+  db,
+  flatError,
+  livekit,
+  logs,
+  memberJwt,
+  scenario,
+  TOKENS,
+  USERS,
+} from './harness.js'
 
 const M = USERS.member
 const calls = () => db.rows('voice_calls')
 const voiceSessions = (userId = M.id) =>
   db.rows('ai_sessions').filter((s) => s.user_id === userId && s.channel === 'voice')
+/** A live `voice_calls` row of another user, `expiresInMs` from now (negative: already expired). */
+const liveRow = (userId: string, expiresInMs = 60_000) => ({
+  session_id: uuid(Math.floor(Math.random() * 1e6)),
+  user_id: userId,
+  call_token_hash: crypto.randomUUID(),
+  access_token: 'x',
+  expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+})
 
 describe('voice call lifecycle', () => {
   scenario(
@@ -97,6 +117,55 @@ describe('voice call lifecycle', () => {
     expect(await flatError(res)).toMatchObject({ status: 429, code: 'rate_limited' })
   })
 
+  scenario(
+    "V16 (API-8) a caller's own unexpired row does not count against the concurrent cap: with two others live, a re-start is 200",
+    async () => {
+      const first = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      db.seed('voice_calls', [liveRow(USERS.admin.id), liveRow(USERS.admin.id)])
+      const res = await call('/voice/sessions')
+      expect(res.status).toBe(200)
+      const second = (await res.json()) as { session_id: string }
+      expect(
+        calls()
+          .filter((c) => c.user_id === M.id)
+          .map((c) => c.session_id),
+      ).toEqual([second.session_id])
+      expect(calls()).toHaveLength(3)
+      expect(voiceSessions().map((s) => s.id)).toEqual([first.session_id, second.session_id])
+    },
+  )
+
+  scenario(
+    'V17 (API-8) unexpired rows idle for over three minutes do not count against the concurrent cap',
+    async () => {
+      const idle = { last_seen_at: new Date(Date.now() - CALL_IDLE_MS - 1000).toISOString() }
+      db.seed('voice_calls', [
+        { ...liveRow(USERS.admin.id), ...idle },
+        { ...liveRow(USERS.admin.id), ...idle },
+        { ...liveRow(USERS.admin.id), ...idle },
+      ])
+      expect((await call('/voice/sessions')).status).toBe(200)
+      const count = db.requestsTo('voice_calls', 'HEAD')[0]!
+      expect(count.params.get('expires_at')).toMatch(/^gt\./)
+      expect(count.params.get('last_seen_at')).toMatch(/^gt\./)
+    },
+  )
+
+  scenario(
+    'V18 (API-11) a failed delete of the previous call is 500 internal_error, logged, and nothing is written',
+    async () => {
+      db.fault((r) => r.table === 'voice_calls' && r.method === 'DELETE', { status: 500 })
+      const res = await call('/voice/sessions')
+      expect(await flatError(res)).toMatchObject({ status: 500, code: 'internal_error' })
+      expect(calls()).toHaveLength(0)
+      expect(voiceSessions()).toHaveLength(0)
+      expect(livekit.dispatches).toHaveLength(0)
+      expect(
+        logs.some((l) => l.level === 'error' && l.line.includes('"event":"previous call cleanup failed"')),
+      ).toBe(true)
+    },
+  )
+
   scenario('V05 a failed dispatch is 502 voice_dispatch_failed and both rows are removed', async () => {
     livekit.failNextDispatch = true
     const res = await call('/voice/sessions')
@@ -104,6 +173,52 @@ describe('voice call lifecycle', () => {
     expect(calls()).toHaveLength(0)
     expect(voiceSessions()).toHaveLength(0)
   })
+
+  scenario(
+    'V11 (API-4) a failed join token is 500 internal_error and both rows are removed; the dispatch stays and is logged',
+    async () => {
+      livekit.failNextJoinToken = true
+      const res = await call('/voice/sessions')
+      expect(await flatError(res)).toMatchObject({ status: 500, code: 'internal_error' })
+      expect(calls()).toHaveLength(0)
+      expect(voiceSessions()).toHaveLength(0)
+      expect(livekit.dispatches).toHaveLength(1)
+      const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"join token failed"'))
+      expect(line?.line).toContain('"session_id"')
+      expect(line?.line).not.toContain(TOKENS.member)
+    },
+  )
+
+  scenario('V12 (API-4) a rollback whose delete fails logs the failure with the session id', async () => {
+    livekit.failNextDispatch = true
+    db.fault((r) => r.table === 'voice_calls' && r.method === 'DELETE' && r.params.has('session_id'), {
+      status: 500,
+    })
+    const res = await call('/voice/sessions')
+    expect(await flatError(res)).toMatchObject({ status: 502, code: 'voice_dispatch_failed' })
+    const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"rollback failed"'))
+    expect(line?.line).toContain('"table":"voice_calls"')
+    expect(line?.line).toContain('"code":"XX000"')
+    expect(line?.line).toContain('"session_id"')
+    // The session delete still ran: a failed first delete does not skip the second.
+    expect(voiceSessions()).toHaveLength(0)
+  })
+
+  scenario(
+    'V13 (API-5) nothing that reaches LiveKit carries the email: identity is the user id, no name',
+    async () => {
+      const res = await call('/voice/sessions')
+      expect(res.status).toBe(200)
+      expect(livekit.tokens).toHaveLength(1)
+      expect(livekit.tokens[0]).toEqual({
+        identity: M.id,
+        room: livekit.dispatches[0]!.room,
+        ttlSeconds: 900,
+      })
+      expect(JSON.stringify(livekit.tokens)).not.toContain(M.email)
+      expect(JSON.stringify(livekit.dispatches)).not.toContain(M.email)
+    },
+  )
 
   scenario('V06 refresh replaces the JWT; expires_at never moves past created_at + 15 min', async () => {
     const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
@@ -124,6 +239,36 @@ describe('voice call lifecycle', () => {
     )
     expect(calls()[0]!.expires_at).toBe(new Date(soon * 1000).toISOString())
   })
+
+  scenario(
+    'V14 (API-6) refresh on an expired, unswept row is 404 not_found and the row is untouched',
+    async () => {
+      const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      const row = calls()[0]!
+      row.expires_at = new Date(Date.now() - 1000).toISOString()
+      const later = memberJwt(Math.floor(Date.now() / 1000) + 3600)
+      db.authUsers[later] = { id: M.authId, email: M.email }
+      const res = await call(`/voice/sessions/${session_id}/refresh`, undefined, { token: later })
+      expect(await flatError(res)).toMatchObject({ status: 404, code: 'not_found' })
+      expect(calls()[0]).toMatchObject({ access_token: TOKENS.member, expires_at: row.expires_at })
+      expect(db.requestsTo('voice_calls', 'PATCH')).toHaveLength(0)
+    },
+  )
+
+  scenario(
+    'V15 (API-6) a row deleted between the lookup and the update is 404 not_found, not 500',
+    async () => {
+      const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      db.onRequest((r) => {
+        if (r.table === 'voice_calls' && r.method === 'PATCH') db.tables.voice_calls = []
+      })
+      const res = await call(`/voice/sessions/${session_id}/refresh`)
+      expect(await flatError(res)).toMatchObject({ status: 404, code: 'not_found' })
+      expect(logs.some((l) => l.level === 'error' && l.line.includes('voice_calls refresh failed'))).toBe(
+        false,
+      )
+    },
+  )
 
   scenario("V07 refresh and end for another user's session are 404 not_found", async () => {
     const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }

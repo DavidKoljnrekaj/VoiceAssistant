@@ -5,9 +5,9 @@ import { AccessToken, AgentDispatchClient } from 'livekit-server-sdk'
 
 import type { ApiEnv } from '../env.js'
 
+/** The participant is identified by `users.id` only: no display name, so no email, reaches LiveKit. */
 export interface JoinTokenInput {
   identity: string
-  name?: string
   room: string
   ttlSeconds: number
 }
@@ -33,7 +33,6 @@ export function createLiveKit(
     async joinToken(input) {
       const at = new AccessToken(apiKey, apiSecret, {
         identity: input.identity,
-        ...(input.name ? { name: input.name } : {}),
         ttl: input.ttlSeconds,
       })
       at.addGrant({

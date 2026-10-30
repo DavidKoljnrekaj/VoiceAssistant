@@ -56,6 +56,16 @@ export async function startCall(
     return { ok: false, code: 'internal_error' }
   }
   const now = deps.clock()
+  const service = ctx.serviceClient
+
+  // One live call per user: the previous call's credential goes first, so that the caller's own
+  // row never counts against the concurrent cap. This is the one write a refused start has made.
+  const { error: oldError } = await service.from('voice_calls').delete().eq('user_id', ctx.userId)
+  if (oldError) {
+    log('error', '[api]', 'previous call cleanup failed', { ...ids, code: oldError.code })
+    return { ok: false, code: 'internal_error' }
+  }
+
   const verdict = await checkVoiceRateLimits(ctx, now, requestId)
   if (!verdict.ok) {
     log('warn', '[api]', 'voice rate limited', {
@@ -65,14 +75,6 @@ export async function startCall(
       limit: verdict.limit,
     })
     return { ok: false, code: 'rate_limited' }
-  }
-  const service = ctx.serviceClient
-
-  // One live call per user: the previous call's credential goes.
-  const { error: oldError } = await service.from('voice_calls').delete().eq('user_id', ctx.userId)
-  if (oldError) {
-    log('error', '[api]', 'previous call cleanup failed', { ...ids, code: oldError.code })
-    return { ok: false, code: 'internal_error' }
   }
 
   const room = `voice-${randomUUID()}`
@@ -86,9 +88,20 @@ export async function startCall(
     return { ok: false, code: 'internal_error' }
   }
   const scoped = { ...ids, session_id: session.id }
+  // Undoes what this request created. Best-effort: a failed delete is logged with the table and
+  // carried on, so a stuck credential row never goes unnoticed and the session delete still runs.
   const rollback = async () => {
-    await service.from('voice_calls').delete().eq('session_id', session.id).eq('user_id', ctx.userId)
-    await service.from('ai_sessions').delete().eq('id', session.id).eq('user_id', ctx.userId)
+    const calls = await service
+      .from('voice_calls')
+      .delete()
+      .eq('session_id', session.id)
+      .eq('user_id', ctx.userId)
+    if (calls.error)
+      log('error', '[api]', 'rollback failed', { ...scoped, table: 'voice_calls', code: calls.error.code })
+    const sessions = await service.from('ai_sessions').delete().eq('id', session.id).eq('user_id', ctx.userId)
+    if (sessions.error) {
+      log('error', '[api]', 'rollback failed', { ...scoped, table: 'ai_sessions', code: sessions.error.code })
+    }
   }
 
   const callToken = randomBytes(32).toString('base64url')
@@ -121,20 +134,32 @@ export async function startCall(
     return { ok: false, code: 'voice_dispatch_failed' }
   }
 
-  const token = await deps.livekit.joinToken({
-    identity: ctx.userId,
-    ...(ctx.email ? { name: ctx.email } : {}),
-    room,
-    ttlSeconds: CALL_CAP_MS / 1000,
-  })
+  // The dispatch cannot be undone; without a row the worker refuses the token at lookup (`apps/voice/src/call.ts`).
+  let token: string
+  try {
+    token = await deps.livekit.joinToken({
+      identity: ctx.userId,
+      room,
+      ttlSeconds: CALL_CAP_MS / 1000,
+    })
+  } catch (err) {
+    log('error', '[api]', 'join token failed', {
+      ...scoped,
+      reason: err instanceof Error ? err.constructor.name : typeof err,
+    })
+    await rollback()
+    return { ok: false, code: 'internal_error' }
+  }
   log('info', '[api]', 'call started', { ...scoped, room })
   return { ok: true, value: { url: deps.livekit.url, token, room, session_id: session.id } }
 }
 
+/** 404 when there is no live call: no row, a row past `expires_at`, or a row gone between the lookup and the update. */
 export async function refreshCall(
   ctx: AuthContext,
   sessionId: string,
   jwt: string,
+  now: Date,
   requestId: string,
 ): Promise<CallResult<null>> {
   const ids = { request_id: requestId, user_id: ctx.userId, session_id: sessionId }
@@ -143,6 +168,7 @@ export async function refreshCall(
     .select('id, created_at')
     .eq('session_id', sessionId)
     .eq('user_id', ctx.userId)
+    .gt('expires_at', now.toISOString())
     .maybeSingle()
   if (error) {
     log('error', '[api]', 'voice_calls lookup failed', { ...ids, code: error.code })
@@ -156,10 +182,12 @@ export async function refreshCall(
     .eq('id', call.id)
     .eq('user_id', ctx.userId)
     .select('id')
-  if (updateError || !updated?.length) {
-    log('error', '[api]', 'voice_calls refresh failed', { ...ids, code: updateError?.code ?? 'no_row' })
+  if (updateError) {
+    log('error', '[api]', 'voice_calls refresh failed', { ...ids, code: updateError.code })
     return { ok: false, code: 'internal_error' }
   }
+  // Ended or swept between the two statements: the call is simply gone.
+  if (!updated?.length) return { ok: false, code: 'not_found' }
   return { ok: true, value: null }
 }
 

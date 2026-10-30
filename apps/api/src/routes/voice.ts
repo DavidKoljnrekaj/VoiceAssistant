@@ -19,7 +19,7 @@ export function voiceRoute(deps: AppDeps): Hono<AppEnv> {
     .post('/voice/sessions/:id/refresh', async (c) => {
       const id = idSchema.safeParse(c.req.param('id'))
       if (!id.success) return fail(c, 'not_found')
-      const result = await refreshCall(c.get('ctx'), id.data, c.get('jwt'), c.get('requestId'))
+      const result = await refreshCall(c.get('ctx'), id.data, c.get('jwt'), deps.clock(), c.get('requestId'))
       if (!result.ok) return fail(c, result.code)
       return c.json({ ok: true })
     })

@@ -16,11 +16,13 @@ export class FakeLiveKit implements LiveKitPort {
   dispatches: Array<{ room: string; agentName: string; metadata: string }> = []
   tokens: JoinTokenInput[] = []
   failNextDispatch = false
+  failNextJoinToken = false
 
   reset(): void {
     this.dispatches = []
     this.tokens = []
     this.failNextDispatch = false
+    this.failNextJoinToken = false
   }
   async createDispatch(room: string, agentName: string, metadata: string): Promise<void> {
     if (this.failNextDispatch) {
@@ -30,6 +32,10 @@ export class FakeLiveKit implements LiveKitPort {
     this.dispatches.push({ room, agentName, metadata })
   }
   async joinToken(input: JoinTokenInput): Promise<string> {
+    if (this.failNextJoinToken) {
+      this.failNextJoinToken = false
+      throw new Error('fake-livekit: token signing failed')
+    }
     this.tokens.push(input)
     return `lk-token-for-${input.identity}`
   }

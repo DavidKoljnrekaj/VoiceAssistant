@@ -282,6 +282,119 @@ describe('POST /chat stream', () => {
     },
   )
 
+  it('C15 (API-11) a reader that cancels the body trips the sse.write_failed source on the next keepalive: abort, no event, rows [user]', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      resetWorld()
+      anthropic.script({ hangUntilAborted: true })
+      const res = await call('/chat', { session_id: null, message: 'x' })
+      const reader = res.body!.getReader()
+      let seen = ''
+      while (!seen.includes('event: session')) seen += new TextDecoder().decode((await reader.read()).value)
+      const sessionId = (JSON.parse(seen.split('data: ')[1]!.split('\n')[0]!) as { session_id: string })
+        .session_id
+      await reader.cancel()
+      await vi.advanceTimersByTimeAsync(15_000)
+      await vi.waitFor(() => expect(logs.some((l) => l.line.includes('"event":"timing"'))).toBe(true))
+      const disconnect = logs.filter((l) => l.line.includes('"event":"client disconnect"'))
+      expect(disconnect).toHaveLength(1)
+      expect(disconnect[0]!.line).toContain('"source":"sse.write_failed"')
+      expect(logs.find((l) => l.line.includes('"event":"timing"'))!.line).toContain(
+        '"outcome":"client_disconnect"',
+      )
+      expect(kinds(sessionId)).toEqual(['user'])
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  scenario(
+    'C16 (API-11) a handler that throws is the flat 500 internal_error envelope with the request id, logged',
+    async () => {
+      const broken = buildApp({
+        clock: () => {
+          throw new Error('clock broke')
+        },
+      })
+      const res = await call(
+        '/chat',
+        { session_id: null, message: 'x' },
+        { app: broken, headers: { 'x-request-id': 'req-500' } },
+      )
+      expect(await flatError(res)).toEqual({
+        status: 500,
+        code: 'internal_error',
+        message: 'Došlo je do greške. Pokušajte ponovno.',
+      })
+      expect(res.headers.get('content-type')).toContain('application/json')
+      expect(res.headers.get('x-request-id')).toBe('req-500')
+      const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"unhandled error"'))
+      expect(line?.line).toContain('"request_id":"req-500"')
+      expect(line?.line).not.toContain('clock broke')
+    },
+  )
+
+  it('C17 (API-11) the request timeout during tool dispatch: a synthetic tool_result row, then error(request_timeout)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      resetWorld()
+      anthropic.script(callTools(toolUse('search_items', { query: 'stol' })))
+      // The assistant row is held for 80 s, so the tool starts at 80 s and the 90 s timeout lands inside it.
+      let release!: () => void
+      db.hold(
+        (r) =>
+          r.table === 'ai_messages' &&
+          r.method === 'POST' &&
+          (r.body as { turn_kind: string }).turn_kind === 'assistant',
+        new Promise<void>((resolve) => (release = resolve)),
+      )
+      db.fault((r) => r.table === 'demo_items', { hang: true })
+      const res = await call('/chat', { session_id: null, message: 'x' })
+      const reading = readSse(res, 0)
+      await vi.advanceTimersByTimeAsync(80_000)
+      release()
+      await vi.advanceTimersByTimeAsync(10_000)
+      const sse = await reading
+      expect(sse.types).toEqual(['session', 'tool_call', 'error'])
+      expect(sse.events.at(-1)!.data).toMatchObject({ code: 'request_timeout' })
+      const sessionId = sse.events[0]!.data.session_id as string
+      expect(kinds(sessionId)).toEqual(['user', 'assistant', 'tool_result'])
+      const block = blocks(rowsOf(sessionId)[2]!.content, 'tool_result')[0]
+      expect(block).toMatchObject({ is_error: true })
+      expect(logs.find((l) => l.line.includes('"event":"timing"'))!.line).toContain(
+        '"outcome":"request_timeout"',
+      )
+      expect(anthropic.calls).toHaveLength(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  scenario(
+    "C18 (R-A7) done.usage is the last model call's usage; the timing line carries the turn's totals",
+    async () => {
+      anthropic.script(
+        {
+          ...callTools(toolUse('search_items', { query: 'stol' })),
+          usage: { input_tokens: 1000, output_tokens: 50 },
+        },
+        answer('Tri stavke.', { input_tokens: 200, output_tokens: 10 }),
+      )
+      const sse = await chat({ session_id: null, message: 'Koji stolovi postoje?' })
+      expect(sse.events.at(-1)!.data).toEqual({
+        type: 'done',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 200, output_tokens: 10 },
+      })
+      const timing = logs.find((l) => l.line.includes('"event":"timing"'))!.line
+      expect(timing).toContain('"iterations":2')
+      expect(timing).toContain('"input_tokens":1200')
+      expect(timing).toContain('"output_tokens":60')
+    },
+  )
+
   scenario('C14 a truncated tool call ends with the explanation turn and done', async () => {
     anthropic.script({ content: [toolUse('search_items', { query: 'x' })], stop_reason: 'max_tokens' })
     const sse = await chat({ session_id: null, message: 'x' })
