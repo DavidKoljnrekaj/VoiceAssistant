@@ -75,8 +75,9 @@ event: error        {"type":"error","code":"…","message":"…"}
 
 Headers: `Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-cache,
 no-transform`, `X-Accel-Buffering: no`, `Connection: keep-alive`, `X-Request-Id`. The event
-name always equals `data.type`. `: ready` is written before any work; `session` is always the
-first event. A row is written before its event (`turn`, `tool_result`); deltas are the one
+name always equals `data.type`. `done.usage` is the last model call's usage, not the turn's;
+the `[api]` `timing` log line carries the turn's totals (`docs/OPS.md` → Logging). `: ready` is
+written before any work; `session` is always the first event. A row is written before its event (`turn`, `tool_result`); deltas are the one
 provisional exception, and an `error` with `persistence_error` means the client drops the
 provisional text of that block. `done.stop_reason` is the model's raw value (`end_turn`,
 `max_tokens`, `refusal`, `tool_limit_reached`). After `done` or `error` the stream closes.
@@ -134,7 +135,8 @@ the service role, user-filtered:
 | voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                               | 24 h   |
 | voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future, across all users              | now    |
 
-Tool-result rows never count. A failing count fails **open** and logs an error line. A refused
+Tool-result rows never count. A failing count fails **open** and logs an error line, the one
+sanctioned exception to invariant 10 (`docs/SECURITY.md` → Abuse). A refused
 request writes nothing. Known: the check-then-act race (`API-1`); no `Retry-After` (`API-3`).
 
 ## Voice call lifecycle
