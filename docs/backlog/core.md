@@ -46,19 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-8 · Low · Abort after the model call: the terminal paths ignore the signal and the dispatch timer keeps running (R-C4, R-C5)
-
-- **Check:** Confirmed (R-C4, R-C5)
-- **Where:** `orchestrator.ts` truncation and terminal paths (`toolResult`, `textBlock`, `done`
-  and `hooks.onComplete()` still run after an abort during the assistant-row insert);
-  `dispatch.ts` `dispatchToolWithTimeout` (the timer runs up to `toolTimeoutMs` for a handler
-  that ignores its signal after the loop has returned)
-- **What happens:** a small window in which a cancelled turn still emits `done` and completes,
-  against `ports.ts` and `.claude/rules/engine.md`; a dangling timer per aborted tool. `E23`
-  does not assert `getTimerCount() === 0` the way `E25` does
-- **Fix direction:** check the signal after the insert and on the terminal paths; clear the
-  timer on abort; extend `E23`
-
 ### CORE-9 · Low · A `model_bad_request` is logged without its reason (R-C6)
 
 - **Check:** Confirmed (R-C6)
@@ -107,6 +94,11 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-8 · Low · Abort after the model call: the terminal paths ignore the signal and the dispatch timer keeps running (R-C4, R-C5)
+
+Resolved in two `fix(core)` commits for CORE-8: the terminal paths check the signal after the
+assistant row (`E35`, `E35b`) and the loop's abort clears the per-tool timer (`E36`).
 
 ### CORE-7 · Medium · `tools` is omitted when none is advertised while the history still holds tool blocks, and the API answers 400 (R-C3)
 

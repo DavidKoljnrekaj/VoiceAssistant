@@ -15,7 +15,7 @@ import {
   sessionMessages,
 } from '../test/harness.js'
 import { BufferedSink } from '../sinks/buffered.js'
-import { awaitHandlerEvent, handlerEvents, openGate } from '../test/tools.js'
+import { awaitHandlerEvent, EDGE_PACK, handlerEvents, openGate, TEST_PACK } from '../test/tools.js'
 import { CANCELLED_BEFORE_RETURN, CANCELLED_BEFORE_RUN } from './tool-round.js'
 
 const kinds = (sessionId: string) => sessionMessages(sessionId).map((r) => r.turn_kind)
@@ -168,6 +168,41 @@ describe('abort, timeout and the no-bare-tool_use invariant', () => {
       expectBranchClosed(run.sessionId)
     },
   )
+
+  it('E36 CORE-8: an abort during dispatch leaves no per-tool timer running, even for a handler that ignores its signal', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      reset()
+      anthropic.script(callTools(toolUse('ignores_signal', { key: 'stubborn' })))
+      const ctx = await authAs('member')
+      const controller = new AbortController()
+      const pending = runChat(ctx, 'x', {
+        controller,
+        packs: [TEST_PACK, EDGE_PACK],
+        settings: { toolTimeoutMs: 15_000 },
+      })
+      await awaitHandlerEvent('start:stubborn')
+      expect(vi.getTimerCount()).toBe(1)
+      controller.abort()
+      const run = await pending
+      expect(vi.getTimerCount()).toBe(0)
+      expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result'])
+      expect(blocksOf(run.rows()[2]!.content, 'tool_result')[0]).toMatchObject({
+        is_error: true,
+        content: JSON.stringify(CANCELLED_BEFORE_RETURN),
+      })
+      expect(run.sink.doneEvent).toBeNull()
+      // Nothing fires later: no timeout log, no second result.
+      await vi.advanceTimersByTimeAsync(15_000)
+      openGate('stubborn', { late: true })
+      await vi.advanceTimersByTimeAsync(1)
+      expect(logs.some((l) => l.line.includes('tool timeout'))).toBe(false)
+      expect(run.sink.toolResults).toEqual([])
+      expectBranchClosed(run.sessionId)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('E25 the per-tool timeout: a tool_timeout error result, the handler told to stop, no leaked timer, late result discarded', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

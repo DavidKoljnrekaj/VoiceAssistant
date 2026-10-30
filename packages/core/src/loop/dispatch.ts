@@ -68,8 +68,9 @@ export async function dispatchTool(
 
 /**
  * `dispatchTool` raced against `timeoutMs`. The handler gets a child signal that fires on the
- * timeout and on the loop's own abort; the timer is cleared however the race ends, and a late
- * result from a timed-out handler is discarded.
+ * timeout and on the loop's own abort; the timer is cleared however the race ends, including
+ * the loop's abort while a handler that ignores its signal is still running, and a late result
+ * from a timed-out or aborted handler is discarded.
  */
 export async function dispatchToolWithTimeout(
   registry: ToolRegistry,
@@ -85,11 +86,19 @@ export async function dispatchToolWithTimeout(
   const timeout = new AbortController()
   const child = AbortSignal.any([signal, timeout.signal])
   let timer: ReturnType<typeof setTimeout> | undefined
+  let onAbort: (() => void) | undefined
   const expired = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       timeout.abort(new Error('tool_timeout'))
       reject(new Error('tool_timeout'))
     }, timeoutMs)
+    // The loop gave up on this round: the timer has nothing left to guard.
+    onAbort = () => {
+      clearTimeout(timer)
+      reject(new Error('tool_aborted'))
+    }
+    if (signal.aborted) onAbort()
+    else signal.addEventListener('abort', onAbort, { once: true })
   })
   try {
     const output = await Promise.race([
@@ -110,6 +119,7 @@ export async function dispatchToolWithTimeout(
     return { output: { error: `tool execution failed: ${message}` }, isError: true }
   } finally {
     clearTimeout(timer)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
   }
 }
 

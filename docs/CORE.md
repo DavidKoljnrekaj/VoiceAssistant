@@ -108,7 +108,8 @@ resolves the name through `registry.find` (an unknown or forbidden name throws w
 `{ error: 'tool execution failed: tool refused: <reason>' }`), re-validates the input with the
 tool's zod schema (`{ error: 'invalid tool input', issues }` without calling the handler), and
 runs the handler with a child signal (`AbortSignal.any` of the loop signal and the timeout). The
-timer is cleared on every exit; a timeout is `{ error: 'tool execution failed: tool_timeout' }`
+timer is cleared on every exit, the loop's abort included (a handler that ignores its signal
+leaves no timer behind, `E36`); a timeout is `{ error: 'tool execution failed: tool_timeout' }`
 and the handler is told to stop through its signal. A handler's `{ error }` return is an error
 result too; a throw becomes `{ error: 'tool execution failed: <message>' }`. The outcome always
 serialises: a handler that resolves `undefined` (a `Promise<void>` handler type-checks) is
@@ -337,8 +338,9 @@ Supabase env for `@va/db`, routes `globalThis.fetch` for `fake-anthropic.test` a
   recorded requests with the client that made them (`clientOf`).
 - `fixtures`: `seedWorld(db)` with an admin and a member (`TOKENS`, `USERS`), the member's chat
   session (three-row chain), nine `demo_items`, and the `ai_session_history` RPC.
-- `tools`: `TEST_PACK` (`echo`, `whoami`, `gate`, `fail`, `boom`, `admin_only`, `write_note`)
-  and `TEST_ALLOWLIST`; `openGate(key, value)` releases a running `gate` handler,
+- `tools`: `TEST_PACK` (`echo`, `whoami`, `gate`, `fail`, `boom`, `admin_only`, `write_note`),
+  `EDGE_PACK` (`nothing`, `bigint`, `ignores_signal`: what the engine must survive) and
+  `TEST_ALLOWLIST`; `openGate(key, value)` releases a running `gate` handler,
   `awaitHandlerEvent('start:key' | 'end:key' | 'aborted:key')` waits for one, `handlerEvents`
   lists them.
 - `harness`: `scenario(name, fn)` (fresh world, fails on an unscripted or unused model turn),

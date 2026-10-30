@@ -22,7 +22,7 @@ import {
   sessionMessages,
   toolResultSentToModel,
 } from '../test/harness.js'
-import { handlerEvents, ODD_OUTPUT_PACK, openGate, TEST_ALLOWLIST, TEST_PACK } from '../test/tools.js'
+import { handlerEvents, EDGE_PACK, openGate, TEST_ALLOWLIST, TEST_PACK } from '../test/tools.js'
 import { BufferedSink } from '../sinks/buffered.js'
 import { TRUNCATED_HR } from './orchestrator.js'
 import type { MessageRow } from './ports.js'
@@ -408,7 +408,7 @@ describe('orchestration loop', () => {
     async () => {
       anthropic.script(callTools(toolUse('nothing', {})), answer('Ništa.'))
       const ctx = await authAs('member')
-      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, ODD_OUTPUT_PACK] })
+      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, EDGE_PACK] })
       expect(run.sink.errorEvent).toBeNull()
       expect(run.sink.toolResults[0]).toMatchObject({ tool: 'nothing', isError: false, output: null })
       expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
@@ -425,7 +425,7 @@ describe('orchestration loop', () => {
     async () => {
       anthropic.script(callTools(toolUse('bigint', {})), answer('Ne mogu pročitati.'))
       const ctx = await authAs('member')
-      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, ODD_OUTPUT_PACK] })
+      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, EDGE_PACK] })
       expect(run.sink.errorEvent).toBeNull()
       expect(run.sink.toolResults[0]).toMatchObject({
         tool: 'bigint',

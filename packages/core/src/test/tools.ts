@@ -176,11 +176,26 @@ export const TEST_PACK: ToolPack = {
   tools: [echo, whoami, gateTool, fail, boom, adminOnly, writeNote] as ToolPack['tools'],
 }
 
-/** Handlers whose output the engine must survive (CORE-5); a separate pack so the request
- * shape E02 pins stays the same. */
-export const ODD_OUTPUT_PACK: ToolPack = {
-  name: 'odd',
-  tools: [nothing, bigint] as ToolPack['tools'],
+/** A handler that never looks at its signal: waits for its gate, whatever the loop does. */
+export const ignoresSignal = defineTool({
+  name: 'ignores_signal',
+  description: 'Waits for the gate with this key and ignores the abort signal.',
+  input: z.object({ key: z.string().describe('Gate key.') }),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler(input) {
+    record(`start:${input.key}`)
+    const value = await gate(input.key).promise
+    record(`end:${input.key}`)
+    return value
+  },
+})
+
+/** Handlers the engine must survive (CORE-5, CORE-8); a separate pack so the request shape E02
+ * pins stays the same. */
+export const EDGE_PACK: ToolPack = {
+  name: 'edge',
+  tools: [nothing, bigint, ignoresSignal] as ToolPack['tools'],
 }
 
 export const TEST_ALLOWLIST: ChannelAllowlist = {
