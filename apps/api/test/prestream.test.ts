@@ -1,12 +1,13 @@
 // P scenarios: everything POST /chat decides before the stream opens. Flat JSON with a real
 // status; nothing written on a refusal.
-import { describe, expect } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { answer } from '@va/core/test'
 import { MSG_USER, SESSION_MEMBER_CHAT, uuid } from '@va/core/test'
 
+import { PRE_STREAM_TIMEOUT_MS } from '../src/deadline.js'
 import { CHAT_BURST_LIMIT, CHAT_DAILY_LIMIT } from '../src/rate-limit.js'
-import { anthropic, call, chat, db, flatError, logs, scenario, TOKENS, USERS } from './harness.js'
+import { anthropic, call, chat, db, flatError, logs, resetWorld, scenario, TOKENS, USERS } from './harness.js'
 
 const M = USERS.member
 
@@ -226,6 +227,44 @@ describe('POST /chat before the stream', () => {
       expect(anthropic.calls).toHaveLength(0)
     },
   )
+
+  it('P20 (API-9) a hung PostgREST lookup before the stream is 500 internal_error after 10 s, logged, nothing written', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      resetWorld()
+      db.fault((r) => r.table === 'ai_sessions' && r.method === 'GET', { hang: true })
+      const before = snapshot()
+      const pending = call('/chat', { session_id: SESSION_MEMBER_CHAT, message: 'x' })
+      await vi.advanceTimersByTimeAsync(PRE_STREAM_TIMEOUT_MS)
+      const res = await pending
+      expect(await flatError(res)).toMatchObject({ status: 500, code: 'internal_error' })
+      expect(snapshot()).toEqual(before)
+      expect(anthropic.calls).toHaveLength(0)
+      const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"pre-stream timeout"'))
+      expect(line?.line).toContain('"step":"prepare"')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('P21 (API-9) a hung GoTrue is 500 internal_error after 10 s, logged with the auth step', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      resetWorld()
+      db.fault((r) => r.service === 'auth', { hang: true })
+      const pending = call('/chat', { session_id: null, message: 'x' })
+      await vi.advanceTimersByTimeAsync(PRE_STREAM_TIMEOUT_MS)
+      const res = await pending
+      expect(await flatError(res)).toMatchObject({ status: 500, code: 'internal_error' })
+      expect(db.rows('ai_sessions').filter((s) => s.id !== SESSION_MEMBER_CHAT)).toHaveLength(0)
+      const line = logs.find((l) => l.level === 'error' && l.line.includes('"event":"pre-stream timeout"'))
+      expect(line?.line).toContain('"step":"auth"')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   scenario('P17 a body over 64 KB is 413 payload_too_large', async () => {
     const res = await call('/chat', { session_id: null, message: 'x', padding: 'p'.repeat(65 * 1024) })

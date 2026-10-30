@@ -1,6 +1,8 @@
 // Everything a chat turn decides before the stream opens, in order: body, rate limit, session,
 // parent, history, the user row. Each failure is a flat error with a real status, and a failure
-// after this request created a session deletes that session again.
+// after this request created a session deletes that session again. Every query carries the
+// pre-stream deadline's signal (`deadline.ts`); the route reads the signal afterwards and names
+// the timeout in its log line, so a step's own failure line may precede it.
 import { z } from 'zod'
 
 import { type AuthContext, assembleHistory, type ChannelSettings, type InMemoryMessage, log } from '@va/core'
@@ -37,10 +39,12 @@ interface PrepareInput {
   settings: ChannelSettings
   now: Date
   requestId: string
+  /** The pre-stream deadline: every read and the user-row insert carry it; the cleanup does not. */
+  signal: AbortSignal
 }
 
 export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Response> {
-  const { ctx, settings, now, requestId } = input
+  const { ctx, settings, now, requestId, signal } = input
   const ids = { request_id: requestId, user_id: ctx.userId }
 
   // 1. body
@@ -54,7 +58,7 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
   const route = sanitizeRoute(body.client_context?.route)
 
   // 2. rate limit, before anything is written
-  const verdict = await checkChatRateLimit(ctx, now, requestId)
+  const verdict = await checkChatRateLimit(ctx, now, requestId, signal)
   if (!verdict.ok) {
     log('warn', '[api]', 'rate limited', {
       ...ids,
@@ -74,6 +78,7 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
       .from('ai_sessions')
       .insert({ user_id: ctx.userId, channel: 'chat' })
       .select('id')
+      .abortSignal(signal)
       .single()
     if (error || !data) {
       log('error', '[api]', 'session insert failed', { ...ids, code: error?.code ?? null })
@@ -87,6 +92,7 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
       .select('id, context_summary, summary_through_message_id')
       .eq('id', body.session_id)
       .eq('user_id', ctx.userId)
+      .abortSignal(signal)
       .maybeSingle()
     if (error) {
       log('error', '[api]', 'session lookup failed', { ...ids, code: error.code })
@@ -121,6 +127,7 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
         .select('id')
         .eq('id', body.parent_message_id)
         .eq('session_id', sessionId)
+        .abortSignal(signal)
         .maybeSingle()
       if (error) {
         log('error', '[api]', 'parent lookup failed', { ...scoped, code: error.code })
@@ -135,6 +142,7 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
+        .abortSignal(signal)
         .maybeSingle()
       if (error) {
         log('error', '[api]', 'leaf lookup failed', { ...scoped, code: error.code })
@@ -146,10 +154,9 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
     // 5. history along the active branch
     const messages: InMemoryMessage[] = []
     if (parentId) {
-      const { data, error } = await ctx.serviceClient.rpc('ai_session_history', {
-        p_leaf_id: parentId,
-        p_max_rows: settings.historyMaxRows,
-      })
+      const { data, error } = await ctx.serviceClient
+        .rpc('ai_session_history', { p_leaf_id: parentId, p_max_rows: settings.historyMaxRows })
+        .abortSignal(signal)
       if (error) {
         log('error', '[api]', 'history load failed', { ...scoped, code: error.code })
         return await cleanup('internal_error')
@@ -171,6 +178,7 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
         parent_id: parentId,
       })
       .select('id')
+      .abortSignal(signal)
       .single()
     if (userError || !userRow) {
       log('error', '[api]', 'user row insert failed', { ...scoped, code: userError?.code ?? null })

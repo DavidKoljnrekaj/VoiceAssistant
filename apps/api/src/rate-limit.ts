@@ -27,21 +27,26 @@ export async function checkChatRateLimit(
   ctx: AuthContext,
   now: Date,
   requestId: string,
+  /** The pre-stream deadline; a count cut short by it passes silently (the next step fails). */
+  signal?: AbortSignal,
 ): Promise<RateLimitVerdict> {
   const since = (ms: number) => new Date(now.getTime() - ms).toISOString()
-  const count = (from: string) =>
-    ctx.serviceClient
+  const count = (from: string) => {
+    const query = ctx.serviceClient
       .from('ai_messages')
       .select('id, ai_sessions!inner(user_id, channel)', { count: 'exact', head: true })
       .eq('turn_kind', 'user')
       .eq('ai_sessions.user_id', ctx.userId)
       .eq('ai_sessions.channel', 'chat')
       .gte('created_at', from)
+    return signal ? query.abortSignal(signal) : query
+  }
   const [burst, daily] = await Promise.all([
     count(since(CHAT_BURST_WINDOW_MS)),
     count(since(CHAT_DAILY_WINDOW_MS)),
   ])
   if (burst.error || daily.error) {
+    if (signal?.aborted) return { ok: true }
     log('error', '[api]', 'rate limit count failed; allowing request', {
       request_id: requestId,
       user_id: ctx.userId,
