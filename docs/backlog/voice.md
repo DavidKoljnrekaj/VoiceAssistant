@@ -76,17 +76,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** at least a line in 0011's consequences and `docs/VOICE.md`; a code fix needs
   the played-text length from the speech handle to cut the persisted row
 
-### VOICE-11 · Low · After the 15-minute cap the call stays open and apologises on every question (R-V6)
-
-- **Check:** Confirmed (R-V6, verified 2026-10-30)
-- **Where:** `apps/voice/src/call.ts` (`liveRow` null → `ctx()` throws `call_ended`);
-  `session.ts` (mapped to `unauthorized` and spoken); `agent.ts` ends the call only on
-  `ParticipantDisconnected`, `Disconnected` and shutdown
-- **What happens:** past the cap every turn hears the refusal line; nothing calls `endCall` or
-  closes the session
-- **Fix direction:** on `call_ended` speak the line once, then an injected `onEnded` →
-  `endCall('expired')` and shutdown; a `W` test
-
 ### VOICE-12 · Low · Call end paths: any participant's disconnect ends the call, an STT or TTS failure never does (R-V7, R-V8)
 
 - **Check:** Confirmed (R-V7, R-V8, verified 2026-10-30)
@@ -158,3 +147,9 @@ line prints `name@ms`; test `VOICE-7`.
 
 Resolved on `fix/voice-review`: `CallSession.turn` runs the turns one after another, so a turn
 started during a barge-in waits for the cancelled loop to unwind; test `VOICE-9`.
+
+### VOICE-11 · Low · After the 15-minute cap the call stays open and apologises on every question (R-V6)
+
+Resolved on `fix/voice-review`: `call_ended` speaks `CALL_ENDED_HR` once and fires `onEnded`;
+the worker's `HangUp` deletes the credential and shuts down after the agent has spoken it; test
+`VOICE-11`.

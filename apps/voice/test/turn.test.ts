@@ -19,6 +19,7 @@ import {
 } from '@va/core/test'
 import { demoPack } from '@va/tools-demo'
 
+import { CALL_ENDED_HR } from '../src/greeting.js'
 import { MAX_TURNS_PER_CALL } from '../src/session.js'
 import { VOICE_ALLOWLIST } from '../src/tools.js'
 
@@ -287,6 +288,27 @@ describe('a spoken turn', () => {
     expect(out.text).toBe(MESSAGES_HR.unauthorized)
     expect(anthropic.calls).toHaveLength(0)
   })
+
+  scenario(
+    'VOICE-11 past the call cap the caller hears a goodbye once, the session reports the end, no model is called',
+    async () => {
+      const ended: string[] = []
+      const call = await openCall({ expiresInMs: 15 * 60_000, onEnded: (reason) => ended.push(reason) })
+      await call.identity.ctx()
+      // The 15-minute cap passes between two questions.
+      call.clock.ms += 16 * 60_000
+      const out = await (await ask(call, 'Halo?')).done
+      expect(out.text).toBe(CALL_ENDED_HR)
+      expect(ended).toEqual(['call_ended'])
+      expect(anthropic.calls).toHaveLength(0)
+      expect(logs.some((l) => l.line.includes('"call ended"') && l.line.includes('"turn":1'))).toBe(true)
+      // A question that still arrives before the hang-up lands hears nothing more.
+      const again = await (await ask(call, 'Halo?')).done
+      expect(again.text).toBe('')
+      expect(ended).toEqual(['call_ended'])
+      expect(anthropic.calls).toHaveLength(0)
+    },
+  )
 
   scenario('W14c a failed identity lookup is spoken as internal_error, not as "not signed in"', async () => {
     const call = await openCall()

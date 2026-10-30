@@ -31,6 +31,7 @@ import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
 import { acceptDispatchedJob, callTokenOf } from './job.js'
+import { HangUp } from './lifecycle.js'
 import { createMetrics, createTurnMetrics } from './metrics.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
@@ -113,7 +114,33 @@ export default defineAgent<UserData>({
         })
       })
 
-    const call = new CallSession(deps, identity)
+    // A quiet caller is still a live call: the row's idle window (3 min) is kept open while the
+    // participant is connected, not only when a turn runs.
+    const keepalive = setInterval(() => identity.touch(), KEEPALIVE_MS)
+    let ended = false
+    const endCall = async (reason: string): Promise<void> => {
+      if (ended) return
+      log('info', LOG_TAG, 'call ending', { ...ids, reason })
+      clearInterval(keepalive)
+      await call.settle()
+      try {
+        await identity.end()
+        ended = true
+      } catch (err) {
+        // Not marked ended: the next path (room close, shutdown) tries the delete again.
+        log('error', LOG_TAG, 'call end failed', {
+          ...ids,
+          reason: errorReason(err),
+        })
+      }
+    }
+    // The credential goes when the caller leaves, when the room closes, on the call's cap and on
+    // shutdown; the API's `/end` and the sweep are the other paths. All idempotent. A hang-up
+    // that follows a spoken line (the goodbye) waits for the agent to finish it.
+    const hangUp = new HangUp((reason) => {
+      void endCall(reason).then(() => ctx.shutdown(reason))
+    })
+    const call = new CallSession(deps, identity, { onEnded: (reason) => hangUp.afterSpeech(reason) })
     const session = new voice.AgentSession({
       vad: vadFor(env, ctx.proc.userData.vad),
       stt: createStt(env, loadHints()),
@@ -150,6 +177,7 @@ export default defineAgent<UserData>({
       }
       if (ev.oldState === 'speaking' && ev.newState !== 'speaking') {
         agentSpeaking = false
+        hangUp.spoke()
         if (userStartedAt !== null) {
           void metrics.write('bargein.jsonl', {
             room,
@@ -172,30 +200,8 @@ export default defineAgent<UserData>({
       })
     })
 
-    // The credential goes when the caller leaves, when the room closes and on shutdown; the
-    // API's `/end` and the sweep are the other paths. All idempotent.
-    // A quiet caller is still a live call: the row's idle window (3 min) is kept open while the
-    // participant is connected, not only when a turn runs.
-    const keepalive = setInterval(() => identity.touch(), KEEPALIVE_MS)
-    let ended = false
-    const endCall = async (reason: string): Promise<void> => {
-      if (ended) return
-      log('info', LOG_TAG, 'call ending', { ...ids, reason })
-      clearInterval(keepalive)
-      await call.settle()
-      try {
-        await identity.end()
-        ended = true
-      } catch (err) {
-        // Not marked ended: the next path (room close, shutdown) tries the delete again.
-        log('error', LOG_TAG, 'call end failed', {
-          ...ids,
-          reason: errorReason(err),
-        })
-      }
-    }
     ctx.room.on(RoomEvent.ParticipantDisconnected, () => {
-      void endCall('participant_disconnected').then(() => ctx.shutdown('participant left'))
+      hangUp.now('participant_disconnected')
     })
     ctx.room.on(RoomEvent.Disconnected, () => {
       void endCall('room_disconnected')
