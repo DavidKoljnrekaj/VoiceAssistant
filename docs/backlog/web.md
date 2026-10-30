@@ -34,21 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-4 · High · A failed turn on an existing conversation is wiped, with the typed text (R-W1)
-
-- **Check:** Confirmed (review 2026-10-30, R-W1)
-- **Where:** `apps/web/src/components/Chat/hooks/useChatStore.ts` (`loadRows(streamedSessionId,
-'reload')` runs for every outcome but `'stopped'`, and `loadRows` replaces the view);
-  `Composer.tsx` clears the text on send
-- **What happens:** on `/c/<id>` a rate limit, an offline send or a `request_timeout` adds the
-  error row (mid-stream `error` event or pre-stream `ApiHttpError`), then the reload replaces the
-  view with the persisted rows: the error and the never-persisted user row vanish and the typed
-  text is gone. Only a brand-new conversation keeps the error. `docs/WEB.md` ("failures reach the
-  user by one mechanism") is untrue for this path
-- **Fix direction:** keep the pre-finish error rows (and the unpersisted user row on a pre-stream
-  failure) across the reload, or skip the reload when `outcome === 'failed'`; the test needs the
-  store harness of `WEB-15`
-
 ### WEB-5 · High · A transient profile re-read failure at token refresh signs the user out of the UI (R-W2)
 
 - **Check:** Confirmed (R-W2)
@@ -178,4 +163,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 
 ## Resolved
 
-Nothing yet.
+### WEB-4 · High · A failed turn on an existing conversation is wiped, with the typed text (R-W1)
+
+- Fixed 2026-10-30 on fix/web-review: the post-stream reload appends the stream's client-only tail (its error rows, and the typed row when no event arrived) after the canonical rows; tests `WEB-4` in `useChatStore.test.ts`.

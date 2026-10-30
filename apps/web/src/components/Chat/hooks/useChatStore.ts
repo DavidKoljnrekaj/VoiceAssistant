@@ -144,21 +144,35 @@ export function useChatStore(): ChatStore {
     }
   }, [userId])
 
-  /** Replaces the view with the canonical rows of `sessionId`; a failed read is an error state. */
-  const loadRows = useCallback(async (sessionId: string, mode: 'select' | 'reload') => {
-    if (mode === 'select') setMessagesStatus('loading')
-    try {
-      const rows = await loadSession(sessionId)
-      if (currentSessionIdRef.current !== sessionId) return
-      leafIdRef.current = computeLeaf(rows)
-      setView({ messages: normalizeFromPersistedRows(rows), pendingText: null })
-      setMessagesStatus('ready')
-    } catch {
-      if (currentSessionIdRef.current !== sessionId) return
-      if (mode === 'select') setMessagesStatus('error')
-      // A failed reload after a stream keeps the live view: nothing is lost, the rows exist.
-    }
-  }, [])
+  /**
+   * Replaces the view with the canonical rows of `sessionId`; a failed read is an error state.
+   * `keep` picks the client-only rows of the previous view that follow the canonical ones (a
+   * reload after a stream keeps its error rows and, when nothing was persisted, the typed row).
+   */
+  const loadRows = useCallback(
+    async (
+      sessionId: string,
+      mode: 'select' | 'reload',
+      keep?: (prev: RenderMessage[]) => RenderMessage[],
+    ) => {
+      if (mode === 'select') setMessagesStatus('loading')
+      try {
+        const rows = await loadSession(sessionId)
+        if (currentSessionIdRef.current !== sessionId) return
+        leafIdRef.current = computeLeaf(rows)
+        setView((prev) => ({
+          messages: [...normalizeFromPersistedRows(rows), ...(keep ? keep(prev.messages) : [])],
+          pendingText: null,
+        }))
+        setMessagesStatus('ready')
+      } catch {
+        if (currentSessionIdRef.current !== sessionId) return
+        if (mode === 'select') setMessagesStatus('error')
+        // A failed reload after a stream keeps the live view: nothing is lost, the rows exist.
+      }
+    },
+    [],
+  )
 
   const newConversation = useCallback(() => {
     abortStream()
@@ -191,13 +205,16 @@ export function useChatStore(): ChatStore {
       const parentMessageId = leafIdRef.current
       const isNew = sessionId === null
 
-      // Optimistic user row. Never double-written: the server persists the user row; on a dropped
-      // connection before that, the row vanishes on the next reload (Landmark's documented caveat).
+      // Optimistic user row. Never double-written: the server persists the user row before the
+      // first event, so the reload replaces this row with the canonical one once any event has
+      // arrived, and keeps it when the request failed before the stream opened (WEB-4).
+      const optimisticId = ids.genId()
+      let receivedEvent = false
       setView((prev) => ({
         ...prev,
         messages: [
           ...prev.messages,
-          { kind: 'user', id: ids.genId(), rowId: null, text: trimmed, createdAt: ids.now() },
+          { kind: 'user', id: optimisticId, rowId: null, text: trimmed, createdAt: ids.now() },
         ],
       }))
 
@@ -217,6 +234,7 @@ export function useChatStore(): ChatStore {
           signal: controller.signal,
           onEvent: (event) => {
             if (controller.signal.aborted) return
+            receivedEvent = true
             if (event.type === 'session') {
               streamedSessionId = event.session_id
               if (isNew) {
@@ -256,8 +274,17 @@ export function useChatStore(): ChatStore {
       if (controller.signal.aborted && outcome !== 'stopped') return
       if (currentSessionIdRef.current !== streamedSessionId) return
       setView((prev) => finishStream(prev, outcome, ids))
-      if (streamedSessionId && outcome !== 'stopped') await loadRows(streamedSessionId, 'reload')
-      else if (streamedSessionId) {
+      if (streamedSessionId && outcome !== 'stopped') {
+        // The canonical rows, then this stream's client-only tail: its error rows (a mid-stream
+        // `error` event, a pre-stream failure) and the typed row when the server never got it.
+        await loadRows(streamedSessionId, 'reload', (prev) => {
+          const start = prev.findIndex((m) => m.id === optimisticId)
+          if (start === -1) return []
+          return prev
+            .slice(start)
+            .filter((m) => m.kind === 'error' || (!receivedEvent && m.id === optimisticId))
+        })
+      } else if (streamedSessionId) {
         // Rows written before the stop stay; the leaf moves to them without replacing the view.
         try {
           leafIdRef.current = computeLeaf(await loadSession(streamedSessionId))

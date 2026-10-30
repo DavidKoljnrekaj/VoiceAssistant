@@ -212,6 +212,68 @@ describe('useChatStore', () => {
     expect(result.current.currentSessionId).toBeNull()
   })
 
+  it('WEB-4: a pre-stream failure on an existing conversation keeps the typed row and the error after the reload', async () => {
+    fakeChat.loadSession.mockResolvedValue(persistedTurn())
+    const { result } = renderHook(() => useChatStore())
+    await act(async () => {
+      await result.current.selectSession(S1)
+    })
+    expect(kinds(result.current)).toEqual(['user', 'assistant'])
+    let sent!: Promise<void>
+    act(() => {
+      sent = result.current.sendMessage('Još jedno')
+    })
+    const stream = await fakeChat.nextStream()
+    await act(async () => {
+      stream.fail(new ApiHttpError(429, 'rate_limited', 'Previše zahtjeva.'))
+      await sent
+    })
+    expect(result.current.isStreaming).toBe(false)
+    expect(result.current.messages).toMatchObject([
+      { kind: 'user', rowId: 'u1', text: 'Bok' },
+      { kind: 'assistant', rowId: 'a1' },
+      { kind: 'user', rowId: null, text: 'Još jedno' },
+      { kind: 'error', code: 'rate_limited', message: ERROR_LABELS_HR.rate_limited },
+    ])
+  })
+
+  it('WEB-4: a mid-stream error event survives the reload, after the canonical rows', async () => {
+    fakeChat.loadSession.mockResolvedValue(persistedTurn())
+    const { result } = renderHook(() => useChatStore())
+    await act(async () => {
+      await result.current.selectSession(S1)
+    })
+    let sent!: Promise<void>
+    act(() => {
+      sent = result.current.sendMessage('Još jedno')
+    })
+    const stream = await fakeChat.nextStream()
+    // The server persisted the user row before the stream opened, then timed out.
+    const persisted = persistedTurn()
+    const u2 = messageRow({ id: 'u2', session_id: S1, role: 'user', content: userText('Još jedno'), parent_id: 'a1' })
+    fakeChat.loadSession.mockResolvedValue([...persisted, u2])
+    await act(async () => {
+      stream.emit({ type: 'session', session_id: S1 })
+      stream.emit({ type: 'delta', text: 'Poč' })
+      stream.emit({ type: 'error', code: 'request_timeout', message: 'Isteklo je vrijeme.' })
+      stream.finish()
+      await sent
+    })
+    expect(result.current.pendingText).toBeNull()
+    expect(result.current.messages).toMatchObject([
+      { kind: 'user', rowId: 'u1' },
+      { kind: 'assistant', rowId: 'a1' },
+      { kind: 'user', rowId: 'u2', text: 'Još jedno' },
+      { kind: 'error', code: 'request_timeout', message: 'Isteklo je vrijeme.' },
+    ])
+    // The next send continues from the persisted user row.
+    act(() => {
+      void result.current.sendMessage('Opet')
+    })
+    const next = await fakeChat.nextStream()
+    expect(next.args.parentMessageId).toBe('u2')
+  })
+
   it('H07: a sign-out empties the store and aborts the open stream', async () => {
     fakeChat.listSessions.mockResolvedValue([sessionSummary(S1, 'Prvi')])
     const { result, rerender } = renderHook(() => useChatStore())
