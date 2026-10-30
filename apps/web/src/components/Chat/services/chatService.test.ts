@@ -97,6 +97,44 @@ describe('chatService reads', () => {
   })
 })
 
+describe('chatService paging (WEB-6)', () => {
+  const at = (i: number) => new Date(Date.UTC(2026, 9, 1, 0, 0, 0) + i * 1000).toISOString()
+
+  it('WEB-6: a conversation longer than one page is read whole, in a stable order, so the leaf is the newest row', async () => {
+    const rows = Array.from({ length: 1203 }, (_, i) =>
+      message(`m${String(i).padStart(4, '0')}`, i === 0 ? null : `m${String(i - 1).padStart(4, '0')}`, at(i)),
+    )
+    fakeTable(backend, 'ai_messages', rows)
+    const loaded = await loadSession(S1)
+    expect(loaded).toHaveLength(1203)
+    expect(loaded.at(-1)?.id).toBe('m1202')
+    const requests = backend.sent('GET', '/rest/v1/ai_messages')
+    expect(requests.map((r) => r.url.searchParams.get('order'))).toEqual([
+      'created_at.asc,id.asc',
+      'created_at.asc,id.asc',
+    ])
+    expect(requests.map((r) => [r.url.searchParams.get('offset'), r.url.searchParams.get('limit')])).toEqual([
+      ['0', '1000'],
+      ['1000', '1000'],
+    ])
+  })
+
+  it('WEB-6: the session list pages the same way, newest activity first', async () => {
+    const rows = Array.from({ length: 1001 }, (_, i) => session(`s${String(i).padStart(4, '0')}`, 'chat', at(i)))
+    fakeTable(backend, 'ai_sessions', rows)
+    const loaded = await listSessions()
+    expect(loaded).toHaveLength(1001)
+    expect(loaded[0]?.id).toBe('s1000')
+    expect(loaded.at(-1)?.id).toBe('s0000')
+    const requests = backend.sent('GET', '/rest/v1/ai_sessions')
+    expect(requests.map((r) => r.url.searchParams.get('order'))).toEqual([
+      'updated_at.desc,id.desc',
+      'updated_at.desc,id.desc',
+    ])
+    expect(requests.map((r) => r.url.searchParams.get('offset'))).toEqual(['0', '1000'])
+  })
+})
+
 describe('chatService mutations', () => {
   it('C03: rename and delete call the API with the session token; a 404 is an ApiHttpError', async () => {
     backend.route('PATCH', API_ORIGIN, '/sessions/', () => json({ ok: true }))

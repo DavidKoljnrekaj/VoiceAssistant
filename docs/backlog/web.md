@@ -34,19 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
-
-- **Check:** Confirmed (R-W3)
-- **Where:** `apps/web/src/components/Chat/services/chatService.ts` (`loadSession`,
-  `listSessions`, no `.range()`); `supabase/config.toml` `max_rows = 1000`; `computeLeaf` in the
-  store
-- **What happens:** `loadSession` orders ascending, so past 1000 rows the newest drop first;
-  `computeLeaf` names a stale leaf, the next send passes it as `parent_message_id`, the API
-  accepts it (it only checks the parent is in the session) and a sibling branch is created.
-  `docs/WEB.md` says "every row"
-- **Fix direction:** page with `.range()` in a stable order, or read the branch through the API's
-  bounded history
-
 ### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
 
 - **Check:** Confirmed (R-W4, verified 2026-10-30)
@@ -157,3 +144,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-5 · High · A transient profile re-read failure at token refresh signs the user out of the UI (R-W2)
 
 - Fixed 2026-10-30 on fix/web-review: a failed profile read keeps the session and the previous profile and is retried with a backoff (5 s, 15 s, 60 s); without a previous profile the form says `network`; only a missing row signs out. Tests `WEB-5` in `AuthContext.test.tsx`.
+
+### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
+
+- Fixed 2026-10-30 on fix/web-review: `listSessions` and `loadSession` page with `range()` (1000 per page) until a short page, ordered by `updated_at desc, id desc` and `created_at asc, id asc`; the API's bounded history was not used because it is the model's 200-row context window behind a service-role-only function, not what a reader of the conversation should see. Tests `WEB-6` in `chatService.test.ts`.

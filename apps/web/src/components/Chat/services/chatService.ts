@@ -9,26 +9,51 @@ import { readSseBody } from '../lib/sse'
 
 export type SessionSummary = Pick<SessionRow, 'id' | 'title' | 'channel' | 'created_at' | 'updated_at'>
 
+/**
+ * PostgREST answers at most `max_rows` (1000, `supabase/config.toml`) per request, so both reads
+ * page with `range()` until a short page, in an order made stable by the id (WEB-6). Without this
+ * a long conversation lost its newest rows and the leaf went stale.
+ */
+const PAGE_SIZE = 1000
+
+/** Reads every page of a query; `page(from, to)` runs one request for that range. */
+async function readAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data ?? []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) return out
+  }
+}
+
 /** The user's chat sessions, newest activity first. Voice calls are sessions too and are left out. */
 export async function listSessions(): Promise<SessionSummary[]> {
-  const { data, error } = await supabase
-    .from('ai_sessions')
-    .select('id, title, channel, created_at, updated_at')
-    .eq('channel', 'chat')
-    .order('updated_at', { ascending: false })
-  if (error) throw error
-  return data
+  return readAllPages((from, to) =>
+    supabase
+      .from('ai_sessions')
+      .select('id, title, channel, created_at, updated_at')
+      .eq('channel', 'chat')
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  )
 }
 
 /** Every row of a session, oldest first; the branch is derived by `normalizeFromPersistedRows`. */
 export async function loadSession(sessionId: string): Promise<MessageRow[]> {
-  const { data, error } = await supabase
-    .from('ai_messages')
-    .select('id, session_id, role, turn_kind, content, parent_id, created_at, stop_reason')
-    .eq('session_id', sessionId)
-    .order('created_at', { ascending: true })
-  if (error) throw error
-  return data
+  return readAllPages((from, to) =>
+    supabase
+      .from('ai_messages')
+      .select('id, session_id, role, turn_kind, content, parent_id, created_at, stop_reason')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 }
 
 export async function renameSession(sessionId: string, title: string): Promise<void> {
