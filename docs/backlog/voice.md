@@ -72,9 +72,12 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   return it as history); decision 0011 reads only the worker's rows and its consequences do not
   mention it
 - **What happens:** LiveKit truncates its own context to what was played; the model's history
-  keeps the unheard rest, so it may refer to something the caller never heard
-- **Fix direction:** at least a line in 0011's consequences and `docs/VOICE.md`; a code fix needs
-  the played-text length from the speech handle to cut the persisted row
+  keeps the unheard rest, so it may refer to something the caller never heard. Recorded as a
+  consequence in decision 0011 and in `docs/VOICE.md` (2026-10-30); the code is unchanged
+- **Fix direction:** the played-text length from LiveKit's speech handle (the assistant item's
+  `interrupted` flag and its truncated `textContent` arrive on `ConversationItemAdded`) to cut
+  the persisted assistant row, or a marker in it, so the next turn's history matches what was
+  heard
 
 ### VOICE-15 · Low · Untested worker paths (R-V11)
 

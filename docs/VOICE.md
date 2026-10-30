@@ -130,6 +130,8 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    15-minute cap, or the API's `/end`) is `call_ended`: the caller hears `CALL_ENDED_HR` once,
    the session reports it (`onEnded`) and the worker hangs up after the agent has spoken it
    (`HangUp`, or after a 10 s grace); a question that still arrives hears nothing (`VOICE-11`).
+   After a barge-in the rows keep the whole answer the model wrote, not what was played
+   (decision 0011, `VOICE-10`).
 7. While the participant is connected the worker bumps `last_seen_at` every minute, so a quiet
    caller stays inside the row's three-minute idle window.
 8. On the caller's disconnect (the participant whose identity is the caller's user id, as the

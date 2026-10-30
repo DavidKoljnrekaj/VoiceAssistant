@@ -28,7 +28,12 @@ more tokens per turn than text only (tool results on voice are at most five item
 are the same ones persisted after the answer, so the worker's memory and the database agree.
 LiveKit's own context still exists (it is what the room's transcription shows) but nothing reads
 it for history. If a call outlives the 20-row window, the oldest turns fall away in whole
-turns, as in chat.
+turns, as in chat. After a barge-in the two disagree on purpose: LiveKit cuts its item to what
+was played, the worker's row keeps the whole answer the model wrote, so the model's history says
+the caller heard everything and a later answer may refer to something the caller never heard
+(`VOICE-10`). Cutting the persisted row to the played length needs the playback position from
+LiveKit's speech handle, which the `llmNode` adapter does not see; until then the row is the
+model's output, not the caller's experience.
 
 ## Date
 
