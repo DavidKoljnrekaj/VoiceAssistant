@@ -76,18 +76,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** at least a line in 0011's consequences and `docs/VOICE.md`; a code fix needs
   the played-text length from the speech handle to cut the persisted row
 
-### VOICE-13 · Low · `callHistory` keeps at least 20 rows, not at most (R-V9)
-
-- **Check:** Confirmed (R-V9, verified 2026-10-30)
-- **Where:** `apps/voice/src/messages.ts` (the loop breaks at the first user row where
-  `rows.length - i >= maxMessages`)
-- **What happens:** the window is 20 rows plus the rest of the turn it starts in; `docs/VOICE.md`
-  and the plan say "last 20". `W04e` passes only because its turns are 4 rows (60 → exactly 20).
-  The other half of R-V9, a markdown link split across two chunks, is `CORE-4`
-- **Fix direction:** decide: break at the last user row with `rows.length - i <= maxMessages`
-  (at most 20, the plan's reading) or document "at least 20, cut on a turn boundary"; `W04e`
-  with a 3-row turn either way
-
 ### VOICE-14 · Low · `connected` logs a random `request_id` (R-V9)
 
 - **Check:** Confirmed (R-V9, verified 2026-10-30)
@@ -146,3 +134,8 @@ the worker's `HangUp` deletes the credential and shuts down after the agent has 
 Resolved on `fix/voice-review`: `participantLeft` compares the identity with the caller's user
 id; `sessionErrorAction` speaks `internal_error` on an unrecoverable provider error (not after a
 TTS failure) and `HangUp` ends the call; the session's `close` event hangs up too.
+
+### VOICE-13 · Low · `callHistory` keeps at least 20 rows, not at most (R-V9)
+
+Resolved on `fix/voice-review`: the window is at most 20 rows from a user row (the newest turn
+always whole); `W04e` with three-row turns.

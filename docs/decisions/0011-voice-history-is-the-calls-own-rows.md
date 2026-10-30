@@ -14,7 +14,7 @@ lookups did not change that; stripping the filler sentence from the context did 
 
 `CallSession` keeps the call's own rows in worker memory as the loop writes them (the user row,
 the assistant rows with their `tool_use` blocks, the `tool_result` rows), and `callHistory`
-turns the last 20 rows, cut on a turn boundary, into the model's messages through the engine's
+turns at most the last 20 rows, cut on a turn boundary, into the model's messages through the engine's
 `assembleHistory` (unanswered `tool_use` repaired, empty rows dropped, oldest turns dropped above
 a ceiling). LiveKit's context supplies only the new user turn (`userTurnOf`). The alternatives
 lost: the prompt line and the filler stripping were tried live and did not work; reading the
