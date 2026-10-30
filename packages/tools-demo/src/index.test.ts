@@ -1,5 +1,5 @@
 // The demo pack against the fakes, as the user: the handlers, the strict schemas, the allowlist,
-// and two scenarios through the real loop (D10, D11).
+// and one scenario per tool through the real loop (D10, D12, D13; D11 is the voice refusal).
 import { describe, expect, it } from 'vitest'
 
 import { type ChannelAllowlist, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
@@ -14,6 +14,7 @@ import {
   reset,
   runChat,
   scenario,
+  toolResultSentToModel,
   toolUse,
   USERS,
 } from '@va/core/test'
@@ -182,6 +183,58 @@ describe('@va/tools-demo', () => {
       expect(result.total).toBe(3)
       expect(result.items.map((i) => i.name)).toEqual(['Radni stol', 'Stolna lampa', 'Uredska stolica'])
       expect(clientOf(db.requestsTo('demo_items', 'GET')[0]!)).toBe('user')
+      expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
+
+  scenario(
+    'D12 through the loop: get_item reads one item as the user; the item reaches the model, the tool_result row and the sink',
+    async () => {
+      anthropic.script(callTools(toolUse('get_item', { item_id: ITEMS.laptop.id })), answer('Košta 1299 eura.'))
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'Koliko košta prijenosno računalo?', { packs: [demoPack], allowlist: ALLOWLIST })
+      const read = db.requestsTo('demo_items', 'GET')[0]!
+      expect(clientOf(read)).toBe('user')
+      expect(read.params.get('id')).toBe(`eq.${ITEMS.laptop.id}`)
+      expect(read.params.get('select')).toBe('id,name,category,price,description,updated_at')
+      const expected = {
+        id: ITEMS.laptop.id,
+        name: ITEMS.laptop.name,
+        category: 'it',
+        price: 1299,
+        description: `Opis: ${ITEMS.laptop.name}`,
+        updated_at: '2026-10-01T08:00:00.000Z',
+      }
+      expect(run.sink.toolResults[0]).toMatchObject({ tool: 'get_item', isError: false, output: expected })
+      expect(toolResultSentToModel(1, run.sink.toolCalls[0]!.id)).toEqual(expected)
+      expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
+
+  scenario(
+    'D13 through the loop: create_note writes as the user with the caller’s user_id; the note id reaches the model',
+    async () => {
+      anthropic.script(
+        callTools(toolUse('create_note', { item_id: ITEMS.desk.id, text: 'Naručiti dva.' })),
+        answer('Zabilježeno.'),
+      )
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'Zabilježi: naručiti dva radna stola', {
+        packs: [demoPack],
+        allowlist: ALLOWLIST,
+      })
+      const write = db.requestsTo('demo_notes', 'POST')[0]!
+      expect(clientOf(write)).toBe('user')
+      expect(write.body).toEqual({ user_id: USERS.member.id, item_id: ITEMS.desk.id, text: 'Naručiti dva.' })
+      const notes = db.rows('demo_notes')
+      expect(notes).toHaveLength(1)
+      expect(notes[0]).toMatchObject({ user_id: USERS.member.id, item_id: ITEMS.desk.id, text: 'Naručiti dva.' })
+      const sent = toolResultSentToModel(1, run.sink.toolCalls[0]!.id) as { id: string; created_at: string }
+      expect(sent.id).toBe(notes[0]!.id)
+      expect(sent).toHaveProperty('created_at')
+      expect(run.sink.toolResults[0]).toMatchObject({ tool: 'create_note', isError: false, output: { id: notes[0]!.id } })
       expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
       expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
     },

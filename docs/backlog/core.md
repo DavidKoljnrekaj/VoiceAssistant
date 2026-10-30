@@ -46,18 +46,15 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-12 · Low · Test gaps in core and the demo pack (R-C9)
+### CORE-12 · Low · Test gaps in core (R-C9)
 
-- **Check:** Confirmed (R-C9)
-- **Where:** `get_item` has no scenario through the loop and `create_note` only its voice refusal
-  (`.claude/rules/tools.md` asks for one per tool); `SpokenTextSink.textBlock` dedupe with two
-  text blocks where the second repeats a prefix; `X05` pins the error-code count (22); `H02b`,
-  `H03`, `H06` call internals instead of `assembleHistory`; nothing pins what a throwing
-  `MessageStore.insert` does (it propagates out of the loop)
+- **Check:** Confirmed (R-C9); the per-tool scenarios and `X05` are done
+- **Where:** `SpokenTextSink.textBlock` dedupe with two text blocks where the second repeats a
+  prefix; `H02b`, `H03`, `H06` call internals instead of `assembleHistory`; nothing pins what a
+  throwing `MessageStore.insert` does (it propagates out of the loop)
 - **What happens:** a regression in any of these passes CI
-- **Fix direction:** one scenario per tool; a dedupe case; `X05` asserts the catalogue's shape,
-  not its length; the `H` tests through the public function; a scenario with a throwing store
-  that pins the outcome
+- **Fix direction:** a dedupe case; the `H` tests through the public function; a scenario with a
+  throwing store that pins the outcome
 
 ## Resolved
 

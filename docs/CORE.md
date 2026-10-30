@@ -369,6 +369,7 @@ VA_TEST_LOGS=1 pnpm exec vitest run packages/core/src/auth.test.ts
 
 Suites: `C` settings, `M` model profiles, `X` errors (through the real SDK), `A` identity, `P`
 prompts, `T` registry and schema, `F` fake Anthropic, `G` fake Supabase (GoTrue and PostgREST),
-`D` the demo pack (handlers, and `D10`/`D11` through the loop), `E` the loop
+`D` the demo pack (handlers, and one scenario per tool through the loop: `D10`, `D12`, `D13`,
+plus the voice refusal `D11`), `E` the loop
 (`loop/orchestrator.test.ts`, `loop/abort.test.ts`), `H` history assembly, `S` the spoken sink
 and `speakable` (`sinks/spoken.test.ts`).
