@@ -152,10 +152,12 @@ export async function startCall(
   return { ok: true, value: { url: deps.livekit.url, token, room, session_id: session.id } }
 }
 
+/** 404 when there is no live call: no row, a row past `expires_at`, or a row gone between the lookup and the update. */
 export async function refreshCall(
   ctx: AuthContext,
   sessionId: string,
   jwt: string,
+  now: Date,
   requestId: string,
 ): Promise<CallResult<null>> {
   const ids = { request_id: requestId, user_id: ctx.userId, session_id: sessionId }
@@ -164,6 +166,7 @@ export async function refreshCall(
     .select('id, created_at')
     .eq('session_id', sessionId)
     .eq('user_id', ctx.userId)
+    .gt('expires_at', now.toISOString())
     .maybeSingle()
   if (error) {
     log('error', '[api]', 'voice_calls lookup failed', { ...ids, code: error.code })
@@ -177,10 +180,12 @@ export async function refreshCall(
     .eq('id', call.id)
     .eq('user_id', ctx.userId)
     .select('id')
-  if (updateError || !updated?.length) {
-    log('error', '[api]', 'voice_calls refresh failed', { ...ids, code: updateError?.code ?? 'no_row' })
+  if (updateError) {
+    log('error', '[api]', 'voice_calls refresh failed', { ...ids, code: updateError.code })
     return { ok: false, code: 'internal_error' }
   }
+  // Ended or swept between the two statements: the call is simply gone.
+  if (!updated?.length) return { ok: false, code: 'not_found' }
   return { ok: true, value: null }
 }
 

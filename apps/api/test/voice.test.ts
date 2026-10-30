@@ -182,6 +182,36 @@ describe('voice call lifecycle', () => {
     expect(calls()[0]!.expires_at).toBe(new Date(soon * 1000).toISOString())
   })
 
+  scenario(
+    'V14 (API-6) refresh on an expired, unswept row is 404 not_found and the row is untouched',
+    async () => {
+      const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      const row = calls()[0]!
+      row.expires_at = new Date(Date.now() - 1000).toISOString()
+      const later = memberJwt(Math.floor(Date.now() / 1000) + 3600)
+      db.authUsers[later] = { id: M.authId, email: M.email }
+      const res = await call(`/voice/sessions/${session_id}/refresh`, undefined, { token: later })
+      expect(await flatError(res)).toMatchObject({ status: 404, code: 'not_found' })
+      expect(calls()[0]).toMatchObject({ access_token: TOKENS.member, expires_at: row.expires_at })
+      expect(db.requestsTo('voice_calls', 'PATCH')).toHaveLength(0)
+    },
+  )
+
+  scenario(
+    'V15 (API-6) a row deleted between the lookup and the update is 404 not_found, not 500',
+    async () => {
+      const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      db.onRequest((r) => {
+        if (r.table === 'voice_calls' && r.method === 'PATCH') db.tables.voice_calls = []
+      })
+      const res = await call(`/voice/sessions/${session_id}/refresh`)
+      expect(await flatError(res)).toMatchObject({ status: 404, code: 'not_found' })
+      expect(logs.some((l) => l.level === 'error' && l.line.includes('voice_calls refresh failed'))).toBe(
+        false,
+      )
+    },
+  )
+
   scenario("V07 refresh and end for another user's session are 404 not_found", async () => {
     const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
     expect(
