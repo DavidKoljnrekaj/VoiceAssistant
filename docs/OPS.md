@@ -40,8 +40,11 @@ the matrix below and fail when it misses a variable an `env.ts` validates.
 
 Secrets never sit in the repository: `.gitignore` keeps every `.env` and `.env.*` out except the
 `.example` files, `.dockerignore` keeps them out of the images, the Claude Code harness is denied
-`Read` on `.env*` (`.claude/settings.json`; never work around it), and the `session-context` hook
-prints only which env files exist. The service-role key reaches the API and the worker only;
+`Read` on `.env*` at any depth and on `~/.config/va/**` (`.claude/settings.json`; never work
+around it; the deny reaches `Edit`, `Write`, the file commands Claude Code recognises in Bash and,
+best-effort, `Grep` and `Glob`, which take no path rule of their own), and the `session-context`
+hook prints only which env files exist. The same deny covers the committed `.env.example` files,
+so a session cannot read or write them (`REL-6`). The service-role key reaches the API and the worker only;
 never the browser, never CI, never LiveKit metadata. Rotation is a dashboard action at the
 vendor (Supabase, Anthropic, LiveKit, Soniox, ElevenLabs), then the new value in the secret
 store and a restart; `IDENTITY_CACHE_MS` bounds how long a running call keeps an old JWT.

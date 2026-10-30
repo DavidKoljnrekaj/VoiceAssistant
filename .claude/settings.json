@@ -52,7 +52,10 @@
       "Read(./apps/*/.env)",
       "Read(./apps/*/.env.*)",
       "Read(./packages/*/.env)",
-      "Read(./packages/*/.env.*)"
+      "Read(./packages/*/.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.config/va/**)"
     ]
   },
   "attribution": {

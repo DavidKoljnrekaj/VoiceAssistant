@@ -41,9 +41,10 @@ item says so in its description.
 - [ ] **No content in logs; error messages truncated.** `log()` and `errorReason()` in `@va/core`;
       `L04` scans every call site; the worker strips LiveKit's `lk.pii.*` keys (`W18`); the metrics
       writer refuses content keys (`W13`).
-- [ ] **Secrets only in env; `.env*` ignored and denied to Claude.** One `env.ts` per app;
-      `.gitignore`, `.dockerignore`, the `deny` list in `.claude/settings.json`; the matrix in
-      `docs/OPS.md` (`X01`–`X03`).
+- [ ] **Secrets only in env; `.env*` and `~/.config/va/` ignored and denied to Claude.** One
+      `env.ts` per app; `.gitignore`, `.dockerignore`, the `deny` list in `.claude/settings.json`
+      (`Read` at any depth, which also covers `Edit`, `Write` and best-effort `Grep` / `Glob`); the
+      matrix in `docs/OPS.md` (`X01`–`X03`, both directions).
 - [ ] **Dependencies pinned; audit in CI; Dependabot cooldown 14 days.** Exact versions in every
       `package.json`; `pnpm audit --prod --audit-level=high` in `test.yml`; `.github/dependabot.yml`.
 - [ ] **CORS limited to the PWA origin(s).** `CORS_ORIGINS` on the API (`*` is the local default
