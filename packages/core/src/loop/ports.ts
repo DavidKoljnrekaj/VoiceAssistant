@@ -119,7 +119,9 @@ export interface LoopConfig {
 
 export interface LoopInput {
   sessionId: string
-  /** The assembled history plus the user turn just persisted. Mutated by the loop. */
+  /** The assembled history plus the user turn just persisted. The loop appends to it and moves
+   * the cache breakpoint inside it; what it hands the store is never touched afterwards, so a
+   * store may serialise its rows after the loop has returned. */
   messages: InMemoryMessage[]
   /** The row the next one chains off: the user turn just persisted. */
   lastInsertedId: string

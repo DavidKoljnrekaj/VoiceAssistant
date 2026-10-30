@@ -81,7 +81,10 @@ order → dispatch the turn's tools concurrently, each with its own timeout and 
 → persist the single `tool_result` row (blocks in `tool_use` order) → emit the results → loop.
 Token deltas are the one provisional exception; the `turn` event that follows is canonical. The
 `tool_result` insert is retried once: that row is what keeps the branch from ending on a bare
-`tool_use`.
+`tool_use`. What the loop hands the store it never touches again: the message array it pushes
+onto and moves the cache breakpoint in holds copies, so a store that serialises after the loop
+(voice's `DeferredStore`) writes the rows exactly as the model and the tools produced them
+(`E33`).
 
 Abort is checked before each model call, between the model call and dispatch, and after
 dispatch. On abort the loop persists synthetic `is_error` results for tools that did not finish

@@ -1,6 +1,8 @@
 // E scenarios, part one: the request shape, the persistence order, tools, truncation, the
 // iteration cap, persistence failures, model errors, refusal, hooks and settings. The abort and
 // timeout scenarios (E20–E25) are in abort.test.ts.
+import { randomUUID } from 'node:crypto'
+
 import { describe, expect } from 'vitest'
 
 import { channelSettings } from '../channel.js'
@@ -23,6 +25,7 @@ import {
 import { handlerEvents, ODD_OUTPUT_PACK, openGate, TEST_ALLOWLIST, TEST_PACK } from '../test/tools.js'
 import { BufferedSink } from '../sinks/buffered.js'
 import { TRUNCATED_HR } from './orchestrator.js'
+import type { MessageRow } from './ports.js'
 import { TRUNCATED_RESULT } from './tool-round.js'
 
 const kinds = (sessionId: string) => sessionMessages(sessionId).map((r) => r.turn_kind)
@@ -437,6 +440,47 @@ describe('orchestration loop', () => {
       })
       expect(logs.some((l) => l.line.includes('tool output not serialisable'))).toBe(true)
       expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+    },
+  )
+
+  scenario(
+    'E33 CORE-6: a store that serialises after the loop (voice) gets the rows exactly as the model and the tools produced them, with no cache marker',
+    async () => {
+      anthropic.script(callTools(toolUse('echo', { text: 'a' })), answer('ok'))
+      const ctx = await authAs('member')
+      const deferred: Array<MessageRow & { id: string }> = []
+      const run = await runChat(ctx, 'x', {
+        store: {
+          async insert(row) {
+            const id = randomUUID()
+            deferred.push({ ...row, id })
+            return { id }
+          },
+        },
+      })
+      // Written after the answer, as the voice worker's DeferredStore does.
+      const { error } = await ctx.serviceClient
+        .from('ai_messages')
+        .insert(deferred.map((r) => ({ ...r, session_id: run.sessionId })))
+      expect(error).toBeNull()
+      const rows = run.rows()
+      expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      const toolUseId = run.sink.toolCalls[0]!.id
+      expect(rows[1]!.content).toEqual([{ type: 'tool_use', id: toolUseId, name: 'echo', input: { text: 'a' } }])
+      expect(rows[2]!.content).toEqual([
+        {
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: JSON.stringify({ echoed: 'a', role: 'member' }),
+          is_error: false,
+        },
+      ])
+      expect(rows[3]!.content).toEqual([{ type: 'text', text: 'ok' }])
+      expect(JSON.stringify(rows.map((r) => r.content))).not.toContain('cache_control')
+      // The requests still carried the breakpoint: it lives in the loop's own array only.
+      expect(anthropic.calls[1]!.body.messages.at(-1)!.content).toMatchObject([
+        { type: 'tool_result', cache_control: { type: 'ephemeral' } },
+      ])
     },
   )
 

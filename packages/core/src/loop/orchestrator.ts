@@ -94,7 +94,9 @@ export async function runOrchestrationLoop(
       return
     }
     lastInsertedId = assistantRow.id
-    messages.push({ role: 'assistant', content: response.content })
+    // A copy: the store may serialise its row later (voice defers persistence) and the cache
+    // breakpoint is moved inside the loop's own array only.
+    messages.push({ role: 'assistant', content: [...response.content] })
 
     // Content-block order. Thinking, fallback and unknown block types stay in the row only.
     const toolUses: ToolUseBlock[] = []
@@ -135,7 +137,7 @@ export async function runOrchestrationLoop(
         return
       }
       lastInsertedId = round.rowId
-      messages.push({ role: 'user', content: round.blocks })
+      messages.push({ role: 'user', content: [...round.blocks] })
       if (round.aborted) {
         log('info', logTag, 'tool round aborted', { ...ids, iteration })
         return

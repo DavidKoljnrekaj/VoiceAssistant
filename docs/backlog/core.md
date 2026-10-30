@@ -46,20 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-6 · Medium · The loop mutates arrays it has already handed to the store (R-C2)
-
-- **Check:** Confirmed (R-C2)
-- **Where:** `packages/core/src/loop/orchestrator.ts` persists `response.content` and then pushes
-  the same array onto `messages`; `tool-round.ts` persists `blocks` and the orchestrator pushes
-  the same array; `history.ts` writes `cache_control` into the last block of `messages` and
-  deletes it later
-- **What happens:** with the chat store nothing leaks (serialised at insert); with the voice
-  `DeferredStore` (`apps/voice/src/turn.ts`, serialised after the answer) the `cache_control`
-  marker lands in `ai_messages.content`. Replay strips it, so the damage is DB pollution, but
-  `ports.ts` ("only `messages` is mutated") is wrong
-- **Fix direction:** push copies (`[...response.content]`); a scenario with a deferred store that
-  asserts the persisted content carries no `cache_control`
-
 ### CORE-7 · Medium · `tools` is omitted when none is advertised while the history still holds tool blocks, and the API answers 400 (R-C3)
 
 - **Check:** Confirmed (R-C3, verified 2026-10-30)
@@ -136,6 +122,11 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-6 · Medium · The loop mutates arrays it has already handed to the store (R-C2)
+
+Resolved in `fix(core)` for CORE-6: the loop pushes copies of the assistant content and the
+tool_result blocks, so a deferred store never sees the cache marker (`E33`); `ports.ts` says so.
 
 ### CORE-5 · High · A handler that resolves `undefined` crashes the loop after a malformed row is written; a `BigInt` output leaves a bare `tool_use` (R-C1)
 
