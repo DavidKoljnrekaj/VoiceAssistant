@@ -78,7 +78,8 @@ value. "CI" is blank when CI never needs it.
 
 Script-only variables, never read by an app: the bench (`VA_BENCH_EMAIL`, `VA_BENCH_PASSWORD`,
 `LABEL`, `SHOW_ANSWERS`), the scripted caller (`VA_API_URL`, `VA_EMAIL`, `VA_PASSWORD`) and the
-Playwright smoke (`E2E_EMAIL`, `E2E_PASSWORD`, `E2E_BASE_URL`). The CI secrets for `e2e.yml`:
+Playwright smoke (`E2E_EMAIL`, `E2E_PASSWORD`, `E2E_BASE_URL`, and `E2E_ALLOWED_SUPABASE_URL`
+for its prod-safety guard, `docs/TESTING.md` → The Playwright smoke). The CI secrets for `e2e.yml`:
 `E2E_SUPABASE_URL` and `E2E_SUPABASE_ANON_KEY`, optional `E2E_API_URL`, `E2E_EMAIL`,
 `E2E_PASSWORD`; the job refuses to run unless `E2E_SUPABASE_URL` equals the dev project URL
 hardcoded in the workflow, so moving it to another project is a reviewed commit, and each secret

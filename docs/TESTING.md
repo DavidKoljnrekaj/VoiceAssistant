@@ -81,8 +81,16 @@ service worker (`E01`), a protected route redirects (`E02`), and with `E2E_EMAIL
 so no API or model key is needed. Locally: `pnpm --filter @va/web build` with `apps/web/.env`,
 then `pnpm --filter @va/web exec playwright install chromium` once and
 `pnpm --filter @va/web test:e2e`; `E2E_BASE_URL` points it at a deployed origin instead. In CI it
-is `e2e.yml`, gated on secrets and the allowlisted dev URL (`docs/OPS.md` → CI). Vitest never
-runs `e2e/` (excluded in `apps/web/vitest.config.ts`).
+is `e2e.yml`, gated on secrets and the allowlisted dev URL (`docs/OPS.md` → CI).
+
+The smoke signs in as a real user, so `apps/web/e2e/support/env.ts` refuses to start a browser
+unless the project the build was made against is safe (Landmark's `e2e/support/env.ts`): the
+local stack (`127.0.0.1`, `localhost`, `host.docker.internal`) always runs; any hosted project
+must equal `E2E_ALLOWED_SUPABASE_URL`, which `e2e.yml` hardcodes to the dev project and a
+developer sets by hand, never to production. `VITE_SUPABASE_URL` is read from the environment
+first, then from `apps/web/.env*` as Vite's production build reads them. The guard is a pure
+function in `e2e/support/prod-safety.ts`, pinned by `G01`–`G04` (a Vitest suite; the Playwright
+specs themselves, `e2e/**/*.spec.ts`, are excluded in `apps/web/vitest.config.ts`).
 
 ## Harness checks
 
