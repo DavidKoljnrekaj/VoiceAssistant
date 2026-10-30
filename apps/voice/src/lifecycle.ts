@@ -2,6 +2,15 @@
 // waits for the agent to finish a last sentence (the goodbye on the cap, the fallback on a
 // provider failure) before the credential goes and the job shuts down.
 
+/**
+ * A remote participant left. The caller is the one the API's join token named (its identity is
+ * the user id, `docs/API.md` → Voice call lifecycle); anyone else in the room (a recorder, an
+ * egress, the same browser reconnecting under a new identity) leaving is not the end of the call.
+ */
+export function participantLeft(participantIdentity: string, callerUserId: string): 'hang_up' | 'ignore' {
+  return participantIdentity === callerUserId ? 'hang_up' : 'ignore'
+}
+
 /** How long a hang-up waits for the agent to speak its last line before going ahead anyway
  * (text-to-speech may be the thing that failed). */
 export const HANGUP_GRACE_MS = 10_000

@@ -2,7 +2,17 @@
 // decisions `agent.ts` wires to the room and session events.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { HANGUP_GRACE_MS, HangUp } from '../src/lifecycle.js'
+import { HANGUP_GRACE_MS, HangUp, participantLeft } from '../src/lifecycle.js'
+
+describe('participantLeft', () => {
+  it("VOICE-12 only the caller's own disconnect ends the call; a recorder, egress or a reconnecting browser under a new identity does not", () => {
+    const caller = '00000000-0000-4000-8000-000000000102'
+    expect(participantLeft(caller, caller)).toBe('hang_up')
+    expect(participantLeft('EG_abc123', caller)).toBe('ignore')
+    expect(participantLeft('00000000-0000-4000-8000-000000000103', caller)).toBe('ignore')
+    expect(participantLeft('', caller)).toBe('ignore')
+  })
+})
 
 describe('HangUp', () => {
   beforeEach(() => vi.useFakeTimers())

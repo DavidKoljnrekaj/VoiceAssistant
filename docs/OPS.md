@@ -118,8 +118,8 @@ failed` (`table`), `client disconnect` (`source`), `request timeout`, `stream wo
 tool input`, `tool timeout`, `model call failed`, `assistant insert failed`, `tool_result insert
 failed`, `tool iteration limit reached`; `[core:auth]` `unauthorized`, `no_profile`,
 `internal_error`; `[voice]` `job refused`, `call accepted`, `warm`, `warm failed`, `turn limit
-reached`, `identity refused`, `call ended`, `persist failed`, `call ending` (`reason`), `call end
-failed`, `session error`.
+reached`, `identity refused`, `call ended`, `other participant left`, `persist failed`, `call
+ending` (`reason`), `call end failed`, `session error`.
 The worker's JSONL metrics (`turns.jsonl`, `bargein.jsonl`, `warm.jsonl`) are described in
 `docs/VOICE.md`.
 

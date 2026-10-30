@@ -31,7 +31,7 @@ import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
 import { acceptDispatchedJob, callTokenOf } from './job.js'
-import { HangUp } from './lifecycle.js'
+import { HangUp, participantLeft } from './lifecycle.js'
 import { createMetrics, createTurnMetrics } from './metrics.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
@@ -200,8 +200,14 @@ export default defineAgent<UserData>({
       })
     })
 
-    ctx.room.on(RoomEvent.ParticipantDisconnected, () => {
-      hangUp.now('participant_disconnected')
+    // Only the caller's own disconnect ends the call: the API's join token names the caller by
+    // the user id, and anyone else in the room (a recorder, an egress) leaving is logged.
+    ctx.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      if (participantLeft(participant.identity, identity.userId) === 'hang_up') {
+        hangUp.now('participant_disconnected')
+      } else {
+        log('info', LOG_TAG, 'other participant left', { ...ids, identity_len: participant.identity.length })
+      }
     })
     ctx.room.on(RoomEvent.Disconnected, () => {
       void endCall('room_disconnected')
