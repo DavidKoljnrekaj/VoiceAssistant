@@ -97,6 +97,9 @@ interface Result {
   rounds: number
   cache_read_first: number
   spoken_len: number
+  /** Paragraph breaks the model wrote into the spoken text (the filler's own break, present on
+   * every tool answer, not counted): each one is a text-to-speech segment seam in the worker. */
+  breaks: number
   outcome: VoiceTurnResult['outcome']
   spoken: string
 }
@@ -120,12 +123,14 @@ async function ask(deps: VoiceDeps, ctx: AuthContext, sessionId: string, q: Ques
   await result.persisted
   // The first call's cache read is what the warm-up and the static prompt buy.
   firstCacheRead ??= result.usage.cacheRead
+  const rounds = result.marks.filter((m) => m.name === 'model_call').length
   return {
     first_text_ms: result.firstTextMs,
     total_ms: result.totalMs,
-    rounds: result.marks.filter((m) => m.name === 'model_call').length,
+    rounds,
     cache_read_first: firstCacheRead,
     spoken_len: result.spoken.length,
+    breaks: Math.max(0, (result.spoken.match(/\n\n/g) ?? []).length - (rounds > 1 ? 1 : 0)),
     outcome: result.outcome,
     spoken: result.spoken,
   }
@@ -184,6 +189,7 @@ async function main(): Promise<void> {
       `\nall ${all.length} (${deps.settings.model}, ${deps.settings.effort}): first text p50 ${sec(pct(first, 50))} p95 ${sec(pct(first, 95))}; ` +
         `whole answer p50 ${sec(pct(total, 50))} p95 ${sec(pct(total, 95))}; ` +
         `rounds ${(all.reduce((s, r) => s + r.rounds, 0) / all.length).toFixed(2)}; ` +
+        `paragraph breaks in ${all.filter((r) => r.breaks > 0).length}/${all.length} answers; ` +
         `prompt cache hit on ${all.filter((r) => r.cache_read_first > 0).length}/${all.length} first calls`,
     )
   } finally {
