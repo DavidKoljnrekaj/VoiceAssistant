@@ -7,6 +7,7 @@ import { describe, expect } from 'vitest'
 
 import { channelSettings } from '../channel.js'
 import { MESSAGES_HR } from '../errors.js'
+import { REASON_MAX_CHARS } from '../log.js'
 import { FALLBACK_BETA } from '../model.js'
 import { answer, callTools, refusal, text, toolUse } from '../test/fake-anthropic.js'
 import { MSG_TOOL_RESULT, SESSION_MEMBER_CHAT, USERS } from '../test/fixtures.js'
@@ -396,6 +397,28 @@ describe('orchestration loop', () => {
       },
     )
   }
+  scenario(
+    'E37 CORE-9: a model_bad_request log line carries the rejected field as reason, cut to REASON_MAX_CHARS',
+    async () => {
+      anthropic.script({
+        error: {
+          status: 400,
+          type: 'invalid_request_error',
+          message: `messages.3.content.0: scripted reason ${'x'.repeat(300)}`,
+        },
+      })
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'x')
+      expect(run.sink.errorEvent?.code).toBe('model_bad_request')
+      const line = logs.find((l) => l.line.includes('model call failed'))
+      expect(line).toBeDefined()
+      const parsed = JSON.parse(line!.line) as { code: string; errorClass: string; reason?: string }
+      expect(parsed).toMatchObject({ code: 'model_bad_request', errorClass: 'BadRequestError' })
+      expect(parsed.reason).toMatch(/^BadRequestError: 400 .*messages\.3\.content\.0: scripted reason/)
+      expect(parsed.reason!.length).toBeLessThanOrEqual('BadRequestError: '.length + REASON_MAX_CHARS + 1)
+    },
+  )
+
   scenario('E19 a connection failure is model_unreachable', async () => {
     anthropic.script({ connectionError: true })
     const ctx = await authAs('member')

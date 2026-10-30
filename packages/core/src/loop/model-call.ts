@@ -5,6 +5,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 
 import { mapAnthropicError, type MappedError } from '../errors.js'
+import { errorReason } from '../log.js'
 import type { ModelProfile } from '../model.js'
 import type { ContentBlock, EventSink, InMemoryMessage, LoopConfig, LoopHooks } from './ports.js'
 
@@ -24,7 +25,9 @@ export interface ModelMessage {
 export type ModelTurn =
   | { kind: 'message'; message: ModelMessage }
   | { kind: 'aborted' }
-  | { kind: 'failed'; mapped: MappedError; errorClass: string }
+  /** `reason` is `errorReason(err)`: the SDK's class and message cut to `REASON_MAX_CHARS`, the
+   * rejected field of an our-fault request included. */
+  | { kind: 'failed'; mapped: MappedError; errorClass: string; reason: string }
 
 export async function streamModelTurn(
   config: LoopConfig,
@@ -77,6 +80,6 @@ export async function streamModelTurn(
   } catch (err) {
     if (signal.aborted) return { kind: 'aborted' }
     const errorClass = err instanceof Error ? err.constructor.name : typeof err
-    return { kind: 'failed', mapped: mapAnthropicError(err), errorClass }
+    return { kind: 'failed', mapped: mapAnthropicError(err), errorClass, reason: errorReason(err) }
   }
 }

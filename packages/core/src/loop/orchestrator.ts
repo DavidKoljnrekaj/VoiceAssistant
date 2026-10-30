@@ -70,6 +70,7 @@ export async function runOrchestrationLoop(
           iteration,
           errorClass: turn.errorClass,
           code: turn.mapped.code,
+          reason: turn.reason,
         })
       }
       await sink.error(turn.mapped.code, turn.mapped.message)

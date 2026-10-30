@@ -46,16 +46,6 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   `speakable` at sentence boundaries instead of word boundaries; measure the latency effect with
   `/bench-voice` before changing the release point
 
-### CORE-9 · Low · A `model_bad_request` is logged without its reason (R-C6)
-
-- **Check:** Confirmed (R-C6)
-- **Where:** `orchestrator.ts` logs `errorClass` and `code` only; `errorReason()` in `log.ts` is
-  unused there
-- **What happens:** the rejected field of an our-fault request (such as `CORE-7`) cannot be read
-  from the logs. Landmark logged the message cut to 200 characters
-- **Fix direction:** add `reason: errorReason(err)` to the `model call failed` line (it truncates
-  and carries no content)
-
 ### CORE-10 · Low · The registry hardcodes the demo pack's voice allowlist (R-C7)
 
 - **Check:** Confirmed (R-C7)
@@ -94,6 +84,11 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
   that pins the outcome
 
 ## Resolved
+
+### CORE-9 · Low · A `model_bad_request` is logged without its reason (R-C6)
+
+Resolved in `fix(core)` for CORE-9: `model call failed` carries `reason: errorReason(err)`
+(`E37`).
 
 ### CORE-8 · Low · Abort after the model call: the terminal paths ignore the signal and the dispatch timer keeps running (R-C4, R-C5)
 

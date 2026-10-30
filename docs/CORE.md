@@ -221,7 +221,9 @@ SDK's typed errors into a code, a message and a `shouldLog` flag: 429 → `model
 connection timeout → `model_timeout` (checked before the connection error, its superclass),
 connection failure → `model_unreachable`, 400 → `model_bad_request`, 401 → `model_auth_failed`,
 529 (overloaded) → `model_rate_limited`, anything else → `model_error`. Operational states are
-not logged loudly; our-fault errors and the fall-through are.
+not logged loudly; our-fault errors and the fall-through are, as `model call failed` with
+`errorClass`, `code` and `reason` (`errorReason(err)`: the SDK's message cut to 200 chars, which
+names the rejected field of a bad request; `E37`).
 
 ## Prompts
 
