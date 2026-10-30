@@ -56,6 +56,16 @@ export async function startCall(
     return { ok: false, code: 'internal_error' }
   }
   const now = deps.clock()
+  const service = ctx.serviceClient
+
+  // One live call per user: the previous call's credential goes first, so that the caller's own
+  // row never counts against the concurrent cap. This is the one write a refused start has made.
+  const { error: oldError } = await service.from('voice_calls').delete().eq('user_id', ctx.userId)
+  if (oldError) {
+    log('error', '[api]', 'previous call cleanup failed', { ...ids, code: oldError.code })
+    return { ok: false, code: 'internal_error' }
+  }
+
   const verdict = await checkVoiceRateLimits(ctx, now, requestId)
   if (!verdict.ok) {
     log('warn', '[api]', 'voice rate limited', {
@@ -65,14 +75,6 @@ export async function startCall(
       limit: verdict.limit,
     })
     return { ok: false, code: 'rate_limited' }
-  }
-  const service = ctx.serviceClient
-
-  // One live call per user: the previous call's credential goes.
-  const { error: oldError } = await service.from('voice_calls').delete().eq('user_id', ctx.userId)
-  if (oldError) {
-    log('error', '[api]', 'previous call cleanup failed', { ...ids, code: oldError.code })
-    return { ok: false, code: 'internal_error' }
   }
 
   const room = `voice-${randomUUID()}`

@@ -22,6 +22,14 @@ const M = USERS.member
 const calls = () => db.rows('voice_calls')
 const voiceSessions = (userId = M.id) =>
   db.rows('ai_sessions').filter((s) => s.user_id === userId && s.channel === 'voice')
+/** A live `voice_calls` row of another user, `expiresInMs` from now (negative: already expired). */
+const liveRow = (userId: string, expiresInMs = 60_000) => ({
+  session_id: uuid(Math.floor(Math.random() * 1e6)),
+  user_id: userId,
+  call_token_hash: crypto.randomUUID(),
+  access_token: 'x',
+  expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+})
 
 describe('voice call lifecycle', () => {
   scenario(
@@ -107,6 +115,24 @@ describe('voice call lifecycle', () => {
     const res = await call('/voice/sessions')
     expect(await flatError(res)).toMatchObject({ status: 429, code: 'rate_limited' })
   })
+
+  scenario(
+    "V16 (API-8) a caller's own unexpired row does not count against the concurrent cap: with two others live, a re-start is 200",
+    async () => {
+      const first = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      db.seed('voice_calls', [liveRow(USERS.admin.id), liveRow(USERS.admin.id)])
+      const res = await call('/voice/sessions')
+      expect(res.status).toBe(200)
+      const second = (await res.json()) as { session_id: string }
+      expect(
+        calls()
+          .filter((c) => c.user_id === M.id)
+          .map((c) => c.session_id),
+      ).toEqual([second.session_id])
+      expect(calls()).toHaveLength(3)
+      expect(voiceSessions().map((s) => s.id)).toEqual([first.session_id, second.session_id])
+    },
+  )
 
   scenario('V05 a failed dispatch is 502 voice_dispatch_failed and both rows are removed', async () => {
     livekit.failNextDispatch = true
