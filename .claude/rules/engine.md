@@ -31,8 +31,9 @@ gets, a scenario test.
 
 - Persistence order per iteration: stream the model turn → persist the assistant row → emit its
   blocks → dispatch tools concurrently → persist the `tool_result` row → emit results → loop.
-- **Abort** is checked before each model call, between the model call and dispatch, and after
-  dispatch. On abort: persist synthetic results for unfinished tools, then return silently. The
+- **Abort** is checked before each model call, after the assistant row is persisted (before the
+  terminal events), between the model call and dispatch, and after dispatch. On abort: persist
+  synthetic results for unfinished tools, then return silently. The
   request owner (api route, voice call) decides whether to emit `error`; the loop never does.
 - **Timeouts:** clear every timer on every exit path; pass the abort signal to handlers; a handler
   that timed out is told to stop through its signal and its late result is discarded.

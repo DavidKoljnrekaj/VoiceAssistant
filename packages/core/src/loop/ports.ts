@@ -96,7 +96,8 @@ export interface MessageStore {
 export type LoopMark = 'model_call' | 'first_event' | 'tools_start' | 'tools_done'
 
 export interface LoopHooks {
-  /** Checked before each model call, between the model call and dispatch, and after dispatch. */
+  /** Checked before each model call, after the assistant row is persisted (before the turn's
+   * terminal events), between the model call and dispatch, and after dispatch. */
   isCancelled(): Promise<boolean>
   /** After a terminal answer: not after an error, not after a cancel. */
   onComplete(): Promise<void>

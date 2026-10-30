@@ -62,6 +62,7 @@ loop   ┌──▶ hooks.isCancelled? ── yes ──▶ return (silent)
        │      abort while streaming ──▶ log, return (silent)      SDK error ──▶ sink.error(mapped), return
        │    store.insert(assistant row)              failure ──▶ sink.error(persistence_error), return
        │    blocks in order: text → sink.textBlock(text, rowId); tool_use → sink.toolCall
+       │    terminal stop and cancelled ──▶ log, synthetic results if truncated, return (silent)
        │    refusal ──▶ sink.done('refusal'), onComplete, return
        │    tool_use:
        │      cancelled before dispatch ──▶ synthetic results for every tool
@@ -86,11 +87,14 @@ onto and moves the cache breakpoint in holds copies, so a store that serialises 
 (voice's `DeferredStore`) writes the rows exactly as the model and the tools produced them
 (`E33`).
 
-Abort is checked before each model call, between the model call and dispatch, and after
-dispatch. On abort the loop persists synthetic `is_error` results for tools that did not finish
-(`cancelled before the tool ran` / `cancelled before the tool returned`; finished tools keep
-their real output), emits no result event and returns silently; the request owner decides
-whether to emit `error`. A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
+Abort is checked before each model call, after the assistant row is persisted (before the
+turn's terminal events), between the model call and dispatch, and after dispatch. On abort the
+loop persists synthetic `is_error` results for tools that did not finish (`cancelled before the
+tool ran` / `cancelled before the tool returned`; finished tools keep their real output), emits
+no result event and returns silently; the request owner decides whether to emit `error`. An
+abort that lands during the assistant-row insert of a terminal turn leaves the row, emits no
+`done` and runs no `onComplete` (`aborted after model call`; a truncation still closes its tool
+calls out, `E35`, `E35b`). A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
 fallback and unknown block types are persisted verbatim and never emitted. A terminal stop with
 `tool_use` blocks (truncation) persists synthetic results and one Croatian explanation row
 (`TRUNCATED_HR`). The manual loop over `messages.stream` is a decision (`docs/decisions/0009`),

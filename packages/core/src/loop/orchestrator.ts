@@ -113,6 +113,24 @@ export async function runOrchestrationLoop(
     }
 
     const stopReason = response.stop_reason ?? 'end_turn'
+    const terminal = stopReason !== 'tool_use' || toolUses.length === 0
+
+    // An abort that landed during the assistant-row insert: the row stands, nothing more is
+    // said. The tool path checks for itself in runToolRound; a truncation still closes its
+    // tool calls out (invariant 3), silently.
+    if (terminal && (signal.aborted || (await hooks.isCancelled()))) {
+      log('info', logTag, 'aborted after model call', { ...ids, iteration, toolCount: toolUses.length })
+      if (toolUses.length > 0) {
+        await persistThenEmit(
+          { ctx, config, toolUses, parentId: lastInsertedId, sessionId, iteration },
+          toolUses.map(() => ({ output: TRUNCATED_RESULT, isError: true })),
+          true,
+          sink,
+          store,
+        )
+      }
+      return
+    }
 
     // A refusal runs no tools; the sinks decide what to say.
     if (stopReason === 'refusal') {
@@ -127,7 +145,7 @@ export async function runOrchestrationLoop(
       return
     }
 
-    if (stopReason === 'tool_use') {
+    if (!terminal) {
       const round = await runToolRound(
         { ctx, config, toolUses, parentId: lastInsertedId, sessionId, iteration, extras },
         sink,
