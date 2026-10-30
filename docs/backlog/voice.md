@@ -76,19 +76,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** at least a line in 0011's consequences and `docs/VOICE.md`; a code fix needs
   the played-text length from the speech handle to cut the persisted row
 
-### VOICE-12 · Low · Call end paths: any participant's disconnect ends the call, an STT or TTS failure never does (R-V7, R-V8)
-
-- **Check:** Confirmed (R-V7, R-V8, verified 2026-10-30)
-- **Where:** `apps/voice/src/agent.ts` (the `ParticipantDisconnected` handler does not check the
-  identity; the `error` handler only logs; no `Closed` handler)
-- **What happens:** a recorder, egress or a browser reconnecting under a new identity ends a live
-  call; a Soniox or ElevenLabs outage leaves the caller silent (LiveKit closes the session after
-  `maxUnrecoverableErrors`; nothing speaks or ends the call). Model and identity failures are
-  spoken (`W11`, `W14b`, `W14c`)
-- **Fix direction:** compare `participant.identity` with the caller's; on an unrecoverable error
-  say `MESSAGES_HR.internal_error` where TTS still works, then `endCall('session_error')` and
-  shutdown; handle `Closed` the same way
-
 ### VOICE-13 · Low · `callHistory` keeps at least 20 rows, not at most (R-V9)
 
 - **Check:** Confirmed (R-V9, verified 2026-10-30)
@@ -153,3 +140,9 @@ started during a barge-in waits for the cancelled loop to unwind; test `VOICE-9`
 Resolved on `fix/voice-review`: `call_ended` speaks `CALL_ENDED_HR` once and fires `onEnded`;
 the worker's `HangUp` deletes the credential and shuts down after the agent has spoken it; test
 `VOICE-11`.
+
+### VOICE-12 · Low · Call end paths: any participant's disconnect ends the call, an STT or TTS failure never does (R-V7, R-V8)
+
+Resolved on `fix/voice-review`: `participantLeft` compares the identity with the caller's user
+id; `sessionErrorAction` speaks `internal_error` on an unrecoverable provider error (not after a
+TTS failure) and `HangUp` ends the call; the session's `close` event hangs up too.

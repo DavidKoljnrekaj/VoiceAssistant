@@ -22,7 +22,7 @@ import {
 import { RoomEvent } from '@livekit/rtc-node'
 import Anthropic from '@anthropic-ai/sdk'
 
-import { channelSettings, errorReason, log } from '@va/core'
+import { channelSettings, errorReason, log, MESSAGES_HR } from '@va/core'
 import { createServiceClient } from '@va/db'
 
 import { AssistantAgent } from './assistant-llm.js'
@@ -31,7 +31,7 @@ import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
 import { acceptDispatchedJob, callTokenOf } from './job.js'
-import { HangUp, participantLeft } from './lifecycle.js'
+import { HangUp, participantLeft, sessionErrorAction } from './lifecycle.js'
 import { createMetrics, createTurnMetrics } from './metrics.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
@@ -191,13 +191,24 @@ export default defineAgent<UserData>({
         }
       }
     })
+    // A Soniox or ElevenLabs failure LiveKit cannot recover from would leave the caller silent:
+    // say the fallback where speech still works, then hang up. The session's own close (after
+    // LiveKit's unrecoverable-error limit, or its drain on shutdown) hangs up too.
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
+      const action = sessionErrorAction(ev.error)
       log('error', LOG_TAG, 'session error', {
         ...ids,
         source: ev.error.type,
         recoverable: 'recoverable' in ev.error ? ev.error.recoverable : null,
         reason: 'error' in ev.error ? (ev.error.error?.constructor.name ?? null) : null,
+        action,
       })
+      if (action === 'log') return
+      if (action === 'speak_and_hang_up') session.say(MESSAGES_HR.internal_error)
+      hangUp.afterSpeech('session_error')
+    })
+    session.on(voice.AgentSessionEventTypes.Close, (ev) => {
+      hangUp.now(`session_closed:${ev.reason}`)
     })
 
     // Only the caller's own disconnect ends the call: the API's join token names the caller by

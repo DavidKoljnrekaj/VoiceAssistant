@@ -11,6 +11,20 @@ export function participantLeft(participantIdentity: string, callerUserId: strin
   return participantIdentity === callerUserId ? 'hang_up' : 'ignore'
 }
 
+/**
+ * A provider error the session reported. LiveKit retries a recoverable one itself (nothing to
+ * do but log); an unrecoverable one leaves the caller silent, so the worker says the fallback
+ * line where text-to-speech still works, then hangs up. An event without the flag (a realtime
+ * model's) counts as unrecoverable.
+ */
+export function sessionErrorAction(error: {
+  type: string
+  recoverable?: boolean
+}): 'log' | 'speak_and_hang_up' | 'hang_up' {
+  if (error.recoverable === true) return 'log'
+  return error.type === 'tts_error' ? 'hang_up' : 'speak_and_hang_up'
+}
+
 /** How long a hang-up waits for the agent to speak its last line before going ahead anyway
  * (text-to-speech may be the thing that failed). */
 export const HANGUP_GRACE_MS = 10_000

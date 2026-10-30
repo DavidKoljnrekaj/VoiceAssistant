@@ -119,7 +119,7 @@ tool input`, `tool timeout`, `model call failed`, `assistant insert failed`, `to
 failed`, `tool iteration limit reached`; `[core:auth]` `unauthorized`, `no_profile`,
 `internal_error`; `[voice]` `job refused`, `call accepted`, `warm`, `warm failed`, `turn limit
 reached`, `identity refused`, `call ended`, `other participant left`, `persist failed`, `call
-ending` (`reason`), `call end failed`, `session error`.
+ending` (`reason`), `call end failed`, `session error` (`source`, `recoverable`, `action`).
 The worker's JSONL metrics (`turns.jsonl`, `bargein.jsonl`, `warm.jsonl`) are described in
 `docs/VOICE.md`.
 

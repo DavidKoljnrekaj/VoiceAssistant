@@ -2,7 +2,19 @@
 // decisions `agent.ts` wires to the room and session events.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { HANGUP_GRACE_MS, HangUp, participantLeft } from '../src/lifecycle.js'
+import { HANGUP_GRACE_MS, HangUp, participantLeft, sessionErrorAction } from '../src/lifecycle.js'
+
+describe('sessionErrorAction', () => {
+  it('VOICE-12b a recoverable provider error is only logged; an unrecoverable one is spoken and ends the call, unless speech itself failed', () => {
+    expect(sessionErrorAction({ type: 'stt_error', recoverable: true })).toBe('log')
+    expect(sessionErrorAction({ type: 'tts_error', recoverable: true })).toBe('log')
+    expect(sessionErrorAction({ type: 'stt_error', recoverable: false })).toBe('speak_and_hang_up')
+    expect(sessionErrorAction({ type: 'llm_error', recoverable: false })).toBe('speak_and_hang_up')
+    expect(sessionErrorAction({ type: 'tts_error', recoverable: false })).toBe('hang_up')
+    // An error event without the flag (a realtime model, not used here) is not recoverable.
+    expect(sessionErrorAction({ type: 'realtime_model_error' })).toBe('speak_and_hang_up')
+  })
+})
 
 describe('participantLeft', () => {
   it("VOICE-12 only the caller's own disconnect ends the call; a recorder, egress or a reconnecting browser under a new identity does not", () => {
