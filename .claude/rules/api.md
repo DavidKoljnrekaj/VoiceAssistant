@@ -27,7 +27,11 @@ paths:
   `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`. The event
   list and payloads are in `docs/API.md`; changing one changes the web client in the same change.
 - **Service-role writes** always filter by `user_id` and/or `session_id`.
-- **A pre-stream failure cleans up** anything the request created (a session row, a voice call row).
+- **A pre-stream failure cleans up** anything the request created (a session row, a voice call row),
+  on every path, including the last step; a cleanup that fails is logged with the table.
+- **A deadline before the first byte.** Authentication and the `/chat` pipeline share
+  `PRE_STREAM_TIMEOUT_MS` (10 s, `deadline.ts`); PostgREST queries before the stream carry its
+  abort signal. The 90 s request timeout covers the stream only.
 - **Cancellation:** read the request's abort signal and pass it into the loop. No cancel beacon.
 - **Logs:** `request_id`, `user_id`, `session_id`, codes and timings. No message content.
 - Rate limits count user turns only (tool-result rows do not count).

@@ -19,8 +19,10 @@ item says so in its description.
       rows they touched where a row must exist.** `apps/api/src/chat/prepare.ts`,
       `routes/sessions.ts`, `voice/calls.ts`, `apps/voice/src/call.ts`, `turn.ts`; the loop's
       `MessageStore` implementations carry the session id. Best-effort by design, no assertion:
-      the delete of a caller's previous call before a new one, the cleanup after a failed start
-      and the end-of-call delete (`voice/calls.ts`). Tests: `V01`–`V10`, `W03b`, `W03c`, `W07`.
+      the delete of a caller's previous call before a new one (a PostgREST error is still a 500,
+      `V18`), the rollback after a failed start (each failed delete logged as `rollback failed`,
+      `V12`) and the end-of-call delete (`voice/calls.ts`). Tests: `V01`–`V18`, `W03b`, `W03c`,
+      `W07`.
 - [ ] **Tools read as the user; permissive-RLS tables get explicit scoping; no raw input in
       `.or()`; `ilike` escaped.** `ctx.userClient` (anon key + the user's JWT) in every handler;
       `escapeLike` and `NO_STAR` in `@va/tools-demo` are the pattern (`docs/CORE.md` → Tools).
@@ -31,16 +33,24 @@ item says so in its description.
       `dispatchTool` resolves the name through the same role-and-channel filter and answers an
       `is_error` result (invariants 4 and 5). Tests: `T02`, `T05`, `T08`, `E08`–`E10`, `W06`,
       `W20`, `R01`.
-- [ ] **The JWT never leaves our side.** LiveKit job metadata carries only the opaque call token
-      and the session id; the browser gets only a LiveKit room token; the `voice_calls` row holds
-      the JWT under the token's SHA-256 (`docs/API.md` → Voice call lifecycle). Tests: `V01`,
-      `W01`, `W02`.
-- [ ] **`voice_calls` rows: hashed token, 15-minute cap, 3-minute idle, deleted on hang-up, swept.**
-      `apps/api/src/voice/calls.ts`, `apps/voice/src/call.ts`, the `voice-calls-sweep` pg_cron job
-      (`20261028100200_voice_calls.sql`). Tests: `V01`, `V02`, `V06`, `V08`, `W02`, `voice_calls_service_only.test.sql`.
-- [ ] **Rate limits on chat turns, voice calls per day, concurrent calls.** `apps/api/src/rate-limit.ts`
-      (20 / 5 min, 200 / day, 20 calls / day, 3 concurrent), 50 turns per call in the worker.
-      Tests: `P09`–`P11`, `V03`, `W14`. Known: check-then-act race `API-1`.
+- [ ] **The JWT never leaves our side; LiveKit learns the user id and nothing else.** LiveKit
+      job metadata carries only the opaque call token and the session id; the browser gets only
+      a LiveKit room token whose participant identity is `users.id` with no name (so no email);
+      the `voice_calls` row holds the JWT under the token's SHA-256 (`docs/API.md` → Voice call
+      lifecycle). Tests: `V01`, `V13`, `W01`, `W02`.
+- [ ] **`voice_calls` rows: hashed token, 15-minute cap, 3-minute idle, deleted on hang-up, swept;
+      a failed start removes what it created.** `apps/api/src/voice/calls.ts` (refresh sees only a
+      row with `expires_at > now()`; a failed dispatch or join token rolls both rows back),
+      `apps/voice/src/call.ts`, the `voice-calls-sweep` pg_cron job
+      (`20261028100200_voice_calls.sql`). Tests: `V01`, `V02`, `V05`, `V06`, `V08`, `V11`, `V14`,
+      `V15`, `W02`, `voice_calls_service_only.test.sql`.
+- [ ] **Rate limits on chat turns, voice calls per day, concurrent calls; a deadline before the
+      first byte.** `apps/api/src/rate-limit.ts` (20 / 5 min, 200 / day, 20 calls / day, 3
+      concurrent over rows neither expired nor idle, the caller's own previous call removed
+      first), 50 turns per call in the worker; `apps/api/src/deadline.ts` bounds authentication
+      and the `/chat` pipeline to 10 s so a hung Supabase cannot pin requests open. Tests:
+      `P09`–`P11`, `P20`, `P21`, `V03`, `V04`, `V16`, `V17`, `W14`. Known: check-then-act race
+      `API-1`.
 - [ ] **No content in logs; error messages truncated.** `log()` and `errorReason()` in `@va/core`;
       `L04` scans every call site; the worker strips LiveKit's `lk.pii.*` keys (`W18`); the metrics
       writer refuses content keys (`W13`).
@@ -51,7 +61,8 @@ item says so in its description.
 - [ ] **Dependencies pinned; audit in CI; Dependabot cooldown 14 days.** Exact versions in every
       `package.json`; `pnpm audit --prod --audit-level=high` in `test.yml`; `.github/dependabot.yml`.
 - [ ] **CORS limited to the PWA origin(s).** `CORS_ORIGINS` on the API (`*` is the local default
-      only; the deploy sets the exact origins). Tests: `P01`.
+      only; the deploy sets the exact origins, and an unlisted origin gets no
+      `access-control-allow-origin`). Tests: `P01`, `P22`.
 - [ ] **Prompt text that users hear or read reviewed by a native speaker before release.** Every
       Croatian string is marked `<!-- needs native review -->` until then (`CORE-1`, `VOICE-2`).
 
@@ -69,7 +80,8 @@ query without such a filter is a finding, whatever it reads. The reviewed except
 the reason it needs no user filter:
 
 - `apps/api/src/rate-limit.ts`, the concurrent-call cap: a `head` count of `voice_calls` rows
-  with `expires_at` in the future across all users; it reads a number, no row.
+  with `expires_at` in the future and `last_seen_at` within the idle window across all users; it
+  reads a number, no row.
 - `apps/voice/src/call.ts`, the call lookup: `voice_calls` by the opaque token's SHA-256 (and the
   room) before the user is known; the hash is the credential and the filter.
 - `packages/core/src/auth.ts`, the profile re-read: `public.users` by `auth_user_id` from GoTrue's
@@ -100,8 +112,11 @@ without the token refuses the job; a job for a room the token was not bound to i
 **Abuse.** Rate limits are counted from the rows that exist, so a refused request writes
 nothing and a flaky count fails open, the one sanctioned exception to invariant 10: a limiter
 that failed closed would take the product down with its database (Anthropic's own limits and the
-request timeout are the backstop). The concurrent-call cap is global. The known check-then-act race bounds the excess by
-what fits in one round trip (`API-1`).
+request timeout are the backstop). The concurrent-call cap is global and counts only rows that
+are neither expired nor idle (the worker's own definition of a live call), after the caller's own
+previous call is removed; a start refused by it has made that one delete. The pre-stream
+deadline (10 s) keeps a hung Supabase from pinning connections open before the first byte. The
+known check-then-act race bounds the excess by what fits in one round trip (`API-1`).
 
 **Logs.** Content never enters a log line: ids, codes, timings, lengths and token counts only,
 third-party error messages cut to 200 characters, LiveKit's own PII keys stripped before
@@ -124,13 +139,14 @@ user hears or reads is reviewed by a native speaker before release; until then i
 
 What is stored, where, and for how long:
 
-| Data                                      | Where                                   | Lawful basis / note                                                            | Retention                                                                                |
-| ----------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| account: email, role, language            | Supabase Auth, `public.users`           | contract (the company's staff)                                                 | the account's life                                                                       |
-| chat turns: typed text, answers, tool I/O | `ai_messages`, `ai_sessions`            | contract; may contain what the user pasted                                     | open: proposal 12 months, then delete (`OPS-4`)                                          |
-| voice turns: transcripts, spoken answers  | `ai_messages` with `channel = 'voice'`  | contract; no audio is recorded (LiveKit recording off, worker `record: false`) | open decision `OPS-4` (proposal 30 days: a transcript is more sensitive than typed text) |
-| the caller's JWT for a live call          | `voice_calls`, service role only        | needed for the worker to act as the caller                                     | ≤ 15 min, deleted on hang-up, swept                                                      |
-| logs and metrics: ids, timings, counts    | the host's log store, `apps/voice/logs` | legitimate interest (operations)                                               | proposal 30 days                                                                         |
+| Data                                                                                                 | Where                                   | Lawful basis / note                                                                   | Retention                                                                                |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| account: email, role, language                                                                       | Supabase Auth, `public.users`           | contract (the company's staff)                                                        | the account's life                                                                       |
+| chat turns: typed text, answers, tool I/O                                                            | `ai_messages`, `ai_sessions`            | contract; may contain what the user pasted                                            | open: proposal 12 months, then delete (`OPS-4`)                                          |
+| voice turns: transcripts, spoken answers                                                             | `ai_messages` with `channel = 'voice'`  | contract; no audio is recorded (LiveKit recording off, worker `record: false`)        | open decision `OPS-4` (proposal 30 days: a transcript is more sensitive than typed text) |
+| the caller's JWT for a live call                                                                     | `voice_calls`, service role only        | needed for the worker to act as the caller                                            | ≤ 15 min, deleted on hang-up, swept                                                      |
+| sent to LiveKit: participant identity (`users.id`), room name, job metadata (call token, session id) | LiveKit Cloud (EU), sub-processor       | contract; the identity is pseudonymous: no name, so no email, reaches LiveKit (`V13`) | the call's life, plus LiveKit's own log retention under its DPA (`OPS-5`)                |
+| logs and metrics: ids, timings, counts                                                               | the host's log store, `apps/voice/logs` | legitimate interest (operations)                                                      | proposal 30 days                                                                         |
 
 Sub-processors (Anthropic, LiveKit, Soniox, ElevenLabs, Supabase, the hosting provider) are
 listed with regions and transfer basis in `docs/OPS.md` → Deploy sketch; the DPAs, the entries in

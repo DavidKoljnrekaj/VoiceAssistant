@@ -17,6 +17,7 @@ apps/api/src/
 ├── tools.ts            createRegistry(): the demo pack with API_ALLOWLIST ({ chat: 'all' }; voice is the worker's)
 ├── env.ts              zod env (see .env.example)
 ├── errors.ts           the flat envelope and the status table
+├── deadline.ts         PRE_STREAM_TIMEOUT_MS (10 s over auth and the /chat pipeline) and withDeadline()
 ├── rate-limit.ts       chat burst/daily, voice calls per day and concurrent calls
 ├── middleware/         request-id, cors, body-limit (64 KB), auth (bearer → authenticateToken)
 ├── sse/                SSEWriter (framing, 15 s keepalive, write-failure detection), SseEventSink
@@ -32,15 +33,15 @@ Dependencies: `hono`, `@hono/node-server`, `livekit-server-sdk`, `@anthropic-ai/
 
 ## Endpoints
 
-| Method | Path                          | Auth | Body                                                                                                   | Answer                                             |
-| ------ | ----------------------------- | ---- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| GET    | `/health`                     | no   |                                                                                                        | `{ ok: true, service: '@va/api' }`                 |
-| POST   | `/chat`                       | yes  | `{ session_id: uuid \| null, message: string, parent_message_id?: uuid, client_context?: { route? } }` | SSE stream (below) or a flat error                 |
-| PATCH  | `/sessions/:id`               | yes  | `{ title: string (1..200) }`                                                                           | `{ ok: true }`; 404 when not the caller's          |
-| DELETE | `/sessions/:id`               | yes  |                                                                                                        | `{ ok: true }`; 404 when not the caller's          |
-| POST   | `/voice/sessions`             | yes  |                                                                                                        | `{ url, token, room, session_id }`                 |
-| POST   | `/voice/sessions/:id/refresh` | yes  |                                                                                                        | `{ ok: true }`; 404 when there is no live call     |
-| POST   | `/voice/sessions/:id/end`     | yes  |                                                                                                        | `{ ok: true }`, idempotent; 404 for another user's |
+| Method | Path                          | Auth | Body                                                                                                   | Answer                                                                                  |
+| ------ | ----------------------------- | ---- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| GET    | `/health`                     | no   |                                                                                                        | `{ ok: true, service: '@va/api' }`                                                      |
+| POST   | `/chat`                       | yes  | `{ session_id: uuid \| null, message: string, parent_message_id?: uuid, client_context?: { route? } }` | SSE stream (below) or a flat error                                                      |
+| PATCH  | `/sessions/:id`               | yes  | `{ title: string (1..200) }`                                                                           | `{ ok: true }`; 404 when not the caller's                                               |
+| DELETE | `/sessions/:id`               | yes  |                                                                                                        | `{ ok: true }`; 404 when not the caller's                                               |
+| POST   | `/voice/sessions`             | yes  |                                                                                                        | `{ url, token, room, session_id }`                                                      |
+| POST   | `/voice/sessions/:id/refresh` | yes  |                                                                                                        | `{ ok: true }`; 404 when there is no live call: none, expired, or gone under the update |
+| POST   | `/voice/sessions/:id/end`     | yes  |                                                                                                        | `{ ok: true }`, idempotent; 404 for another user's                                      |
 
 Every route except `/health` runs, in order: request id, CORS, the 405 guard for known paths,
 the 64 KB body limit, authentication. `Authorization: Bearer <jwt>` is required; the profile
@@ -48,10 +49,20 @@ the 64 KB body limit, authentication. `Authorization: Bearer <jwt>` is required;
 never trusted. A known path with the wrong method is 405 before authentication. The PWA lists
 sessions and loads messages through supabase-js (RLS); the API only mutates them.
 
+**The pre-stream deadline.** Everything before a response's first byte runs under one budget of
+10 s (`PRE_STREAM_TIMEOUT_MS`, `deadline.ts`): authentication on every route (GoTrue and the
+profile re-read, raced, since GoTrue's client takes no abort signal) and, on `/chat`, the
+pipeline below with whatever the budget has left, where every query carries the deadline's abort
+signal so a hung PostgREST request is released. A timeout is 500 `internal_error` and one
+`pre-stream timeout` log line naming the step (`auth` or `prepare`). The stream has its own 90 s
+timeout from `: ready` on. Voice start's own queries run after authentication without a signal
+(`P20`, `P21`).
+
 ### `POST /chat`, before the stream
 
 In order, each with its failure: body (`bad_request`, `message_too_long`: the cap of 4000
-counts the raw string); the rate limit (`rate_limited`); the session (`session_id` null inserts
+counts the raw string; `session_id` is required, `null` opens a session and a missing field is
+`bad_request`, so a client that drops it cannot fork a session per turn); the rate limit (`rate_limited`); the session (`session_id` null inserts
 one; otherwise it must be the caller's: `session_not_found`); the parent (`parent_message_id`
 must belong to the session: `not_found`; otherwise the session's newest row, or none on a new
 session); history (`ai_session_history(leaf, 200)` through the service client, assembled by
@@ -76,8 +87,9 @@ event: error        {"type":"error","code":"…","message":"…"}
 
 Headers: `Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-cache,
 no-transform`, `X-Accel-Buffering: no`, `Connection: keep-alive`, `X-Request-Id`. The event
-name always equals `data.type`. `done.usage` is the last model call's usage, not the turn's;
-the `[api]` `timing` log line carries the turn's totals (`docs/OPS.md` → Logging). `: ready` is
+name always equals `data.type`. `done.usage` is the **last model call's** usage, not the turn's
+(`C18` pins it): a client that wants the turn's totals sums the calls itself; the `[api]`
+`timing` log line carries the turn's totals (`docs/OPS.md` → Logging). `: ready` is
 written before any work; `session` is always the first event. A row is written before its event (`turn`, `tool_result`); deltas are the one
 provisional exception, and an `error` with `persistence_error` means the client drops the
 provisional text of that block. `done.stop_reason` is the model's raw value (`end_turn`,
@@ -89,17 +101,17 @@ Changing an event changes the web client in the same change.
 Pre-stream failures are `{ error: { code, message } }` with a real status; the message is the
 Croatian text from `@va/core`'s catalogue.
 
-| status | code                              | when                                                      |
-| ------ | --------------------------------- | --------------------------------------------------------- |
-| 400    | `bad_request`, `message_too_long` | malformed JSON, missing or empty message, over 4000 chars |
-| 401    | `unauthorized`                    | no bearer, or GoTrue rejects it                           |
-| 403    | `no_profile`                      | auth user without a `public.users` row                    |
-| 404    | `session_not_found`, `not_found`  | not the caller's session; parent outside it; no live call |
-| 405    | `method_not_allowed`              | known path, wrong method                                  |
-| 413    | `payload_too_large`               | body over 64 KB                                           |
-| 429    | `rate_limited`                    | a limit below                                             |
-| 500    | `internal_error`                  | a failed write or read; LiveKit not configured            |
-| 502    | `voice_dispatch_failed`           | LiveKit refused the agent dispatch (both rows removed)    |
+| status | code                              | when                                                                                                |
+| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 400    | `bad_request`, `message_too_long` | malformed JSON, missing or empty message, over 4000 chars                                           |
+| 401    | `unauthorized`                    | no bearer, or GoTrue rejects it                                                                     |
+| 403    | `no_profile`                      | auth user without a `public.users` row                                                              |
+| 404    | `session_not_found`, `not_found`  | not the caller's session; parent outside it; no live call                                           |
+| 405    | `method_not_allowed`              | known path, wrong method                                                                            |
+| 413    | `payload_too_large`               | body over 64 KB                                                                                     |
+| 429    | `rate_limited`                    | a limit below                                                                                       |
+| 500    | `internal_error`                  | a failed write or read; the pre-stream deadline; LiveKit not configured or its token signing failed |
+| 502    | `voice_dispatch_failed`           | LiveKit refused the agent dispatch (both rows removed)                                              |
 
 Mid-stream failures are `error` events on the open 200 stream: the model codes
 (`model_rate_limited`, `model_timeout`, `model_unreachable`, `model_bad_request`,
@@ -129,29 +141,36 @@ never ends on a bare `tool_use`. The writer is always closed.
 Counted from the rows that exist, with two parallel `count: 'exact', head: true` queries through
 the service role, user-filtered:
 
-| limit                     | counts                                                                            | window |
-| ------------------------- | --------------------------------------------------------------------------------- | ------ |
-| chat burst: 20            | `ai_messages` with `turn_kind = 'user'` in the user's `channel = 'chat'` sessions | 5 min  |
-| chat daily: 200           | same                                                                              | 24 h   |
-| voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                               | 24 h   |
-| voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future, across all users              | now    |
+| limit                     | counts                                                                                                                                            | window |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| chat burst: 20            | `ai_messages` with `turn_kind = 'user'` in the user's `channel = 'chat'` sessions                                                                 | 5 min  |
+| chat daily: 200           | same                                                                                                                                              | 24 h   |
+| voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                                                                                               | 24 h   |
+| voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future and `last_seen_at` within the worker's 3-minute idle window (`CALL_IDLE_MS`), across all users | now    |
 
 Tool-result rows never count. A failing count fails **open** and logs an error line, the one
-sanctioned exception to invariant 10 (`docs/SECURITY.md` → Abuse). A refused
-request writes nothing. Known: the check-then-act race (`API-1`); no `Retry-After` (`API-3`).
+sanctioned exception to invariant 10 (`docs/SECURITY.md` → Abuse). A refused request writes
+nothing, with one exception: a voice start has already deleted the caller's own previous
+`voice_calls` row before it counts (one live call per user, and the caller's own row must not
+count against the concurrent cap: `V16`). Known: the check-then-act race (`API-1`); no
+`Retry-After` (`API-3`).
 
 ## Voice call lifecycle
 
-Landmark §4.4 ported. `POST /voice/sessions`: rate limits → the user's previous `voice_calls`
-row is deleted (one live call per user) → `ai_sessions { channel: 'voice', external_id: room,
-title: 'Glasovni poziv' }` with `room = 'voice-' + uuid` → an opaque call token (32 random bytes,
-base64url) whose SHA-256 goes into `voice_calls` with `platform_call_id = room`, `access_token`
-= the caller's JWT and `expires_at = min(JWT exp, now + 15 min)` → `AgentDispatchClient
-.createDispatch(room, VOICE_AGENT_NAME, { metadata: { callToken, sessionId } })` → a LiveKit
-`AccessToken` (identity = user id, ttl 15 min, roomJoin / canPublish / canSubscribe /
-canPublishData) → `{ url, token, room, session_id }`. A failed dispatch removes both rows and
-answers 502. The JWT is never in the metadata or the response; the call token never in the
-response.
+Landmark §4.4 ported. `POST /voice/sessions`: the user's previous `voice_calls` row is deleted
+(one live call per user; a failed delete is 500 and writes nothing, `V18`) → rate limits →
+`ai_sessions { channel: 'voice', external_id: room, title: 'Glasovni poziv' }` with `room =
+'voice-' + uuid` → an opaque call token (32 random bytes, base64url) whose SHA-256 goes into
+`voice_calls` with `platform_call_id = room`, `access_token` = the caller's JWT and `expires_at
+= min(JWT exp, now + 15 min)` → `AgentDispatchClient.createDispatch(room, VOICE_AGENT_NAME,
+{ metadata: { callToken, sessionId } })` → a LiveKit `AccessToken` (identity = the user id and
+nothing else: no participant name, so no email reaches LiveKit, `V13`; ttl 15 min; roomJoin /
+canPublish / canSubscribe / canPublishData) → `{ url, token, room, session_id }`. A failed
+dispatch removes both rows and answers 502; a failed join token removes both rows and answers
+500 (the dispatch cannot be undone; the worker refuses the token at lookup once the row is gone,
+`V11`). A rollback delete that fails is logged as `rollback failed` with the table, and the
+other delete still runs (`V12`). The JWT is never in the metadata or the response; the call
+token never in the response.
 
 The four rules a `voice_calls` row lives by:
 
@@ -165,14 +184,18 @@ The four rules a `voice_calls` row lives by:
    rows).
 4. **Rotated, never extended.** `POST /voice/sessions/:id/refresh` authenticates with the
    browser's new JWT, replaces `access_token`, and sets `expires_at = min(new exp, created_at +
-15 min)`.
+15 min)`. It finds the row only while `expires_at > now()`: an expired, unswept row is 404
+   `not_found` and untouched (`V14`), and a row that vanished between the lookup and the update
+   (hang-up or sweep) is 404 too, never 500 (`V15`).
 
 Without the three `LIVEKIT_*` variables, start answers 500 `internal_error` and writes nothing.
 
 ## Logging
 
 One JSON line per event (`{ ts, tag, event, …fields }`, `docs/OPS.md` → Logging), `tag: '[api]'`,
-with `request_id`, `user_id`, `session_id`, codes and timings. Never the message, the JWT or the call token. Per turn a `timing` line carries
+with `request_id`, `user_id`, `session_id`, codes and timings. Never the message, the JWT or the
+call token. Failures worth grepping for: `pre-stream timeout` (`step`, `timeout_ms`), `join token
+failed`, `rollback failed` (`table`, `code`), `previous call cleanup failed`, `unhandled error`. Per turn a `timing` line carries
 `auth_ms`, `prepare_ms`, `first_delta_ms` (−1 when no delta), `total_ms`, `iterations`,
 `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens` and `outcome`
 (`completed`, `client_disconnect`, `request_timeout`). `X-Request-Id` is taken from the request
@@ -222,15 +245,18 @@ behaviour was verified with the probe described above and by `C06`/`C07`; the st
 ## Testing
 
 `apps/api/test/harness.ts` builds the app with `anthropicClient()` from `@va/core/test`, the
-demo pack, a `FakeLiveKit` (records dispatches and join tokens, `failNextDispatch`) and a real
-clock. `call(path, body, { token, method, raw, headers, signal, app })` sends a `Request` to
+demo pack, a `FakeLiveKit` (records dispatches and join tokens, `failNextDispatch`,
+`failNextJoinToken`) and a real clock. `call(path, body, { token, method, raw, headers, signal, app })` sends a `Request` to
 `app.request`; `chat(body)` posts and reads the stream; `readSse(res)` parses frames into
 `{ raw, comments, events, types }` (`timeoutMs: 0` under fake timers); `flatError(res)`;
 `memberJwt(exp)` makes a JWT-shaped token the fake GoTrue accepts; `buildApp(overrides)` for a
-different env or no LiveKit. Scenarios: `P01`–`P18` (pre-stream), `C01`–`C14` (stream),
-`V01`–`V10` (voice and sessions). `P15` differs from the plan's wording: the history read only
-runs on an existing session (a new session has no leaf), so it asserts the 500 and that no user
-row is written; `P16` covers the deleted session.
+different env or no LiveKit. Scenarios: `P01`–`P25` (pre-stream), `C01`–`C18` (stream),
+`V01`–`V18` (voice and sessions); a scenario that fixes or pins a review finding carries the
+backlog id in its name (`V11 (API-4) …`). `P15` differs from the plan's wording: the history
+read only runs on an existing session (a new session has no leaf), so it asserts the 500 and
+that no user row is written; `P16` covers the deleted session. Tests that need the clock to
+move (`C05`, `C15`, `C17`, `P20`, `P21`) are plain `it`s under `vi.useFakeTimers` and reset
+the world themselves.
 
 ```
 pnpm exec vitest run apps/api
