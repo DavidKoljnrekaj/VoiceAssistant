@@ -34,17 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-9 · Low · Stopping or leaving a brand-new conversation plants the interrupted marker in the fresh view (R-W6)
-
-- **Check:** Confirmed (R-W6, verified 2026-10-30)
-- **Where:** `useChatStore.ts` (with `streamedSessionId === null` the guard passes;
-  `finishStream` in `lib/normalizeMessages.ts` always pushes the marker on `'stopped'`);
-  `ChatPanel.tsx` calls `newConversation` unconditionally
-- **What happens:** stop, or "new conversation", before the `session` event leaves "Odgovor
-  prekinut." in an empty conversation
-- **Fix direction:** plant the marker only when the view still holds this stream's optimistic
-  user row
-
 ### WEB-10 · Low · `useVoiceCall`: a closed tab never ends the call; tracks are removed without `detach()`; `TrackUnsubscribed` is unhandled (R-W7)
 
 - **Check:** Confirmed (R-W7, verified 2026-10-30)
@@ -134,3 +123,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-8 · Low · The call banner says "Poziv u tijeku" twice (R-W5)
 
 - Fixed 2026-10-30 on fix/web-review: `call.banner` no longer starts with the `call.live` words in hr and en; test `WEB-8` in `locales.test.ts` (which also pins identical key sets, `I01`). <!-- needs native review -->
+
+### WEB-9 · Low · Stopping or leaving a brand-new conversation plants the interrupted marker in the fresh view (R-W6)
+
+- Fixed 2026-10-30 on fix/web-review: the store counts view replacements (new conversation, select, user change) and a stream whose view was replaced ends without touching it; a plain stop still leaves the typed row and the marker. Tests `WEB-9` in `useChatStore.test.ts`.

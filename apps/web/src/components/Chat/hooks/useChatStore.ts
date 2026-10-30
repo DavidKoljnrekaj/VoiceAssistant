@@ -77,6 +77,8 @@ export function useChatStore(): ChatStore {
   const leafIdRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const isStreamingRef = useRef(false)
+  /** Bumped whenever the view is replaced wholesale (new conversation, select, user change). */
+  const viewEpochRef = useRef(0)
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId
   }, [currentSessionId])
@@ -107,6 +109,7 @@ export function useChatStore(): ChatStore {
     abortRef.current = null
     leafIdRef.current = null
     currentSessionIdRef.current = null
+    viewEpochRef.current += 1
   }, [userId])
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -188,6 +191,7 @@ export function useChatStore(): ChatStore {
 
   const newConversation = useCallback(() => {
     abortStream()
+    viewEpochRef.current += 1
     currentSessionIdRef.current = null
     leafIdRef.current = null
     setCurrentSessionId(null)
@@ -199,6 +203,7 @@ export function useChatStore(): ChatStore {
     async (id: string) => {
       if (id === currentSessionIdRef.current) return
       abortStream()
+      viewEpochRef.current += 1
       currentSessionIdRef.current = id
       leafIdRef.current = null
       setCurrentSessionId(id)
@@ -216,6 +221,7 @@ export function useChatStore(): ChatStore {
       const sessionId = currentSessionIdRef.current
       const parentMessageId = leafIdRef.current
       const isNew = sessionId === null
+      const epoch = viewEpochRef.current
 
       // Optimistic user row. Never double-written: the server persists the user row before the
       // first event, so the reload replaces this row with the canonical one once any event has
@@ -285,6 +291,9 @@ export function useChatStore(): ChatStore {
       // already replaced it and aborted us.
       if (controller.signal.aborted && outcome !== 'stopped') return
       if (currentSessionIdRef.current !== streamedSessionId) return
+      // A "new conversation" before the session event emptied the view and aborted us (both ids
+      // null): the fresh view gets no marker (WEB-9).
+      if (viewEpochRef.current !== epoch) return
       setView((prev) => finishStream(prev, outcome, ids))
       if (streamedSessionId && outcome !== 'stopped') {
         // The canonical rows, then this stream's client-only tail: its error rows (a mid-stream

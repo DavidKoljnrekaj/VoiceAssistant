@@ -304,6 +304,42 @@ describe('useChatStore', () => {
     expect(result.current.messages).toEqual([])
   })
 
+  it('WEB-9: leaving a brand-new conversation before its session event leaves the fresh view empty', async () => {
+    const { result } = renderHook(() => useChatStore())
+    await waitFor(() => expect(result.current.sessionsStatus).toBe('ready'))
+    let sent!: Promise<void>
+    act(() => {
+      sent = result.current.sendMessage('Bok')
+    })
+    await fakeChat.nextStream()
+    expect(kinds(result.current)).toEqual(['user'])
+    // "New conversation" (or the route moving to /) aborts the stream and empties the view.
+    await act(async () => {
+      result.current.newConversation()
+    })
+    await act(async () => {
+      await sent
+    })
+    expect(result.current.isStreaming).toBe(false)
+    expect(result.current.messages).toEqual([])
+    expect(result.current.pendingText).toBeNull()
+  })
+
+  it('WEB-9: stopping a brand-new conversation before its session event keeps the typed row and the marker', async () => {
+    const { result } = renderHook(() => useChatStore())
+    await waitFor(() => expect(result.current.sessionsStatus).toBe('ready'))
+    let sent!: Promise<void>
+    act(() => {
+      sent = result.current.sendMessage('Bok')
+    })
+    await fakeChat.nextStream()
+    await act(async () => {
+      result.current.stop()
+      await sent
+    })
+    expect(result.current.messages).toMatchObject([{ kind: 'user', text: 'Bok' }, { kind: 'interrupted' }])
+  })
+
   it('H07: a sign-out empties the store and aborts the open stream', async () => {
     fakeChat.listSessions.mockResolvedValue([sessionSummary(S1, 'Prvi')])
     const { result, rerender } = renderHook(() => useChatStore())
