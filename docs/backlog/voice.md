@@ -53,19 +53,20 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Where:** `packages/core/src/sinks/spoken.ts` (the hold releases on `/[.!?]\s+\S/`, the start
   of the _next_ sentence, otherwise on `done`; `holding` re-arms after the filler);
   `apps/voice/src/assistant-llm.ts` (`\n\n` → `FlushSentinel`); `speakable.ts` keeps `\n\n` (`S09`)
-- **What happens:** a one-sentence answer, which the prompt asks for, reaches TTS only after the
-  whole generation; the measured `llm_ttft` of 2.3–3.1 s against a model first event of ~1.2 s
-  fits. Each paragraph break costs a TTS seam (~130–150 ms TTFB). A `\n\n` split across two
+- **What happens:** a one-sentence answer, which the prompt asks for, reached TTS only after the
+  whole generation (fixed by the hold timer, 2026-10-30); the measured `llm_ttft` of 2.3–3.1 s
+  against a model first event of ~1.2 s fits. Each paragraph break costs a TTS seam (~130–150 ms TTFB). A `\n\n` split across two
   deltas produces no flush at all (the cut is at whitespace), so the sentinel is
   tokeniser-dependent. Against the targets (first sound ≤ 1.5 s, one-lookup answer ≤ 4 s) the
   29 Oct live run gave 2.36–3.33 s and p50 4.2 s
 - **Fix direction:** in order of expected gain, each measured before and after: release the held
   sentence after a short timer as well as on the next sentence; drop the announcement heuristic
-  for the filler-less case; collapse paragraph breaks inside the answer. On 2026-10-30 the bench
-  could not run (Docker Desktop was off, so the local Supabase stack the keys file points at was
-  down); the first and third lever are written with their sink tests on `exp/voice-latency`
-  (stacked on `fix/voice-review`), unmeasured and not to be merged before `/bench-voice` runs
-  on each commit against the baseline at the branch's base. Further levers from the
+  for the filler-less case; collapse paragraph breaks inside the answer. Measured 2026-10-30
+  (`docs/VOICE.md` → Measurements): the hold timer (`HOLD_MS` 200 ms) is kept, it takes about
+  0.17 s off the one-sentence answers and nothing off the catalogue ones, whose first text is
+  the filler; the paragraph-break collapse is not kept, the model wrote no paragraph break in
+  any bench answer (0/12), and no instrument counts TTS seams anyway. It stays on
+  `exp/voice-latency` with its test. The announcement heuristic was not touched. Further levers from the
   review: Landmark's entity list in the per-user block (saves a round, ~1.3 s on lookups);
   refresh the 60 s identity off the hot path from the keepalive timer (~0.25 s on the turn that
   crosses 60 s); build to `dist` (`VOICE-4` / `OPS-1`)

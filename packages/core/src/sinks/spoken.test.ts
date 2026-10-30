@@ -1,10 +1,10 @@
 // S: the spoken-text sink. Landmark's sink.test.ts cases (S01–S07) plus the plan's additions
 // (S08–S10) and the end-of-stream contract (S11–S12). Assertions are on what `say` received.
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MESSAGES_HR } from '../errors.js'
 import { speakable } from './speakable.js'
-import { SpokenTextSink, type SpokenEnd } from './spoken.js'
+import { HOLD_MS, SpokenTextSink, type SpokenEnd } from './spoken.js'
 
 const USAGE = { input_tokens: 0, output_tokens: 0 }
 
@@ -148,5 +148,72 @@ describe('SpokenTextSink', () => {
     expect(h.sink.spoken).toBe(h.text())
     expect(h.sink.firstOutputAt).not.toBeNull()
     expect(h.ends).toEqual(['done'])
+  })
+})
+
+describe('SpokenTextSink hold timer (VOICE-8)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('S13: a finished first sentence is spoken after HOLD_MS when nothing follows it, before done', async () => {
+    const h = harness()
+    await h.sink.textDelta('Imamo dva stola.')
+    expect(h.said).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(HOLD_MS - 1)
+    expect(h.said).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(h.text()).toBe('Imamo dva stola.')
+    await h.sink.done('end_turn', USAGE)
+    expect(h.text()).toBe('Imamo dva stola.')
+    expect(h.ends).toEqual(['done'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('S13b: the next sentence still releases at once and disarms the timer; a tool call inside the hold still drops the announcement', async () => {
+    const h = harness()
+    await h.sink.textDelta('Prva rečenica. Druga')
+    expect(h.text()).toBe('Prva rečenica. ')
+    expect(vi.getTimerCount()).toBe(0)
+
+    const drop = harness()
+    await drop.sink.textDelta('Trebam prvo pogledati.')
+    await vi.advanceTimersByTimeAsync(HOLD_MS - 50)
+    await drop.sink.toolStarting()
+    expect(drop.text()).toBe('Samo trenutak.\n\n')
+    expect(vi.getTimerCount()).toBe(0)
+    await drop.sink.textDelta('Nema ga.')
+    await drop.sink.done('end_turn', USAGE)
+    expect(drop.text()).toBe('Samo trenutak.\n\nNema ga.')
+  })
+
+  it('S13c: an announcement the model lets sit past the hold is spoken, then the filler follows it', async () => {
+    const h = harness()
+    await h.sink.textDelta('Trebam prvo pogledati.')
+    await vi.advanceTimersByTimeAsync(HOLD_MS)
+    await h.sink.toolStarting()
+    expect(h.text()).toBe('Trebam prvo pogledati. Samo trenutak.\n\n')
+  })
+
+  it('S13d: done and error clear a pending hold; a number split at its decimal point is still spoken whole', async () => {
+    const h = harness()
+    await h.sink.textDelta('Bok!')
+    await h.sink.done('end_turn', USAGE)
+    expect(h.text()).toBe('Bok!')
+    expect(vi.getTimerCount()).toBe(0)
+
+    const e = harness()
+    await e.sink.textDelta('Hm.')
+    await e.sink.error('model_timeout', MESSAGES_HR.model_timeout)
+    expect(e.text()).toBe(`Hm. ${MESSAGES_HR.model_timeout}`)
+    expect(vi.getTimerCount()).toBe(0)
+
+    // "3." looks like a sentence end at the delta boundary and arms the hold; the next token
+    // arrives long before it runs out, releases on the real sentence end and disarms it.
+    const d = harness()
+    await d.sink.textDelta('Cijena je 3.')
+    expect(vi.getTimerCount()).toBe(1)
+    await d.sink.textDelta('5 eura. Dostupno')
+    expect(d.text()).toBe('Cijena je 3.5 eura. ')
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
