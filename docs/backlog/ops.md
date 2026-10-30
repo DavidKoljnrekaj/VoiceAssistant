@@ -1,6 +1,6 @@
 # Backlog — ops
 
-Ids: OPS-7 (next free)
+Ids: OPS-9 (next free)
 
 CI, hooks, env, logging, deploy, dependencies.
 
@@ -73,6 +73,28 @@ CI, hooks, env, logging, deploy, dependencies.
 - **Fix direction:** set the secrets, create the test user on the dev project (after `REL-1`),
   run the workflow by hand once and fix what the real Chromium shows; then extend the smoke to
   one streamed turn against a deployed API (`E2E_API_URL`) once `OPS-3` is done
+
+### OPS-7 · Low · The images ship dev dependencies, typecheck in the runtime stage and run nginx as root; Actions are pinned by tag (R-O5, R-V10)
+
+- **Check:** Confirmed (review 2026-10-30, R-O5, R-V10)
+- **Where:** `apps/api/Dockerfile`, `apps/voice/Dockerfile` (the runtime stages copy the full dev
+  `node_modules` and run `pnpm --filter … typecheck`); `apps/web/Dockerfile` (`nginx:1.28-alpine`
+  as root); `.github/workflows/*.yml` (`@v7`, `@v6`, not SHAs)
+- **What happens:** typescript, vitest and the rest ship in the production images (with `OPS-1`'s
+  tsx-at-runtime); the typecheck belongs in CI, not in the image; the web container runs as root
+- **Fix direction:** a build stage that typechecks and a runtime stage with `pnpm install --prod`
+  (after `OPS-1`); `nginxinc/nginx-unprivileged`; Dependabot can pin actions by SHA
+
+### OPS-8 · Low · Hook and lint blind spots (R-O6)
+
+- **Check:** Confirmed (R-O6)
+- **Where:** `.claude/hooks/stop-verify.mjs` (blocks a turn that changed nothing when the tree is
+  dirty from a previous session); `packages/core/src/log-fields.test.ts` (fields passed through
+  a spread or a prebuilt object, quoted keys, `.mjs` files and `tools/` are not scanned)
+- **What happens:** a content field can reach a log line through `{ ...fields }` or
+  `'message': x`; a session that only reads is blocked by someone else's red tree
+- **Fix direction:** scan quoted keys and `.mjs`; stamp the Stop hook per turn, not per tree; the
+  spread case stays a review item (documented at the top of the test)
 
 ## Resolved
 

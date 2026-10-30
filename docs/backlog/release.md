@@ -54,7 +54,10 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       workflow (`OPS-6`). (d) Diff each `apps/*/.env.example` against the matrix in `docs/OPS.md`:
       the session that wrote the matrix could not read the example files (the harness denies
       `.env*`), so a stale comment or a missing name there is possible; `X01`–`X03` only check the
-      matrix against the code.
+      matrix against the code. (e) `apps/web/.env.example` is a one-line placeholder with no
+      variables (review R-O3): write it by hand with `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+      and `VITE_API_URL`, a one-line comment each and no values; the triage session of 2026-10-30
+      could not, the deny covers writes too.
 
 ## Resolved
 
