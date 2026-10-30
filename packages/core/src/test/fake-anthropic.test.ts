@@ -112,6 +112,26 @@ describe('fake-anthropic', () => {
     expect(validateConversation([{ role: 'assistant', content: [text('x')] }])).toMatch(/first message/)
   })
 
+  it('F10: tool blocks in messages need tools on the request; a chain alone can still be checked for shape', async () => {
+    const tu = toolUse('search_items', { query: 'x' })
+    const roundTrip = [
+      { role: 'user', content: [text('a')] },
+      { role: 'assistant', content: [tu] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: tu.id, content: '{}' }] },
+      { role: 'user', content: [text('c')] },
+    ]
+    expect(validateConversation(roundTrip, [])).toMatch(/messages\.1\.content\.0: `tool_use` blocks require `tools`/)
+    expect(validateConversation(roundTrip, [{ name: 'search_items' }])).toBeNull()
+    expect(validateConversation(roundTrip)).toBeNull()
+    reset()
+    anthropic.script(answer('never served'))
+    await expect(
+      anthropicClient().messages.create({ ...REQUEST, messages: roundTrip as never }),
+    ).rejects.toBeInstanceOf(Anthropic.BadRequestError)
+    expect(anthropic.rejections).toEqual([expect.stringMatching(/require `tools`/)])
+    expect(anthropic.remaining).toBe(1)
+  })
+
   it('F09: accepts a well-formed tool round trip', () => {
     const tu = toolUse('search_items', { query: 'x' })
     expect(

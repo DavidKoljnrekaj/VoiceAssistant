@@ -320,7 +320,9 @@ Supabase env for `@va/db`, routes `globalThis.fetch` for `fake-anthropic.test` a
 - `FakeAnthropic`: `script(...turns)` with `answer`, `callTools`, `toolUse`, `text`, `refusal`,
   `{ error }`, `{ connectionError }`, `{ hangUntilAborted }` or a function of the captured
   request; serves `messages.create`, `messages.stream` and the beta endpoint identically;
-  rejects conversations the real API rejects; counts unscripted calls.
+  rejects conversations the real API rejects (a non-user first message, an unanswered
+  `tool_use`, an orphan `tool_result`, tool blocks on a request without `tools`); counts
+  unscripted calls.
 - `FakeSupabase`: GoTrue `/auth/v1/user` by token, a PostgREST subset (selects, embeds, filters,
   order, limit, count, single, insert/update/delete, `rpc/`), `fault`, `hold`, `onRequest`,
   recorded requests with the client that made them (`clientOf`).

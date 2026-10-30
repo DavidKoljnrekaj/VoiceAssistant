@@ -12,7 +12,8 @@
 // the same path with an `anthropic-beta` header, which is captured with the call.
 //
 // It also enforces the real API's conversation-shape rules (`validateConversation`), so a
-// history the engine builds that the real API would reject is rejected here too.
+// history the engine builds that the real API would reject is rejected here too, including the
+// rule that `tool_use` and `tool_result` blocks in `messages` need `tools` on the request.
 
 export type Block =
   | { type: 'text'; text: string }
@@ -121,7 +122,7 @@ export class FakeAnthropic {
     for (const h of this.hooks) h(call)
 
     if (this.validate) {
-      const problem = validateConversation(body.messages)
+      const problem = validateConversation(body.messages, body.tools ?? [])
       if (problem) {
         this.rejections.push(problem)
         return apiError(400, 'invalid_request_error', problem)
@@ -206,11 +207,17 @@ interface AnyBlock {
 
 /**
  * The shape rules of the real Messages API that an engine can break: the conversation starts
- * with a user turn, and every `tool_use` in an assistant turn is answered by a `tool_result`
- * with the same id in the immediately following user turn, which answers nothing else. The real
- * API returns 400 invalid_request_error for each.
+ * with a user turn; every `tool_use` in an assistant turn is answered by a `tool_result` with
+ * the same id in the immediately following user turn, which answers nothing else; and a
+ * `tool_use` or `tool_result` block anywhere needs `tools` on the request. The real API returns
+ * 400 invalid_request_error for each. `tools` is the request's array (`[]` when the request
+ * carries none); when the caller passes nothing the tools rule is not applied, so a chain can
+ * be checked for its shape alone.
  */
-export function validateConversation(messages: Array<{ role: string; content: unknown }>): string | null {
+export function validateConversation(
+  messages: Array<{ role: string; content: unknown }>,
+  tools?: ReadonlyArray<unknown>,
+): string | null {
   if (!messages?.length) return 'messages: at least one message is required'
   if (messages[0]!.role !== 'user') return 'messages: first message must use the "user" role'
   const blocks = (m: { content: unknown }): AnyBlock[] =>
@@ -218,6 +225,12 @@ export function validateConversation(messages: Array<{ role: string; content: un
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i]!
     const next = messages[i + 1]
+    if (tools && tools.length === 0) {
+      const j = blocks(m).findIndex((b) => b.type === 'tool_use' || b.type === 'tool_result')
+      if (j >= 0) {
+        return `messages.${i}.content.${j}: \`${blocks(m)[j]!.type}\` blocks require \`tools\` to be defined`
+      }
+    }
     const uses =
       m.role === 'assistant'
         ? blocks(m)
