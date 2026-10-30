@@ -137,7 +137,6 @@ export async function startCall(
   try {
     token = await deps.livekit.joinToken({
       identity: ctx.userId,
-      ...(ctx.email ? { name: ctx.email } : {}),
       room,
       ttlSeconds: CALL_CAP_MS / 1000,
     })

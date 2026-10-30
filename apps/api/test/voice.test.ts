@@ -146,6 +146,22 @@ describe('voice call lifecycle', () => {
     expect(voiceSessions()).toHaveLength(0)
   })
 
+  scenario(
+    'V13 (API-5) nothing that reaches LiveKit carries the email: identity is the user id, no name',
+    async () => {
+      const res = await call('/voice/sessions')
+      expect(res.status).toBe(200)
+      expect(livekit.tokens).toHaveLength(1)
+      expect(livekit.tokens[0]).toEqual({
+        identity: M.id,
+        room: livekit.dispatches[0]!.room,
+        ttlSeconds: 900,
+      })
+      expect(JSON.stringify(livekit.tokens)).not.toContain(M.email)
+      expect(JSON.stringify(livekit.dispatches)).not.toContain(M.email)
+    },
+  )
+
   scenario('V06 refresh replaces the JWT; expires_at never moves past created_at + 15 min', async () => {
     const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }
     const row = calls()[0]!
