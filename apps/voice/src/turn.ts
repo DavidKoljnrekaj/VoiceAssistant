@@ -37,8 +37,9 @@ export class DeferredStore implements MessageStore {
 
 /**
  * Writes the turn's rows: the user row hangs off the session's newest row, the rest chain as the
- * loop left them, with explicit increasing `created_at` so the next turn finds its parent as the
- * newest row. One insert; a failure throws.
+ * loop left them, with explicit increasing `created_at` (after the leaf's, so two saves within
+ * one millisecond still sort in order) and the next turn finds its parent as the newest row.
+ * One insert; a failure throws.
  */
 export async function persistTurn(
   service: DbClient,
@@ -49,13 +50,13 @@ export async function persistTurn(
 ): Promise<void> {
   const { data: leaf, error: leafError } = await service
     .from('ai_messages')
-    .select('id')
+    .select('id, created_at')
     .eq('session_id', sessionId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (leafError) throw new Error(`leaf lookup failed: ${leafError.code}`)
-  const base = Date.now()
+  const base = Math.max(Date.now(), leaf ? Date.parse(leaf.created_at) + 1 : 0)
   const all = [
     {
       id: userRowId,

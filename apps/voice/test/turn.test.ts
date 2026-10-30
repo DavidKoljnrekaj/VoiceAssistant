@@ -180,6 +180,32 @@ describe('a spoken turn', () => {
     },
   )
 
+  scenario(
+    'VOICE-9 a turn that starts while the cancelled one is still unwinding chains off its rows',
+    async () => {
+      anthropic.script(callTools(toolUse('gate', { key: 'g' })), answer('Drugi.'))
+      const call = await openCall({ packs: [TEST_PACK], allowlist: TEST_ALLOWLIST })
+      const first = await ask(call, 'Prvo.')
+      await awaitHandlerEvent('start:g')
+      await first.cancel()
+      // LiveKit starts the next llmNode at once; the first loop has not returned yet.
+      const second = await ask(call, 'Drugo.')
+      expect((await second.done).text).toBe('Drugi.')
+      await first.done
+      await call.session.settle()
+      const rows = rowsOf(call.sessionId)
+      expect(kinds(call.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'user', 'assistant'])
+      expect(rows[0]!.parent_id).toBeNull()
+      for (let i = 1; i < rows.length; i++) expect(rows[i]!.parent_id).toBe(rows[i - 1]!.id)
+      // The model saw the cut-short turn (its tool_use answered) before the new question.
+      expect(anthropic.calls).toHaveLength(2)
+      expect(anthropic.calls[1]!.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'user'])
+      expect(blocksOf(anthropic.calls[1]!.body.messages[2]!.content, 'tool_result')[0]).toMatchObject({
+        is_error: true,
+      })
+    },
+  )
+
   scenario('W10 the voice model profile is on every request', async () => {
     anthropic.script(callTools(toolUse('search_items', { query: 'a' })), answer('Da.'))
     const call = await openCall()

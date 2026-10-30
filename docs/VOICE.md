@@ -123,8 +123,9 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    the last 20 rows cut on a turn boundary and assembled by the engine (`callHistory`;
    decision 0011). LiveKit's text-only context is not used for history: a model that saw its
    earlier answer with no lookup behind it retracted it on the next question (`VOICE-5`). The
-   call's saves run one after another, so each turn chains off the previous one's rows even
-   when a turn was cut short.
+   call's turns run one after another: a turn LiveKit starts while the cancelled one is still
+   unwinding (a barge-in) waits for it, so its history carries the cut-short turn's rows and
+   its save chains off them (`VOICE-9`); the saves themselves are chained too.
 7. While the participant is connected the worker bumps `last_seen_at` every minute, so a quiet
    caller stays inside the row's three-minute idle window.
 8. On participant disconnect, room close and job shutdown the worker waits for the deferred
@@ -322,6 +323,7 @@ scenario's deferred rows never land in the next one's world.
 | W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT                                                                                                                                       |
 | W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                                                                                                                                          |
 | W07        | rows written after the answer, chained, newest row first for the next turn, one insert                                                                                                                                          |
+| VOICE-9    | a turn started while the cancelled one is still unwinding sees its rows (the repaired `tool_use`) and chains off them; one parent chain                                                                                         |
 | W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                                                                                                                                          |
 | W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`                                                                                                                                 |
 | W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request                                                                                                                                   |

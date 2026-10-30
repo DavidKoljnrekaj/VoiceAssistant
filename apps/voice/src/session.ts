@@ -39,6 +39,10 @@ export interface CallSessionOptions {
 export class CallSession {
   private turns = 0
   private readonly pending = new Set<Promise<unknown>>()
+  /** The call's turns run one after another: a turn LiveKit starts while the cancelled one is
+   * still unwinding (a barge-in) waits for it, so its history has the cut-short turn's rows and
+   * its save chains off them (VOICE-9). */
+  private last: Promise<unknown> = Promise.resolve()
   /** The call's saves run one after another, so each turn chains off the previous one's rows. */
   private saves: Promise<unknown> = Promise.resolve()
   /** The call's own rows so far, the model's history (tool rounds included; VOICE-5). */
@@ -57,7 +61,8 @@ export class CallSession {
    * the turn. Returns the turn's result, or null when it was refused before the model. The turn
    * and its deferred write are tracked so `settle()` can wait for them. */
   turn(io: TurnIO): Promise<VoiceTurnResult | null> {
-    const result = this.runTurn(io)
+    const result = this.last.then(() => this.runTurn(io))
+    this.last = result.catch(() => {})
     this.track(result.then((r) => r?.persisted))
     return result
   }

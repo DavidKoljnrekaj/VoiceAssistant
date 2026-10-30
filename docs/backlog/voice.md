@@ -65,20 +65,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   refresh the 60 s identity off the hot path from the keepalive timer (~0.25 s on the turn that
   crosses 60 s); build to `dist` (`VOICE-4` / `OPS-1`)
 
-### VOICE-9 · Low · Overlapping turns race the save chain (R-V4)
-
-- **Check:** Confirmed (R-V4, verified 2026-10-30)
-- **Where:** `apps/voice/src/session.ts` (`persistAfter: this.saves` captured at turn start;
-  `saves` and `rows` updated only when `runVoiceTurn` returns); `assistant-llm.ts` (`cancel()`
-  returns at once while the loop is still unwinding); `turn.ts` `persistTurn` reads the leaf
-- **What happens:** when LiveKit starts the next `llmNode` while a cancelled turn's loop is still
-  unwinding (a handler ignoring its signal, up to the 6 s tool timeout), both turns read the same
-  leaf: two user rows with the same `parent_id`, and the new turn's history misses the cancelled
-  turn's rows. `docs/VOICE.md` §6 claims serialised saves; `W08` cancels but asks nothing afterwards
-- **Fix direction:** register the turn's save promise before `runVoiceTurn` resolves (a per-turn
-  deferred), or serialise `runTurn` on a mutex; a test that cancels during a stalled handler,
-  asks again and asserts one parent chain
-
 ### VOICE-10 · Low · After a barge-in the history says the caller heard the whole answer (R-V5)
 
 - **Check:** Confirmed (R-V5, verified 2026-10-30)
@@ -167,3 +153,8 @@ the reply that follows it (test `VOICE-6` builds both from real 1.9.2 `ChatMessa
 
 Resolved on `fix/voice-review`: the worker stamps each mark as it arrives (`TimedMark`), the
 line prints `name@ms`; test `VOICE-7`.
+
+### VOICE-9 · Low · Overlapping turns race the save chain (R-V4)
+
+Resolved on `fix/voice-review`: `CallSession.turn` runs the turns one after another, so a turn
+started during a barge-in waits for the cancelled loop to unwind; test `VOICE-9`.
