@@ -54,38 +54,69 @@ export function createMetrics(dir: string): MetricsWriter {
   }
 }
 
-/** What LiveKit reports on an assistant item (seconds), as the item exposes it. */
-export interface AssistantItemLike {
+/**
+ * What `@livekit/agents` 1.9.2 sets on a chat item (seconds), as `voice/agent_activity.js`
+ * creates them. The **user** message carries the Soniox figures (`transcriptionDelay`,
+ * `endOfTurnDelay`, when the user started and stopped speaking); the assistant reply carries the
+ * model's and the synthesiser's (`llmNodeTtft`, `ttsNodeTtfb`, `e2eLatency`, playback); a
+ * `say()` item (the greeting) only the synthesiser's. Both reach `ConversationItemAdded`, the
+ * user item first. The class defaults `metrics` to `{}`.
+ */
+export interface ChatItemLike {
   role?: string
   interrupted?: boolean
   textContent?: string | undefined
   metrics?: {
-    e2eLatency?: number | undefined
+    startedSpeakingAt?: number | undefined
+    stoppedSpeakingAt?: number | undefined
     transcriptionDelay?: number | undefined
     endOfTurnDelay?: number | undefined
+    onUserTurnCompletedDelay?: number | undefined
     llmNodeTtft?: number | undefined
     ttsNodeTtfb?: number | undefined
+    e2eLatency?: number | undefined
+    playbackLatency?: number | undefined
   }
 }
 
 const ms = (s: number | undefined): number | null => (s === undefined ? null : Math.round(s * 1000))
 
-/** The `turns.jsonl` entry for an assistant item: the framework's own latencies and the text
- * length. Null when the item is not an assistant reply with metrics. */
-export function turnEntry(
-  item: AssistantItemLike,
-  settings: Record<string, number | string>,
-): Record<string, unknown> | null {
-  if (item.role !== 'assistant' || !item.metrics) return null
-  const m = item.metrics
+export interface TurnMetrics {
+  /** Feeds one added item; returns the `turns.jsonl` entry once a reply completes a turn, else
+   * null. */
+  add(item: ChatItemLike): Record<string, unknown> | null
+}
+
+/**
+ * Joins each user item's Soniox delays with the reply that follows it into one `turns.jsonl`
+ * entry: the framework's own latencies and the text length. The greeting and any other `say()`
+ * item (no model figure, no e2e) is not a turn. A user item is used once; a reply with no user
+ * item before it (nothing was transcribed) carries null delays.
+ */
+export function createTurnMetrics(settings: Record<string, number | string>): TurnMetrics {
+  let user: ChatItemLike['metrics'] | null = null
   return {
-    ...settings,
-    e2e_ms: ms(m.e2eLatency),
-    transcription_delay_ms: ms(m.transcriptionDelay),
-    end_of_turn_delay_ms: ms(m.endOfTurnDelay),
-    llm_ttft_ms: ms(m.llmNodeTtft),
-    tts_ttfb_ms: ms(m.ttsNodeTtfb),
-    interrupted: Boolean(item.interrupted),
-    text_len: (item.textContent ?? '').length,
+    add(item) {
+      const m = item.metrics ?? {}
+      if (item.role === 'user') {
+        user = m
+        return null
+      }
+      if (item.role !== 'assistant' || (m.llmNodeTtft === undefined && m.e2eLatency === undefined)) {
+        return null
+      }
+      const u = user
+      user = null
+      return {
+        ...settings,
+        e2e_ms: ms(m.e2eLatency),
+        transcription_delay_ms: ms(u?.transcriptionDelay),
+        end_of_turn_delay_ms: ms(u?.endOfTurnDelay),
+        llm_ttft_ms: ms(m.llmNodeTtft),
+        tts_ttfb_ms: ms(m.ttsNodeTtfb),
+        interrupted: Boolean(item.interrupted),
+        text_len: (item.textContent ?? '').length,
+      }
+    },
   }
 }

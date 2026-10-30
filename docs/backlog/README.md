@@ -53,5 +53,5 @@ Rank by what goes wrong if the item is left, then by how small the job is.
 2. `CORE-1` native review of every Croatian string before a user hears or reads one
 3. `OPS-3` / `VOICE-1` decide where the API, the worker and the PWA run before the first user trial
 4. `OPS-4` / `OPS-5` retention for voice rows and the DPA list, both needed before a trial under GDPR
-5. `VOICE-6` / `VOICE-7` / `VOICE-8` the latency figures the bench needs, and the first-sound lever
+5. `VOICE-7` / `VOICE-8` the latency figures the bench needs, and the first-sound lever
 6. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)

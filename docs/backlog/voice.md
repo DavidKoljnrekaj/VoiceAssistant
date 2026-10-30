@@ -46,19 +46,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** build the workspace to `dist` (`OPS-1`) so the job process imports compiled
   JavaScript; then the timeout can go back to the default
 
-### VOICE-6 · Medium · `transcription_delay_ms` and `end_of_turn_delay_ms` are always null (R-V1)
-
-- **Check:** Confirmed (review 2026-10-30, R-V1)
-- **Where:** `apps/voice/src/metrics.ts` `turnEntry` reads them off the assistant item; in
-  `@livekit/agents` 1.9.2 they sit on the **user** message (`agent_activity.js` sets
-  `userMessage.metrics`); the assistant item carries only `llmNodeTtft`, `ttsNodeTtfb`,
-  `e2eLatency` and the playback fields
-- **What happens:** `turns.jsonl` never has the two Soniox figures; `docs/VOICE.md` (the live
-  checklist) blames the plugin; `VOICE-3` cannot be done. `W13` feeds a hand-built item with all
-  five fields, so it cannot catch this
-- **Fix direction:** read the user item's metrics too (one `timing` line per turn joining both);
-  a test built from the real item shapes; correct the explanation in `docs/VOICE.md`
-
 ### VOICE-7 · Medium · The `timing` line's `marks` carry names but no times (R-V2)
 
 - **Check:** Confirmed (R-V2)
@@ -160,7 +147,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
 - **Check:** Confirmed (R-V11)
 - **Where:** all of `agent.ts` (entry wiring, keepalive, the `endCall` paths, event handlers, the
-  warm fire-and-forget); `turnEntry` against a real LiveKit item (`VOICE-6`); `redact` against
+  warm fire-and-forget); `redact` against
   real pino (`W18b` uses a bare `Writable`); overlapping turns (`VOICE-9`); a `\n\n` inside an
   answer producing extra flushes; `request_timeout` during a tool round (`W16` hangs the model
   only); the 6 s tool timeout as a spoken outcome; a `persistTurn` leaf-read failure;
@@ -169,7 +156,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   chunks, cancel, flush) but not LiveKit's `performLLMInference` / `produceSegments`, which is
   why `VOICE-6` was not caught
 - **Fix direction:** a thin seam in `agent.ts` (handlers as named functions) and tests through
-  it; real item shapes captured from one live call for `turnEntry`
+  it
 
 ## Resolved
 
@@ -180,3 +167,8 @@ kept in worker memory by `CallSession` and assembled by `callHistory`; LiveKit's
 only the new user turn. A prompt line and filler stripping were tried live first and did not
 help. Confirmed live on 2026-10-29: the second question ("Koliko košta stolna lampa?") was
 answered directly from the first turn's tool result, no retraction, no new lookup.
+
+### VOICE-6 · Medium · `transcription_delay_ms` and `end_of_turn_delay_ms` are always null (R-V1)
+
+Resolved on `fix/voice-review`: `createTurnMetrics` joins the user item's Soniox delays with
+the reply that follows it (test `VOICE-6` builds both from real 1.9.2 `ChatMessage` items).

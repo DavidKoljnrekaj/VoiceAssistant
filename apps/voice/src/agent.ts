@@ -31,7 +31,7 @@ import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
 import { acceptDispatchedJob, callTokenOf } from './job.js'
-import { createMetrics, turnEntry } from './metrics.js'
+import { createMetrics, createTurnMetrics } from './metrics.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
 import { createTts } from './providers/tts.js'
@@ -121,9 +121,11 @@ export default defineAgent<UserData>({
       turnHandling: turnHandlingOptions(env),
     })
 
-    // The framework's own e2e figure per reply: user stopped speaking → the agent's first frame.
+    // The framework's own figures per turn: the Soniox delays off the user item, then the
+    // reply's model, synthesiser and e2e (user stopped speaking → the agent's first frame).
+    const turnMetrics = createTurnMetrics(TUNING)
     session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
-      const entry = turnEntry(ev.item as Parameters<typeof turnEntry>[0], TUNING)
+      const entry = turnMetrics.add(ev.item as Parameters<typeof turnMetrics.add>[0])
       if (entry) void metrics.write('turns.jsonl', { room, ...entry })
     })
 

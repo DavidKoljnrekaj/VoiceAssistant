@@ -207,7 +207,9 @@ barge-in cases). Everything in plan §10 was exercised except the full 20-try ba
 Barge-in tries that missed the agent (it had finished its answer before the script's 2 s
 interrupt point) do not count; getting 20 clean tries needs a take that reliably provokes a
 long answer, or a shorter interrupt delay in `call-test.ts`. `transcription_delay_ms` and
-`end_of_turn_delay_ms` came back null from LiveKit with the Soniox plugin. Against the targets:
+`end_of_turn_delay_ms` were null in that run because the worker read them off the assistant
+item; in `@livekit/agents` 1.9.2 they sit on the user item (`VOICE-6`, fixed; the next live run
+fills them). Against the targets:
 the first sound is ~1 s over 1.5 s on direct answers and the answer itself is under 4 s; the
 tuning backlog below applies.
 
@@ -243,9 +245,10 @@ forces JSON output in the job process and strips every `lk.pii.*` key from what 
 (`redact.ts`, `W18`), adding `redacted: <count>` to the line. `LOG_LEVEL` (`info` for `start`,
 `debug` for `dev`) sets LiveKit's level. The JSONL metrics in `apps/voice/logs/`:
 
-- `turns.jsonl`: per reply, LiveKit's own `e2e_ms`, `transcription_delay_ms`,
-  `end_of_turn_delay_ms`, `llm_ttft_ms`, `tts_ttfb_ms`, `interrupted`, `text_len`, with the
-  tuning values in force.
+- `turns.jsonl`: per turn, LiveKit's own `transcription_delay_ms` and `end_of_turn_delay_ms`
+  (off the user item, where 1.9.2 puts them), `e2e_ms`, `llm_ttft_ms`, `tts_ttfb_ms`,
+  `interrupted`, `text_len` (off the reply), with the tuning values in force; the greeting
+  writes no line.
 - `bargein.jsonl`: per interruption, when the user started, when Soniox's first words arrived,
   when the agent stopped, `stop_ms`.
 - `warm.jsonl`: per call, the warm-up's `ms`, `cache_write`, `cache_read`.
@@ -309,28 +312,28 @@ reads the stream (a flush shows as `⏎`). `openCall()` seeds a voice session an
 `CallSession` and the agent; every opened call is settled at the end of the scenario so one
 scenario's deferred rows never land in the next one's world.
 
-| Id         | Scenario                                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W01        | a job without `callToken` is refused and logged; `callTokenOf`                                                                                                                                          |
-| W02        | an unknown, foreign-room, expired or idle token resolves to null; a failed lookup throws                                                                                                                |
-| W03        | identity cached for 60 s, re-read after (second `getUser` only once the clock moves); role change                                                                                                       |
-| W03b, W03c | a rotated JWT, a deleted row (`call_ended`), `end()` idempotent; `touch()` with the user filter                                                                                                         |
-| W04        | `userTurnOf`: the trailing user items are the turn, system items, the greeting and earlier turns are not; `callHistory`: tool rounds kept as written, a cut-short turn repaired, window from a user row |
-| W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT                                                                                                               |
-| W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                                                                                                                  |
-| W07        | rows written after the answer, chained, newest row first for the next turn, one insert                                                                                                                  |
-| W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                                                                                                                  |
-| W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`                                                                                                         |
-| W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request                                                                                                           |
-| W11, W12   | a model error is spoken and the stream ends; a refusal with nothing spoken says the decline                                                                                                             |
-| W13        | metrics lines carry latencies and lengths, no `text`; the writer refuses content keys                                                                                                                   |
-| W14        | the cap is 50 turns per call; past it the caller hears `rate_limited` and no model is called (pinned with a cap of 1); an expired JWT is `unauthorized`, a failed lookup `internal_error`               |
-| W15        | the hints file parses: comments stripped, duplicates dropped                                                                                                                                            |
-| W16        | the request timeout aborts the loop and is spoken; only the user row is written                                                                                                                         |
-| W17        | a failed save is logged without the text; the next turn still saves; no log line carries the words                                                                                                      |
-| W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                            |
-| W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                               |
-| W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat |
+| Id         | Scenario                                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W01        | a job without `callToken` is refused and logged; `callTokenOf`                                                                                                                                                                  |
+| W02        | an unknown, foreign-room, expired or idle token resolves to null; a failed lookup throws                                                                                                                                        |
+| W03        | identity cached for 60 s, re-read after (second `getUser` only once the clock moves); role change                                                                                                                               |
+| W03b, W03c | a rotated JWT, a deleted row (`call_ended`), `end()` idempotent; `touch()` with the user filter                                                                                                                                 |
+| W04        | `userTurnOf`: the trailing user items are the turn, system items, the greeting and earlier turns are not; `callHistory`: tool rounds kept as written, a cut-short turn repaired, window from a user row                         |
+| W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT                                                                                                                                       |
+| W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                                                                                                                                          |
+| W07        | rows written after the answer, chained, newest row first for the next turn, one insert                                                                                                                                          |
+| W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                                                                                                                                          |
+| W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`                                                                                                                                 |
+| W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request                                                                                                                                   |
+| W11, W12   | a model error is spoken and the stream ends; a refusal with nothing spoken says the decline                                                                                                                                     |
+| W13        | the metrics writer refuses content keys; `VOICE-6`: a `turns.jsonl` line joins the user item's Soniox delays with the reply's model, TTS and e2e figures, built from real 1.9.2 `ChatMessage` items; the greeting is not a turn |
+| W14        | the cap is 50 turns per call; past it the caller hears `rate_limited` and no model is called (pinned with a cap of 1); an expired JWT is `unauthorized`, a failed lookup `internal_error`                                       |
+| W15        | the hints file parses: comments stripped, duplicates dropped                                                                                                                                                                    |
+| W16        | the request timeout aborts the loop and is spoken; only the user row is written                                                                                                                                                 |
+| W17        | a failed save is logged without the text; the next turn still saves; no log line carries the words                                                                                                                              |
+| W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                                                    |
+| W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                                                       |
+| W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat                                                                                     |
 
 ```
 pnpm exec vitest run apps/voice
