@@ -4,6 +4,7 @@ import { describe, expect } from 'vitest'
 
 import { uuid } from '@va/core/test'
 
+import { CALL_IDLE_MS } from '../src/rate-limit.js'
 import { CALL_CAP_MS, sha256Hex } from '../src/voice/calls.js'
 import {
   buildApp,
@@ -131,6 +132,22 @@ describe('voice call lifecycle', () => {
       ).toEqual([second.session_id])
       expect(calls()).toHaveLength(3)
       expect(voiceSessions().map((s) => s.id)).toEqual([first.session_id, second.session_id])
+    },
+  )
+
+  scenario(
+    'V17 (API-8) unexpired rows idle for over three minutes do not count against the concurrent cap',
+    async () => {
+      const idle = { last_seen_at: new Date(Date.now() - CALL_IDLE_MS - 1000).toISOString() }
+      db.seed('voice_calls', [
+        { ...liveRow(USERS.admin.id), ...idle },
+        { ...liveRow(USERS.admin.id), ...idle },
+        { ...liveRow(USERS.admin.id), ...idle },
+      ])
+      expect((await call('/voice/sessions')).status).toBe(200)
+      const count = db.requestsTo('voice_calls', 'HEAD')[0]!
+      expect(count.params.get('expires_at')).toMatch(/^gt\./)
+      expect(count.params.get('last_seen_at')).toMatch(/^gt\./)
     },
   )
 

@@ -230,6 +230,7 @@ export class FakeSupabase {
     const createdAt = (raw.created_at as string | undefined) ?? this.now()
     const row: Row = { ...(DEFAULTS[table] ?? {}), id: crypto.randomUUID(), created_at: createdAt }
     if (HAS_UPDATED_AT.has(table)) row.updated_at = createdAt
+    if (table === 'voice_calls') row.last_seen_at = createdAt // DDL: `DEFAULT now()`
     return { ...row, ...raw }
   }
 
