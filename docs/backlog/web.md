@@ -34,15 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-8 · Low · The call banner says "Poziv u tijeku" twice (R-W5)
-
-- **Check:** Confirmed (R-W5)
-- **Where:** `ChatPanel.tsx` renders `call.live` + `call.banner`; `call.banner` in both locales
-  starts with the same words
-- **What happens:** "**Poziv u tijeku.** Poziv u tijeku. Govorite s …"
-- **Fix direction:** drop the repeated words from `call.banner` in `hr` and `en` together
-  <!-- needs native review -->
-
 ### WEB-9 · Low · Stopping or leaving a brand-new conversation plants the interrupted marker in the fresh view (R-W6)
 
 - **Check:** Confirmed (R-W6, verified 2026-10-30)
@@ -139,3 +130,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
 
 - Fixed 2026-10-30 on fix/web-review: when a selected session has no rows the store reads the `ai_sessions` row by id (`findSession`, `maybeSingle`) and a null is `messagesStatus = 'not_found'`, rendered as a not-found state with the composer disabled; an owned empty session stays ready. Tests `WEB-7` in `useChatStore.test.ts` and `chatService.test.ts`.
+
+### WEB-8 · Low · The call banner says "Poziv u tijeku" twice (R-W5)
+
+- Fixed 2026-10-30 on fix/web-review: `call.banner` no longer starts with the `call.live` words in hr and en; test `WEB-8` in `locales.test.ts` (which also pins identical key sets, `I01`). <!-- needs native review -->

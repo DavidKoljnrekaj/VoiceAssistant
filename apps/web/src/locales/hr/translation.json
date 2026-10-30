@@ -62,7 +62,7 @@
     "end": "Završi poziv",
     "mic_denied": "Mikrofon nije dostupan. Dopustite pristup mikrofonu u pregledniku.",
     "start_failed": "Glasovni poziv nije uspio. Pokušajte ponovno.",
-    "banner": "Poziv u tijeku. Govorite s asistentom; poziv se sprema kao zaseban razgovor."
+    "banner": "Govorite s asistentom; poziv se sprema kao zaseban razgovor."
   },
   "lang": {
     "hr": "Hrvatski",

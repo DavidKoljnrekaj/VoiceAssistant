@@ -61,7 +61,7 @@
     "end": "End call",
     "mic_denied": "The microphone is not available. Allow microphone access in your browser.",
     "start_failed": "The voice call failed. Try again.",
-    "banner": "Call in progress. Talk to the assistant; the call is saved as a separate conversation."
+    "banner": "Talk to the assistant; the call is saved as a separate conversation."
   },
   "lang": {
     "hr": "Hrvatski",
