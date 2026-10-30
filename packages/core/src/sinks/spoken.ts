@@ -6,8 +6,9 @@
 //     abbreviation is never split across two chunks. The first sentence of each stretch of text
 //     is held until the next token shows what follows it: if a tool call starts instead, the
 //     sentence was the model announcing a lookup ("Trebam prvo pronaći projekt…"), which the
-//     filler already covers, so it is dropped. Text-to-speech waits for a sentence end anyway,
-//     so holding it costs almost nothing;
+//     filler already covers, so it is dropped. A finished sentence that nothing follows within
+//     `HOLD_MS` is spoken anyway (VOICE-8): a one-sentence answer must not wait for the end of
+//     the generation, and a lookup the model announces that late is spoken before the filler;
 //   - toolStarting speaks one filler sentence per request, followed by a paragraph break, so the
 //     caller does not sit in silence while tools run;
 //   - textBlock repeats text already streamed as deltas, so it is spoken only when it was not
@@ -30,6 +31,11 @@ export const FILLERS_HR: readonly string[] = [
 
 export type SpokenEnd = 'done' | 'error'
 
+/** How long a finished first sentence waits for the next token before it is spoken anyway. A
+ * token follows within a few tens of milliseconds while the model is still writing; a tool
+ * call's `between_tools` thinking takes longer, which is the trade-off S13c pins. */
+export const HOLD_MS = 200
+
 function randomFiller(): string {
   return FILLERS_HR[Math.floor(Math.random() * FILLERS_HR.length)]!
 }
@@ -39,6 +45,7 @@ export class SpokenTextSink implements EventSink {
   private streamed = ''
   private fillerSpoken = false
   private holding = true
+  private holdTimer: ReturnType<typeof setTimeout> | null = null
   /** Everything spoken so far, after `speakable()`. */
   spoken = ''
   /** When the first text went to `say` (`performance.now()`), for the owner's timing log. */
@@ -48,6 +55,7 @@ export class SpokenTextSink implements EventSink {
     private readonly sayText: (text: string) => Promise<void>,
     private readonly end: (reason: SpokenEnd) => Promise<void>,
     private readonly pickFiller: () => string = randomFiller,
+    private readonly holdMs: number = HOLD_MS,
   ) {}
 
   private async say(text: string): Promise<void> {
@@ -82,15 +90,42 @@ export class SpokenTextSink implements EventSink {
     this.streamed += text
     this.pending += text
     if (this.holding) {
-      // Released once a sentence has ended and more text follows it.
-      if (!/[.!?](\s+)\S/.test(this.pending)) return
+      // Released once a sentence has ended and more text follows it, or after the hold.
+      if (!/[.!?](\s+)\S/.test(this.pending)) {
+        if (/[.!?]\s*$/.test(this.pending)) this.armHold()
+        return
+      }
+      this.clearHold()
       this.holding = false
     }
     await this.flushWords()
   }
 
+  private armHold(): void {
+    if (this.holdTimer !== null) return
+    this.holdTimer = setTimeout(() => {
+      this.holdTimer = null
+      void this.releaseHold()
+    }, this.holdMs)
+  }
+
+  private clearHold(): void {
+    if (this.holdTimer === null) return
+    clearTimeout(this.holdTimer)
+    this.holdTimer = null
+  }
+
+  /** The hold ran out: the sentence is spoken whole (its last word has no whitespace after it). */
+  private async releaseHold(): Promise<void> {
+    if (!this.holding) return
+    this.holding = false
+    if (/[.!?]\s*$/.test(this.pending)) await this.flushAll()
+    else await this.flushWords()
+  }
+
   async toolStarting(): Promise<void> {
     // Held text followed by a tool call is an announcement of the lookup.
+    this.clearHold()
     if (this.holding) this.pending = ''
     this.holding = true
     if (this.fillerSpoken) return
@@ -114,6 +149,7 @@ export class SpokenTextSink implements EventSink {
   async toolResult(_tool: string, _output: unknown, _id: string, _isError: boolean): Promise<void> {}
 
   async done(stopReason: string, _usage: Usage): Promise<void> {
+    this.clearHold()
     await this.flushAll()
     // A declined request (after any fallback) ends with nothing to say.
     if (stopReason === 'refusal' && !this.spoken.trim()) await this.say(MESSAGES_HR.model_refused)
@@ -121,6 +157,7 @@ export class SpokenTextSink implements EventSink {
   }
 
   async error(_code: ErrorCode, message: string): Promise<void> {
+    this.clearHold()
     await this.flushAll()
     await this.say(`${this.joiner()}${message}`)
     await this.end('error')

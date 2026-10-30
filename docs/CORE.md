@@ -145,16 +145,20 @@ it.
 
 ### SpokenTextSink
 
-`new SpokenTextSink(say, end, pickFiller?)` turns the loop's events into sentences for
+`new SpokenTextSink(say, end, pickFiller?, holdMs?)` turns the loop's events into sentences for
 text-to-speech and nothing else: `say(text)` receives what to speak, `end('done' | 'error')` is
 called once after `done` or `error`, `pickFiller` picks the filler sentence (random from
-`FILLERS_HR` by default; tests pin one). Landmark's `OpenAiChunkSink` without its wire format: the
-voice worker runs the loop in-process and hands `say` to the TTS adapter.
+`FILLERS_HR` by default; tests pin one), `holdMs` (default `HOLD_MS`, 200) is how long a
+finished first sentence waits for the next token. Landmark's `OpenAiChunkSink` without its wire
+format: the voice worker runs the loop in-process and hands `say` to the TTS adapter.
 
 - `textDelta` is spoken a word at a time, up to the last whitespace, so an abbreviation is never
   split across two chunks before `speakable()` sees it. The first sentence of every stretch of
   text is **held** until a second sentence starts; if a tool call starts instead, the held
-  sentence was the model announcing a lookup and is dropped (the filler covers it).
+  sentence was the model announcing a lookup and is dropped (the filler covers it). A finished
+  sentence that nothing follows within `holdMs` is spoken anyway (`VOICE-8`, S13): a
+  one-sentence answer does not wait for the end of the generation; a lookup the model announces
+  and then thinks about for longer than the hold is spoken before the filler (S13c).
 - `toolStarting` speaks one filler per request (`Samo trenutak, provjeravam.` and two
   variants), followed by `\n\n` so the TTS synthesises it at once instead of waiting for more
   text.
