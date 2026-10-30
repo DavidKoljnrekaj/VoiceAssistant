@@ -96,7 +96,8 @@ Tags: `[api]`, `[core]`, `[core:auth]`, `[voice]`. Allowed fields are ids, codes
 numbers, durations, token counts and lengths. Never message text, transcripts, audio, tokens or
 JWTs (invariant 9). `L04` in `packages/core/src/log-fields.test.ts` scans every `log(` call site
 under `apps/*` and `packages/*` for a field named `text`, `message`, `content`, `transcript`,
-`token` or `jwt` and fails the build on one. A third party's error message goes through
+`token`, `jwt` or a variant that carries the same content (`callToken`, `access_token`, `prompt`,
+`answer`, `body`, `email`, `input`) and fails the build on one. A third party's error message goes through
 `errorReason(err)` (the class name and the message cut to 200 characters) before it is logged.
 The voice worker also strips LiveKit's own `lk.pii.*` keys from everything that reaches stdout
 (`docs/VOICE.md`).

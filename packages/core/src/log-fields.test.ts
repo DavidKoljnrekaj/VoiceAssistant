@@ -9,7 +9,24 @@ import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = join(import.meta.dirname, '..', '..', '..')
-export const FORBIDDEN_LOG_FIELDS = ['text', 'message', 'content', 'transcript', 'token', 'jwt'] as const
+export const FORBIDDEN_LOG_FIELDS = [
+  'text',
+  'message',
+  'content',
+  'transcript',
+  'token',
+  'jwt',
+  // Variant names that carry the same content: a credential, a prompt, an answer, a body.
+  'callToken',
+  'call_token',
+  'accessToken',
+  'access_token',
+  'prompt',
+  'answer',
+  'body',
+  'email',
+  'input',
+] as const
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', 'logs', 'e2e', 'public'])
 const SOURCE_ROOTS = ['apps', 'packages']
 
@@ -100,13 +117,15 @@ describe('log fields', () => {
         count,
         token
       })
+      log('info', TAG, 'variants', { callToken, access_token: t, input_tokens: 1, body })
     `
     const calls = logCalls(sample)
-    expect(calls).toHaveLength(5)
+    expect(calls).toHaveLength(6)
     expect(forbiddenKeys(calls[0]!.text)).toEqual(['message'])
     expect(forbiddenKeys(calls[1]!.text)).toEqual([])
     expect(forbiddenKeys(calls[2]!.text)).toEqual(['transcript'])
     expect(forbiddenKeys(calls[3]!.text)).toEqual(['text', 'jwt'])
     expect(forbiddenKeys(calls[4]!.text)).toEqual(['token'])
+    expect(forbiddenKeys(calls[5]!.text)).toEqual(['callToken', 'access_token', 'body'])
   })
 })
