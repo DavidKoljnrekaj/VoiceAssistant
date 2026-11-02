@@ -58,7 +58,9 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
           navigateFallback: '/index.html',
           // Streams and auth answers must never come from a cache; NetworkOnly makes that explicit
-          // even though these origins are not precached either.
+          // even though these origins are not precached either. GET only (Workbox's default): a
+          // non-GET request matches no route and bypasses the worker, and the Cache API stores no
+          // non-GET response (docs/WEB.md → PWA caching rules; sw-routes.test.ts pins it).
           runtimeCaching: networkOnlyOrigins.map((origin) => ({
             urlPattern: originPattern(origin),
             handler: 'NetworkOnly' as const,

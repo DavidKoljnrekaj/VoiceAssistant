@@ -223,12 +223,21 @@ short name "Asistent", `lang: hr`, `display: standalone`, theme colour `#1d4ed8`
 placeholder icons (192, 512, the latter also maskable). Workbox precaches the built app shell
 only (`js, css, html, png, svg, ico, webmanifest`) with `index.html` as the navigation fallback,
 and has one runtime rule per backend origin, `NetworkOnly` for `VITE_API_URL` and
-`VITE_SUPABASE_URL`, so `/chat`, `/voice/*`, `/sessions/*` and every Supabase request are
-answered by the network and never stored. The rule's `urlPattern` is a RegExp built from the
-origin, never a function: `generateSW` serialises the route into `sw.js` as text and a function
-loses its closure (it compared against the worker's own origin until `sw-routes.test.ts` read
-the built worker back). The origins are read from the env at build time, so a build without
-them has no runtime rules (and still caches nothing from them). To verify in DevTools:
+`VITE_SUPABASE_URL`. The two rules match GET requests only (Workbox's default method): the
+Supabase reads and GoTrue's `GET /user` go through them to the network, while `POST /chat`,
+`POST /voice/*`, `PATCH`/`DELETE /sessions/:id`, GoTrue's token and logout POSTs and the
+`users` PATCH match no route at all, so the worker never handles them and the browser sends
+them itself. Nothing of either kind is stored: the Cache API refuses a non-GET response, and
+no rule caches a GET. Routes per verb were considered and not added (V-8): a `NetworkOnly`
+route for a POST would only put the worker's own `fetch` between the page and the streamed
+`/chat` body, and between an unloading page and its keepalive `/end`, with nothing to gain;
+`sw-routes.test.ts` pins the two routes as GET so a change is deliberate. The rule's
+`urlPattern` is a RegExp built from the origin, never a function: `generateSW` serialises the
+route into `sw.js` as text and a function loses its closure (it compared against the worker's
+own origin until the test read the built worker back; the test matches the registration itself,
+a RegExp literal carrying the origin, `NetworkOnly`, `GET`). The origins are read from the env
+at build time, so a build without them has no runtime rules (and still caches nothing from
+them). To verify in DevTools:
 Application → Cache Storage holds only `workbox-precache-*` with the shell; a `/chat` request
 shows no `(ServiceWorker)` size.
 
