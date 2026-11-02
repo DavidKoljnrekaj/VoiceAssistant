@@ -3,8 +3,8 @@
 import { describe, expect } from 'vitest'
 
 import { uuid } from '@va/core/test'
+import { VOICE_CALL_IDLE_MS } from '@va/db'
 
-import { CALL_IDLE_MS } from '../src/rate-limit.js'
 import { CALL_CAP_MS, sha256Hex } from '../src/voice/calls.js'
 import {
   buildApp,
@@ -138,7 +138,7 @@ describe('voice call lifecycle', () => {
   scenario(
     'V17 (API-8) unexpired rows idle for over three minutes do not count against the concurrent cap',
     async () => {
-      const idle = { last_seen_at: new Date(Date.now() - CALL_IDLE_MS - 1000).toISOString() }
+      const idle = { last_seen_at: new Date(Date.now() - VOICE_CALL_IDLE_MS - 1000).toISOString() }
       db.seed('voice_calls', [
         { ...liveRow(USERS.admin.id), ...idle },
         { ...liveRow(USERS.admin.id), ...idle },

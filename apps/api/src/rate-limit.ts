@@ -4,6 +4,7 @@
 // neither expired nor idle, the worker's own definition of a live row). A failing count fails
 // OPEN and logs loudly: a flaky query must not lock users out. Known race: N concurrent requests can all pass (docs/backlog/api.md API-1).
 import { type AuthContext, log } from '@va/core'
+import { VOICE_CALL_IDLE_MS } from '@va/db'
 
 export const CHAT_BURST_WINDOW_MS = 5 * 60_000
 export const CHAT_BURST_LIMIT = 20
@@ -11,8 +12,6 @@ export const CHAT_DAILY_WINDOW_MS = 24 * 60 * 60_000
 export const CHAT_DAILY_LIMIT = 200
 export const VOICE_CALLS_PER_DAY = 20
 export const VOICE_CONCURRENT_CALLS = 3
-/** The worker's idle window (`apps/voice/src/call.ts` IDLE_MS, the sweep's 3 minutes): a quiet row counts as absent. */
-export const CALL_IDLE_MS = 3 * 60_000
 
 export type RateLimitVerdict =
   | { ok: true }
@@ -78,7 +77,8 @@ export async function checkVoiceRateLimits(
       .from('voice_calls')
       .select('id', { count: 'exact', head: true })
       .gt('expires_at', now.toISOString())
-      .gt('last_seen_at', new Date(now.getTime() - CALL_IDLE_MS).toISOString()),
+      // The worker's idle window, shared with the sweep (`@va/db`): a quiet row counts as absent.
+      .gt('last_seen_at', new Date(now.getTime() - VOICE_CALL_IDLE_MS).toISOString()),
   ])
   if (calls.error || live.error) {
     log('error', '[api]', 'voice rate limit count failed; allowing request', {

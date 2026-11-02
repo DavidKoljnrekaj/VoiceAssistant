@@ -141,12 +141,12 @@ never ends on a bare `tool_use`. The writer is always closed.
 Counted from the rows that exist, with two parallel `count: 'exact', head: true` queries through
 the service role, user-filtered:
 
-| limit                     | counts                                                                                                                                            | window |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| chat burst: 20            | `ai_messages` with `turn_kind = 'user'` in the user's `channel = 'chat'` sessions                                                                 | 5 min  |
-| chat daily: 200           | same                                                                                                                                              | 24 h   |
-| voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                                                                                               | 24 h   |
-| voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future and `last_seen_at` within the worker's 3-minute idle window (`CALL_IDLE_MS`), across all users | now    |
+| limit                     | counts                                                                                                                                                                | window |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| chat burst: 20            | `ai_messages` with `turn_kind = 'user'` in the user's `channel = 'chat'` sessions                                                                                     | 5 min  |
+| chat daily: 200           | same                                                                                                                                                                  | 24 h   |
+| voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                                                                                                                   | 24 h   |
+| voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future and `last_seen_at` within the worker's 3-minute idle window (`VOICE_CALL_IDLE_MS` from `@va/db`), across all users | now    |
 
 Tool-result rows never count. A failing count fails **open** and logs an error line, the one
 sanctioned exception to invariant 10 (`docs/SECURITY.md` → Abuse). A refused request writes

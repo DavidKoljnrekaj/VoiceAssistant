@@ -192,6 +192,10 @@ import type { Database, Tables } from '@va/db'
 - `createServiceClient()` uses the service role key. Persistence only, always with an explicit
   user or session filter (`ctx.serviceClient`).
 - Both set `persistSession: false, autoRefreshToken: false`: the apps are servers.
+- `VOICE_CALL_IDLE_MS` (`voice-calls.ts`) is the 3-minute idle window of a `voice_calls` row,
+  the one TypeScript value behind the worker's lookup and the API's concurrent count; it mirrors
+  the `interval '3 minutes'` literal of the sweep in `20261028100200_voice_calls.sql`, and the
+  two change together.
 - `database.ts` is generated. During Part 2 it came from the local stack
   (`supabase gen types typescript --local`); from now on `/db-types` (`pnpm db:types`) regenerates
   it from the linked project after a migration is applied there, and the file is committed with
