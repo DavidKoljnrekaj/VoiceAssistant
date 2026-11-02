@@ -129,7 +129,9 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    earlier answer with no lookup behind it retracted it on the next question (`VOICE-5`). The
    call's turns run one after another: a turn LiveKit starts while the cancelled one is still
    unwinding (a barge-in) waits for it, so its history carries the cut-short turn's rows and
-   its save chains off them (`VOICE-9`); the saves themselves are chained too. A gone row (the
+   its save chains off them (`VOICE-9`); the saves themselves are chained too. A queued turn
+   LiveKit cancels before it runs is dropped (`turn dropped`): it counts for nothing and writes
+   nothing (`V-3`). A gone row (the
    15-minute cap, or the API's `/end`) is `call_ended`: the caller hears `CALL_ENDED_HR` once,
    the session reports it (`onEnded`) and the worker hangs up once that reply's speech has
    played out (`HangUp` waits for the `SpeechHandle` LiveKit created for the turn, or 10 s of
@@ -276,7 +278,7 @@ WebSocket client of LiveKit). The worker's `prewarm` loads Silero once per proce
 
 Logs are one JSON line per event with `tag: '[voice]'`: `job refused`, `call accepted`, `warm`,
 `timing` per turn (`auth_ms`, `first_text_ms`, `total_ms`, the engine's marks as `name@ms`,
-`spoken_len`, token and cache counts, `outcome`), `turn limit reached`, `identity timeout`
+`spoken_len`, token and cache counts, `outcome`), `turn dropped`, `turn limit reached`, `identity timeout`
 (with `timeout_ms`), `identity refused`, `call ended` (the cap), `call ending` (with its
 `reason`).
 Never the transcript, the audio or the call token. LiveKit's own logger (pino, JSON) writes the
@@ -362,7 +364,7 @@ scenario's deferred rows never land in the next one's world.
 | W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT                                                                                                                                                              |
 | W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                                                                                                                                                                 |
 | W07        | rows written after the answer, chained, newest row first for the next turn, one insert                                                                                                                                                                 |
-| VOICE-9    | a turn started while the cancelled one is still unwinding sees its rows (the repaired `tool_use`) and chains off them; one parent chain                                                                                                                |
+| VOICE-9    | a turn started while the cancelled one is still unwinding sees its rows (the repaired `tool_use`) and chains off them; one parent chain; `V-3b`: a queued turn cancelled before it ran counts for nothing and writes nothing                           |
 | W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                                                                                                                                                                 |
 | W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`                                                                                                                                                        |
 | W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request                                                                                                                                                          |

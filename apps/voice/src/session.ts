@@ -87,6 +87,12 @@ export class CallSession {
   private async runTurn(io: TurnIO): Promise<VoiceTurnResult | null> {
     const requestId = randomUUID()
     const ids = { request_id: requestId, user_id: this.identity.userId, session_id: this.identity.sessionId }
+    // LiveKit cancelled this turn (a barge-in) while it waited behind the one before it: nobody
+    // is listening for it, so it counts for nothing and reads and writes nothing (V-3).
+    if (io.signal.aborted) {
+      log('info', LOG_TAG, 'turn dropped', { ...ids, turns: this.turns })
+      return null
+    }
     if (++this.turns > this.maxTurns) {
       log('warn', LOG_TAG, 'turn limit reached', { ...ids, turns: this.turns, limit: this.maxTurns })
       await io.say(MESSAGES_HR.rate_limited)

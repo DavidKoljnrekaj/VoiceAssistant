@@ -1,7 +1,7 @@
 // W05–W08, W10–W12, W14: a turn through `AssistantAgent.llmNode`, the stream LiveKit reads,
 // the rows written after the answer, and the gates. Assertions are on what is spoken, the rows,
 // and the requests sent; the loop itself is tested in @va/core.
-import { describe, expect } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 
 import { FALLBACK_BETA, MESSAGES_HR } from '@va/core'
 import {
@@ -346,6 +346,29 @@ describe('a spoken turn', () => {
       expect(
         logs.some((l) => l.line.includes('identity refused') && l.line.includes('"code":"internal_error"')),
       ).toBe(true)
+    },
+  )
+
+  scenario(
+    'V-3b a turn LiveKit cancelled while it waited behind another is dropped: it counts for nothing and writes nothing',
+    async () => {
+      anthropic.script({ hangUntilAborted: true }, answer('Treći.'))
+      const call = await openCall({ maxTurns: 2 })
+      const first = await ask(call, 'Jedan.')
+      await vi.waitFor(() => expect(anthropic.calls).toHaveLength(1))
+      // The caller speaks again (LiveKit starts the next llmNode, which queues behind the first
+      // turn) and then interrupts that one too before the first has unwound.
+      const second = await ask(call, 'Dva.')
+      await second.cancel()
+      await first.cancel()
+      await Promise.all([first.done, second.done])
+      const third = await (await ask(call, 'Tri.')).done
+      expect(third.text).toBe('Treći.')
+      expect(anthropic.calls).toHaveLength(2)
+      await call.session.settle()
+      expect(kinds(call.sessionId)).toEqual(['user', 'user', 'assistant'])
+      expect(logs.some((l) => l.line.includes('"turn dropped"'))).toBe(true)
+      expect(logs.some((l) => l.line.includes('turn limit reached'))).toBe(false)
     },
   )
 
