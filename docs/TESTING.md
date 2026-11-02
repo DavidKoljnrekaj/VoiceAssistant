@@ -15,7 +15,8 @@
 | `pnpm typecheck`, `pnpm lint`            | the other two checks CI runs                                           |
 
 Tests live beside the code as `*.test.ts`. Each package has a `vitest.config.ts` with
-`environment: 'node'`; the root `vitest.config.ts` lists the projects.
+`environment: 'node'` (a web test that renders hooks or components opts into jsdom with a
+`// @vitest-environment jsdom` docblock); the root `vitest.config.ts` lists the projects.
 
 ## Conventions
 
@@ -72,6 +73,29 @@ finds every `log(` call under `apps/*` and `packages/*` and fails on a field nam
 `X01`–`X03` (`env-matrix.test.ts` in each app) fail when the first column of the matrix in
 `docs/OPS.md` does not name a variable an `env.ts` validates, and `X01b`–`X03b` when the matrix
 names one for an app whose `env.ts` does not validate it. Both exist so a rule in a doc cannot drift from the code silently.
+
+## The web suites
+
+`apps/web` has its own fakes under `apps/web/src/test/` (the PWA depends on no other workspace
+package but `@va/db`, so `@va/core/test` is not reused). `fake-backend.ts` answers GoTrue (the
+password and refresh grants, `/user`, `/logout`), PostgREST (`eq.` filters, `order`,
+`offset`/`limit` with the 1000-row cap, PATCH with `return=representation`) and the API (`/chat`
+as a frame-by-frame SSE body, the session and voice endpoints) over `globalThis.fetch`, records
+every request, and errors a body with `AbortError` when the request's signal aborts; the real
+`supabase-js` and `lib/api.ts` run on top. `vitest.config.ts` sets the three `VITE_` variables
+to `http://supabase.test` and `http://api.test`. `fake-chat-service.ts` is a scripted
+`chatService` installed with `vi.mock` by the store tests, so a test drives a stream event by
+event (`nextStream()`, `emit`, `finish`, `fail`) and programs the reads per case.
+`useVoiceCall.test.ts` stands in for `livekit-client` with a scripted module, the one SDK a fake
+replaces: WebRTC has no wire protocol a fetch fake could answer. Hooks are rendered with
+`@testing-library/react`'s `renderHook` (`cleanup()` in `afterEach`, since Vitest globals are
+off), the auth context with `AuthProvider` as the wrapper over a real client signed in through
+the fake GoTrue (`refreshSession()` is how a test triggers `TOKEN_REFRESHED`). Two things to
+know: an effect scheduled by one `act` scope runs when that scope closes, so a test that awaits
+something the effect must cause uses a second `act`; and `waitFor` polls every 50 ms, so a state
+that a retry replaces must outlast that poll (the auth tests use a 300 ms retry delay).
+`sw-routes.test.ts` runs a production build into a temporary directory (about 8 s) and reads
+`sw.js` back for the `NetworkOnly` routes.
 
 ## The Playwright smoke
 

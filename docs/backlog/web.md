@@ -43,8 +43,12 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
   service worker controls the page the precache serves it, but once the new worker activates (a
   second tab, a navigation, the 24 h update check) the old chunk is gone from cache and server
   and the first call click fails with `start_failed`
-- **Fix direction:** a `vite:preloadError` listener in `main.tsx` that reloads the page;
-  optionally `onNeedRefresh` instead of `autoUpdate`
+- **Fix direction (2026-11-02):** either prompt for a reload when a new service worker is waiting
+  (`registerType: 'prompt'` with `onNeedRefresh` → a toast "Nova verzija je dostupna" with a reload
+  action, so the old page never meets the new precache), or retry the failed import once after a
+  reload (`vite:preloadError` listener in `main.tsx` that calls `location.reload()` once per
+  session). The prompt is the better fit for a PWA that stays open all day; the retry is the
+  smaller change and also covers a CDN hiccup
 
 ## Resolved
 
