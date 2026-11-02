@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { ApiHttpError } from '../../../types/api'
 import { errorLabel } from '../lib/labels'
+import { SseStallError } from '../lib/sse'
 import {
   applyEvent,
   type ChatView,
@@ -276,6 +277,7 @@ export function useChatStore(): ChatStore {
         } else {
           outcome = 'failed'
           if (err instanceof ApiHttpError) pushError(err.code, err.message)
+          else if (err instanceof SseStallError) pushError('stream_stalled', '')
           else if (err instanceof TypeError) pushError('network_error', '')
           else pushError('unknown_error', '')
         }

@@ -34,15 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-11 · Low · No stall detection on the chat stream (R-W8)
-
-- **Check:** Confirmed (R-W8, verified 2026-10-30)
-- **Where:** `lib/sse.ts` `readSseBody` awaits `reader.read()` with no timer and discards the
-  comment frames (`: keepalive` every 15 s); `lib/api.ts` passes no timeout signal
-- **What happens:** a half-open connection leaves `isStreaming` true until the user presses stop
-- **Fix direction:** a stall timer reset on every chunk (three missed keepalives, 45 s) that
-  aborts the controller and ends the stream as `failed`
-
 ### WEB-12 · Low · A deploy while a page is open breaks the lazy LiveKit chunk (R-W9)
 
 - **Check:** Confirmed, narrowed (R-W9, verified 2026-10-30)
@@ -119,3 +110,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-10 · Low · `useVoiceCall`: a closed tab never ends the call; tracks are removed without `detach()`; `TrackUnsubscribed` is unhandled (R-W7)
 
 - Fixed 2026-10-30 on fix/web-review: a `pagehide` listener ends the call through `endVoiceCall(id, { keepalive: true })`; tracks are kept and `detach()`ed before their elements are removed; `TrackUnsubscribed` detaches its track. Tests `WEB-10` in `useVoiceCall.test.ts` (livekit-client is a scripted module there: WebRTC has no wire a fetch fake could answer).
+
+### WEB-11 · Low · No stall detection on the chat stream (R-W8)
+
+- Fixed 2026-11-02 on fix/web-review: `readSseBody` races every read against a stall clock (`stallMs`, reset by any chunk, keepalive comments included) and throws `SseStallError` after cancelling the body; `streamMessage` passes 45 s (three missed keepalives) and the store renders it as the `stream_stalled` inline error. Tests `WEB-11` in `sse.test.ts`, `chatService.test.ts` and `useChatStore.test.ts`.

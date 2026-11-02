@@ -95,7 +95,12 @@ function abortable(response: Response, signal: AbortSignal | undefined): Respons
         )
       })
     },
-    cancel: () => reader.cancel().catch(() => {}),
+    cancel: () => {
+      // A cancel (a stall, an early return) resolves the pending read with done: the pull must
+      // not close the controller again.
+      settled = true
+      return reader.cancel().catch(() => {})
+    },
   })
   return new Response(body, { status: response.status, headers: response.headers })
 }

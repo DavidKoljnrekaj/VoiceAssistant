@@ -14,6 +14,7 @@ import {
 } from '../../../test/fake-chat-service'
 import { ApiHttpError } from '../../../types/api'
 import { ERROR_LABELS_HR } from '../lib/labels'
+import { SseStallError } from '../lib/sse'
 import { useChatStore } from './useChatStore'
 
 vi.mock('../services/chatService', async () => {
@@ -338,6 +339,32 @@ describe('useChatStore', () => {
       await sent
     })
     expect(result.current.messages).toMatchObject([{ kind: 'user', text: 'Bok' }, { kind: 'interrupted' }])
+  })
+
+  it('WEB-11: a stalled stream ends as failed with an inline error, and the composer is free again', async () => {
+    fakeChat.loadSession.mockResolvedValue(persistedTurn())
+    const { result } = renderHook(() => useChatStore())
+    await act(async () => {
+      await result.current.selectSession(S1)
+    })
+    let sent!: Promise<void>
+    act(() => {
+      sent = result.current.sendMessage('Bok')
+    })
+    const stream = await fakeChat.nextStream()
+    await act(async () => {
+      stream.emit({ type: 'session', session_id: S1 })
+      stream.emit({ type: 'delta', text: 'Poč' })
+      stream.fail(new SseStallError())
+      await sent
+    })
+    expect(result.current.isStreaming).toBe(false)
+    expect(result.current.pendingText).toBeNull()
+    expect(result.current.messages.at(-1)).toMatchObject({
+      kind: 'error',
+      code: 'stream_stalled',
+      message: ERROR_LABELS_HR.stream_stalled,
+    })
   })
 
   it('H07: a sign-out empties the store and aborts the open stream', async () => {

@@ -15,6 +15,7 @@ export const ERROR_LABELS_HR: Record<string, string> = {
   rename_failed: 'Preimenovanje razgovora nije uspjelo. Pokušajte ponovno.',
   delete_failed: 'Brisanje razgovora nije uspjelo. Pokušajte ponovno.',
   network_error: 'Nema veze s poslužiteljem. Pokušajte ponovno.',
+  stream_stalled: 'Veza s poslužiteljem je prekinuta. Pokušajte ponovno.',
   unknown_error: 'Neočekivana greška. Pokušajte ponovno.',
   http_error: 'Poslužitelj je odgovorio greškom. Pokušajte ponovno.',
   // Server codes the API may answer before the stream opens without a usable message body.

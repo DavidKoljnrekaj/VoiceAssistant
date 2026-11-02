@@ -92,10 +92,14 @@ export interface StreamMessageArgs {
   onEvent: (event: ChatEvent) => void
 }
 
+/** Three missed `: keepalive` frames (the API writes one every 15 s): the connection is half-open. */
+const STREAM_STALL_MS = 45_000
+
 /**
  * One streamed turn. A non-OK status throws ApiHttpError before any event; after that every
  * frame reaches `onEvent` until `done` or `error` closes the stream. Aborting the signal is the
- * cancel: the server reads the closed connection (docs/API.md → Cancellation).
+ * cancel: the server reads the closed connection (docs/API.md → Cancellation). A stream silent
+ * for STREAM_STALL_MS throws SseStallError (WEB-11).
  */
 export async function streamMessage(args: StreamMessageArgs): Promise<void> {
   const response = await apiFetch('/chat', {
@@ -109,7 +113,11 @@ export async function streamMessage(args: StreamMessageArgs): Promise<void> {
     signal: args.signal,
   })
   if (!response.body) throw new Error('empty stream body')
-  await readSseBody(response.body, (payload) => {
-    if (isChatEvent(payload)) args.onEvent(payload)
-  })
+  await readSseBody(
+    response.body,
+    (payload) => {
+      if (isChatEvent(payload)) args.onEvent(payload)
+    },
+    { stallMs: STREAM_STALL_MS },
+  )
 }

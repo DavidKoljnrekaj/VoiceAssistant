@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createSseParser, parseSseFrame, readSseBody, type SseFrame } from './sse'
+import { createSseParser, parseSseFrame, readSseBody, type SseFrame, SseStallError } from './sse'
 
 function collect(): { frames: SseFrame[]; parser: ReturnType<typeof createSseParser> } {
   const frames: SseFrame[] = []
@@ -74,5 +74,37 @@ describe('SSE frame parser', () => {
     const payloads: unknown[] = []
     await readSseBody(body, (p) => payloads.push(p))
     expect(payloads).toEqual([{ type: 'delta', text: 'Š' }])
+  })
+
+  describe('stall detection (WEB-11)', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('WEB-11: a body silent for the stall window fails with SseStallError; a keepalive comment resets the clock', async () => {
+      vi.useFakeTimers()
+      const encoder = new TextEncoder()
+      let controller!: ReadableStreamDefaultController<Uint8Array>
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          controller = c
+        },
+      })
+      const payloads: unknown[] = []
+      let settled: 'pending' | 'resolved' | unknown = 'pending'
+      const reading = readSseBody(body, (p) => payloads.push(p), { stallMs: 45_000 }).then(
+        () => (settled = 'resolved'),
+        (e: unknown) => (settled = e),
+      )
+      await vi.advanceTimersByTimeAsync(40_000)
+      controller.enqueue(encoder.encode(': keepalive\n\n'))
+      await vi.advanceTimersByTimeAsync(40_000)
+      expect(settled).toBe('pending')
+      controller.enqueue(encoder.encode('data: {"type":"delta","text":"Bok"}\n\n'))
+      await vi.advanceTimersByTimeAsync(44_999)
+      expect(settled).toBe('pending')
+      await vi.advanceTimersByTimeAsync(1)
+      await reading
+      expect(settled).toBeInstanceOf(SseStallError)
+      expect(payloads).toEqual([{ type: 'delta', text: 'Bok' }])
+    })
   })
 })

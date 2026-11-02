@@ -1,7 +1,7 @@
 // The chat services against the fake backend (src/test/fake-backend.ts): PostgREST for the two
 // reads, the API for the stream and the mutations. The real supabase-js and lib/api.ts run; the
 // assertions are on the requests sent and on what the service returns or throws.
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { supabase } from '../../../lib/supabase'
 import {
@@ -18,6 +18,7 @@ import {
   sseResponse,
 } from '../../../test/fake-backend'
 import { ApiHttpError, type ChatEvent } from '../../../types/api'
+import { SseStallError } from '../lib/sse'
 import {
   deleteSession,
   findSession,
@@ -289,5 +290,36 @@ describe('chatService.streamMessage', () => {
     const failure = await pending.catch((e: unknown) => e)
     expect(failure).toMatchObject({ name: 'AbortError' })
     expect(events.map((e) => e.type)).toEqual(['session', 'delta'])
+  })
+
+  it('WEB-11: a stream that goes silent for three keepalive periods (45 s) fails as a stall', async () => {
+    const stream = openSse()
+    backend.route('POST', API_ORIGIN, '/chat', () => stream.response)
+    const events: ChatEvent[] = []
+    const pending = streamMessage({
+      sessionId: S1,
+      message: 'Bok',
+      parentMessageId: null,
+      route: null,
+      signal: new AbortController().signal,
+      onEvent: (e) => events.push(e),
+    })
+    // Wait for the request to be made with real timers, then drive the stall clock.
+    await vi.waitFor(() => expect(backend.sent('POST', '/chat')).toHaveLength(1))
+    stream.send({ type: 'session', session_id: S1 })
+    await new Promise((r) => setTimeout(r, 10))
+    vi.useFakeTimers()
+    try {
+      await vi.advanceTimersByTimeAsync(44_000)
+      stream.comment('keepalive')
+      await vi.advanceTimersByTimeAsync(44_000)
+      let failure: unknown = null
+      void pending.catch((e: unknown) => (failure = e))
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(failure).toBeInstanceOf(SseStallError)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(events.map((e) => e.type)).toEqual(['session'])
   })
 })
