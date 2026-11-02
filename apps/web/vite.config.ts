@@ -15,6 +15,15 @@ function originOf(value: string | undefined): string | null {
   }
 }
 
+/**
+ * Every URL on `origin`, as a RegExp. generateSW serialises the route into sw.js as text, so a
+ * function pattern would lose its closure (`url.origin === origin` then compares against the
+ * worker's own origin); a RegExp carries the origin with it (WEB-15, `sw-routes.test.ts`).
+ */
+function originPattern(origin: string): RegExp {
+  return new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(/|$)`)
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const networkOnlyOrigins = [originOf(env.VITE_API_URL), originOf(env.VITE_SUPABASE_URL)].filter(
@@ -49,9 +58,11 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
           navigateFallback: '/index.html',
           // Streams and auth answers must never come from a cache; NetworkOnly makes that explicit
-          // even though these origins are not precached either.
+          // even though these origins are not precached either. GET only (Workbox's default): a
+          // non-GET request matches no route and bypasses the worker, and the Cache API stores no
+          // non-GET response (docs/WEB.md → PWA caching rules; sw-routes.test.ts pins it).
           runtimeCaching: networkOnlyOrigins.map((origin) => ({
-            urlPattern: ({ url }: { url: URL }) => url.origin === origin,
+            urlPattern: originPattern(origin),
             handler: 'NetworkOnly' as const,
           })),
         },

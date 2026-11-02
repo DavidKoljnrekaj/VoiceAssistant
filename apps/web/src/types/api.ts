@@ -14,24 +14,30 @@ export type ChatEvent =
 
 export type ChatEventType = ChatEvent['type']
 
-const EVENT_TYPES: ReadonlySet<string> = new Set<ChatEventType>([
-  'session',
-  'delta',
-  'turn',
-  'tool_call',
-  'tool_result',
-  'done',
-  'error',
-])
+type Shape = Record<string, 'string' | 'boolean'>
 
-/** Narrows a parsed SSE payload to a ChatEvent; anything unknown is dropped, never rendered. */
+/** The required fields of each event and their types; `unknown`-typed fields are not checked. */
+const EVENT_SHAPES: Record<ChatEventType, Shape> = {
+  session: { session_id: 'string' },
+  delta: { text: 'string' },
+  turn: { text: 'string', message_id: 'string' },
+  tool_call: { tool: 'string', tool_use_id: 'string' },
+  tool_result: { tool: 'string', tool_use_id: 'string', is_error: 'boolean' },
+  done: {},
+  error: { code: 'string', message: 'string' },
+}
+
+/**
+ * Narrows a parsed SSE payload to a ChatEvent: a known `type` with its required fields of the
+ * right type. Anything else is dropped, never rendered (a `delta` without `text` would have
+ * shown "undefined", WEB-15).
+ */
 export function isChatEvent(value: unknown): value is ChatEvent {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { type?: unknown }).type === 'string' &&
-    EVENT_TYPES.has((value as { type: string }).type)
-  )
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  if (typeof record.type !== 'string' || !Object.hasOwn(EVENT_SHAPES, record.type)) return false
+  const shape = EVENT_SHAPES[record.type as ChatEventType]
+  return Object.entries(shape).every(([field, kind]) => typeof record[field] === kind)
 }
 
 export interface VoiceCallSession {

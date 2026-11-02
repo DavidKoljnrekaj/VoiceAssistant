@@ -15,7 +15,10 @@ export default defineConfig({
         '**/*.test.{ts,tsx}',
         'packages/core/src/test/**', // the fakes and the harness
         'packages/db/src/database.ts', // generated
-        'apps/web/src/**/*.tsx', // components: no DOM tests yet (Playwright covers the shell)
+        'apps/web/src/components/**/*.tsx', // components: no DOM tests (Playwright covers the shell)
+        'apps/web/src/pages/**',
+        'apps/web/src/App.tsx',
+        'apps/web/src/test/**', // the fakes
         'apps/web/src/main.tsx',
       ],
     },

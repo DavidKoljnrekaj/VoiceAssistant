@@ -1,6 +1,7 @@
 // One in-app voice call: start, mute, hang up. Ported from Landmark's useVoiceCall. livekit-client
 // loads on the first call, not with the panel; the agent's audio plays through hidden audio
-// elements; a refreshed JWT is passed on to the call while it lasts.
+// elements (detached when the track or the call goes); a refreshed JWT is passed on to the call
+// while it lasts; a closed tab ends the call with a keepalive request (WEB-10).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RemoteTrack, Room } from 'livekit-client'
 
@@ -28,8 +29,14 @@ export interface VoiceCall {
 interface Live {
   room: Room
   sessionId: string
-  audio: HTMLMediaElement[]
+  /** The agent's subscribed audio tracks; their elements are detached with them. */
+  tracks: Set<RemoteTrack>
   unsubscribe: () => void
+  onPageHide: () => void
+}
+
+function detach(track: RemoteTrack): void {
+  track.detach().forEach((el) => el.remove())
 }
 
 export function useVoiceCall(): VoiceCall {
@@ -39,15 +46,20 @@ export function useVoiceCall(): VoiceCall {
   const [error, setError] = useState<VoiceCallErrorCode | null>(null)
   const live = useRef<Live | null>(null)
 
-  const teardown = useCallback(() => {
+  const teardown = useCallback((reason: 'hangup' | 'pagehide' = 'hangup') => {
     const current = live.current
     live.current = null
     if (!current) return
     current.unsubscribe()
-    current.audio.forEach((el) => el.remove())
+    window.removeEventListener('pagehide', current.onPageHide)
+    current.tracks.forEach(detach)
+    current.tracks.clear()
     void current.room.disconnect()
-    // Best effort: the credential also expires and is swept server-side.
-    endVoiceCall(current.sessionId).catch(() => {})
+    // Best effort: the credential also expires and is swept server-side. On pagehide the request
+    // must outlive the page, so it is sent with keepalive; apiFetch still awaits getSession() for
+    // the token (supabase-js has no synchronous accessor), a microtask with a valid token but a
+    // network refresh near expiry, which an unloading page may not finish (docs/WEB.md).
+    endVoiceCall(current.sessionId, { keepalive: reason === 'pagehide' }).catch(() => {})
     setState('idle')
     setMuted(false)
     setAgentSpeaking(false)
@@ -63,25 +75,32 @@ export function useVoiceCall(): VoiceCall {
     try {
       const session = await startVoiceCall()
       sessionId = session.session_id
-      const audio: HTMLMediaElement[] = []
+      const tracks = new Set<RemoteTrack>()
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
         if (track.kind !== Track.Kind.Audio) return
         const el = track.attach()
         el.style.display = 'none'
         document.body.appendChild(el)
-        audio.push(el)
+        tracks.add(track)
+      })
+      room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+        if (!tracks.delete(track)) return
+        detach(track)
       })
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         setAgentSpeaking(speakers.some((p) => p.identity !== room.localParticipant.identity))
       })
       room.on(RoomEvent.Disconnected, () => teardown())
+      const onPageHide = () => teardown('pagehide')
+      window.addEventListener('pagehide', onPageHide)
       live.current = {
         room,
         sessionId: session.session_id,
-        audio,
+        tracks,
         unsubscribe: onAccessTokenRefreshed(() => {
           refreshVoiceCall(session.session_id).catch(() => {})
         }),
+        onPageHide,
       }
       await room.connect(session.url, session.token)
       await room.localParticipant.setMicrophoneEnabled(true, {
@@ -112,7 +131,9 @@ export function useVoiceCall(): VoiceCall {
   }, [muted])
 
   // Hang up when the panel goes away.
-  useEffect(() => teardown, [teardown])
+  useEffect(() => () => teardown(), [teardown])
 
-  return { state, muted, agentSpeaking, error, start, end: teardown, toggleMute }
+  const end = useCallback(() => teardown(), [teardown])
+
+  return { state, muted, agentSpeaking, error, start, end, toggleMute }
 }

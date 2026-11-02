@@ -27,4 +27,13 @@ void i18n
     interpolation: { escapeValue: false },
   })
 
+// The page language follows the switch, so assistive technology reads the UI in the language it
+// shows (WEB-14). index.html starts with lang="hr", the fallback.
+function applyDocumentLanguage(language: string): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = isLanguage(language) ? language : 'hr'
+}
+i18n.on('languageChanged', applyDocumentLanguage)
+if (i18n.resolvedLanguage) applyDocumentLanguage(i18n.resolvedLanguage)
+
 export default i18n

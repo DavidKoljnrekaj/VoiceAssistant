@@ -34,101 +34,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** decide whether English users should see English chips; if so, move the two
   maps into the locale files and key `toolLabel` / `errorLabel` through `t()`
 
-### WEB-4 · High · A failed turn on an existing conversation is wiped, with the typed text (R-W1)
-
-- **Check:** Confirmed (review 2026-10-30, R-W1)
-- **Where:** `apps/web/src/components/Chat/hooks/useChatStore.ts` (`loadRows(streamedSessionId,
-'reload')` runs for every outcome but `'stopped'`, and `loadRows` replaces the view);
-  `Composer.tsx` clears the text on send
-- **What happens:** on `/c/<id>` a rate limit, an offline send or a `request_timeout` adds the
-  error row (mid-stream `error` event or pre-stream `ApiHttpError`), then the reload replaces the
-  view with the persisted rows: the error and the never-persisted user row vanish and the typed
-  text is gone. Only a brand-new conversation keeps the error. `docs/WEB.md` ("failures reach the
-  user by one mechanism") is untrue for this path
-- **Fix direction:** keep the pre-finish error rows (and the unpersisted user row on a pre-stream
-  failure) across the reload, or skip the reload when `outcome === 'failed'`; the test needs the
-  store harness of `WEB-15`
-
-### WEB-5 · High · A transient profile re-read failure at token refresh signs the user out of the UI (R-W2)
-
-- **Check:** Confirmed (R-W2)
-- **Where:** `apps/web/src/contexts/AuthContext.tsx` (`resolve()` on `TOKEN_REFRESHED` and
-  `USER_UPDATED`; the catch keeps `session` but sets `profile = null`, no retry);
-  `ProtectedRoute.tsx` redirects on `!profile`; `useChatStore.ts` resets sessions and aborts the
-  stream when `userId` goes null. The comment at `AuthContext.tsx:67` ("show nothing until a
-  retry") describes a retry that does not exist (R-W13)
-- **What happens:** every hour, a flaky network at the refresh moment drops the user to `/login`
-  with a valid GoTrue session and no message, and aborts an open stream
-- **Fix direction:** keep the previous profile on a transient error and retry; only `no_profile`
-  (403) signs out; fix the comment
-
-### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
-
-- **Check:** Confirmed (R-W3)
-- **Where:** `apps/web/src/components/Chat/services/chatService.ts` (`loadSession`,
-  `listSessions`, no `.range()`); `supabase/config.toml` `max_rows = 1000`; `computeLeaf` in the
-  store
-- **What happens:** `loadSession` orders ascending, so past 1000 rows the newest drop first;
-  `computeLeaf` names a stale leaf, the next send passes it as `parent_message_id`, the API
-  accepts it (it only checks the parent is in the session) and a sibling branch is created.
-  `docs/WEB.md` says "every row"
-- **Fix direction:** page with `.range()` in a stable order, or read the branch through the API's
-  bounded history
-
-### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
-
-- **Check:** Confirmed (R-W4, verified 2026-10-30)
-- **Where:** `chatService.ts` `loadSession` returns `[]` under RLS; `useChatStore.ts`
-  `loadRows('select')` sets `ready` with no rows; `ChatPanel.tsx` shows "Bez naslova" and the
-  empty prompt
-- **What happens:** `/c/<someone else's or a deleted id>` looks like a new conversation; a send
-  gets the API's 404, which `WEB-4` then wipes. The same class as invariant 10: an RLS-filtered
-  empty result is not "not found"
-- **Fix direction:** when the rows are empty, select the `ai_sessions` row by id (`maybeSingle`)
-  and show a not-found state when it is null (an owned but empty session is possible after a
-  failed first persist, so check the session row, not the row count)
-
-### WEB-8 · Low · The call banner says "Poziv u tijeku" twice (R-W5)
-
-- **Check:** Confirmed (R-W5)
-- **Where:** `ChatPanel.tsx` renders `call.live` + `call.banner`; `call.banner` in both locales
-  starts with the same words
-- **What happens:** "**Poziv u tijeku.** Poziv u tijeku. Govorite s …"
-- **Fix direction:** drop the repeated words from `call.banner` in `hr` and `en` together
-  <!-- needs native review -->
-
-### WEB-9 · Low · Stopping or leaving a brand-new conversation plants the interrupted marker in the fresh view (R-W6)
-
-- **Check:** Confirmed (R-W6, verified 2026-10-30)
-- **Where:** `useChatStore.ts` (with `streamedSessionId === null` the guard passes;
-  `finishStream` in `lib/normalizeMessages.ts` always pushes the marker on `'stopped'`);
-  `ChatPanel.tsx` calls `newConversation` unconditionally
-- **What happens:** stop, or "new conversation", before the `session` event leaves "Odgovor
-  prekinut." in an empty conversation
-- **Fix direction:** plant the marker only when the view still holds this stream's optimistic
-  user row
-
-### WEB-10 · Low · `useVoiceCall`: a closed tab never ends the call; tracks are removed without `detach()`; `TrackUnsubscribed` is unhandled (R-W7)
-
-- **Check:** Confirmed (R-W7, verified 2026-10-30)
-- **Where:** `apps/web/src/components/Chat/hooks/useVoiceCall.ts` (`teardown`, the room event
-  handlers)
-- **What happens:** closing the tab leaves the `voice_calls` row to the 15-minute cap and the
-  sweep; audio elements are removed without `track.detach()`; an unsubscribed track keeps its
-  element. A `room.connect` failure after `live.current` is set runs teardown twice, which the
-  `live.current = null` guard makes harmless
-- **Fix direction:** a `pagehide` listener that calls the end endpoint with `keepalive: true`;
-  `detach()` before `remove()`; a `TrackUnsubscribed` handler
-
-### WEB-11 · Low · No stall detection on the chat stream (R-W8)
-
-- **Check:** Confirmed (R-W8, verified 2026-10-30)
-- **Where:** `lib/sse.ts` `readSseBody` awaits `reader.read()` with no timer and discards the
-  comment frames (`: keepalive` every 15 s); `lib/api.ts` passes no timeout signal
-- **What happens:** a half-open connection leaves `isStreaming` true until the user presses stop
-- **Fix direction:** a stall timer reset on every chunk (three missed keepalives, 45 s) that
-  aborts the controller and ends the stream as `failed`
-
 ### WEB-12 · Low · A deploy while a page is open breaks the lazy LiveKit chunk (R-W9)
 
 - **Check:** Confirmed, narrowed (R-W9, verified 2026-10-30)
@@ -138,44 +43,55 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
   service worker controls the page the precache serves it, but once the new worker activates (a
   second tab, a navigation, the 24 h update check) the old chunk is gone from cache and server
   and the first call click fails with `start_failed`
-- **Fix direction:** a `vite:preloadError` listener in `main.tsx` that reloads the page;
-  optionally `onNeedRefresh` instead of `autoUpdate`
-
-### WEB-13 · Low · The language switcher swallows a failed `updateLanguage` (R-W10)
-
-- **Check:** Confirmed (R-W10)
-- **Where:** `apps/web/src/components/Layout/LanguageSwitcher.tsx` (an empty `catch`)
-- **What happens:** the UI switches, the preference silently reverts on the next load
-  (invariant 10 in the UI)
-- **Fix direction:** a toast worded in both locales, and the switcher keeps the previous language
-
-### WEB-14 · Low · Accessibility gaps in the shell (R-W11)
-
-- **Check:** Confirmed (R-W11)
-- **Where:** `ChatPanel.tsx` mobile drawer (no `role="dialog"`, focus trap or Escape);
-  `Toast.tsx` (click-only dismiss); `MessageList.tsx` (the streamed answer is not in a live
-  region; `Spinner` without `label` there, in `ProtectedRoute.tsx` and `LoginPage.tsx`);
-  `index.html` `<html lang="hr">` never follows the switch; the manifest `description` is
-  Croatian only
-- **What happens:** keyboard and screen-reader users cannot close the drawer or hear the answer
-  arrive
-- **Fix direction:** dialog semantics with a focus trap and Escape, `aria-live="polite"` on the
-  streaming bubble, labelled spinners, `document.documentElement.lang` set on language change
-
-### WEB-15 · Low · The store, auth context, voice hook and services have no tests; `isChatEvent` checks only `type` (R-W12)
-
-- **Check:** Confirmed (R-W12)
-- **Where:** `hooks/useChatStore.ts`, `contexts/AuthContext.tsx`, `hooks/useVoiceCall.ts`,
-  `services/chatService.ts`, `lib/api.ts` (`ApiHttpError` mapping, non-JSON bodies);
-  `types/api.ts` `isChatEvent`; the built service worker's `NetworkOnly` routes
-- **What happens:** web coverage is 28 %; `WEB-4`, `WEB-5`, `WEB-7` and `WEB-9` have nowhere to
-  put their failing test; a `delta` without `text` renders "undefined"
-  (`lib/normalizeMessages.ts`); nothing asserts the built `sw.js` has `NetworkOnly` for the two
-  origins
-- **Fix direction:** a store harness over a fake `fetch` (the SSE fixtures exist) and a fake
-  supabase-js; a shape check per event type in `isChatEvent`; a build-output grep for the two
-  routes
+- **Fix direction (2026-11-02):** either prompt for a reload when a new service worker is waiting
+  (`registerType: 'prompt'` with `onNeedRefresh` → a toast "Nova verzija je dostupna" with a reload
+  action, so the old page never meets the new precache), or retry the failed import once after a
+  reload (`vite:preloadError` listener in `main.tsx` that calls `location.reload()` once per
+  session). The prompt is the better fit for a PWA that stays open all day; the retry is the
+  smaller change and also covers a CDN hiccup
 
 ## Resolved
 
-Nothing yet.
+### WEB-4 · High · A failed turn on an existing conversation is wiped, with the typed text (R-W1)
+
+- Fixed 2026-10-30 on fix/web-review (`de6b0eb`): the post-stream reload appends the stream's client-only tail (its error rows, and the typed row when no event arrived) after the canonical rows; tests `WEB-4` in `useChatStore.test.ts`.
+
+### WEB-5 · High · A transient profile re-read failure at token refresh signs the user out of the UI (R-W2)
+
+- Fixed 2026-10-30 on fix/web-review (`0bf66a4`): a failed profile read keeps the session and the previous profile and is retried with a backoff (5 s, 15 s, 60 s); without a previous profile the form says `network`; only a missing row signs out. Tests `WEB-5` in `AuthContext.test.tsx`.
+
+### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
+
+- Fixed 2026-10-30 on fix/web-review (`3abbd04`): `listSessions` and `loadSession` page with `range()` (1000 per page) until an empty page (V-9, 2026-11-02; a short page was the stop before), ordered by `updated_at desc, id desc` and `created_at asc, id asc`; the API's bounded history was not used because it is the model's 200-row context window behind a service-role-only function, not what a reader of the conversation should see. Tests `WEB-6` in `chatService.test.ts`.
+
+### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
+
+- Fixed 2026-10-30 on fix/web-review (`e87e7b8`): when a selected session has no rows the store reads the `ai_sessions` row by id (`findSession`, `maybeSingle`) and a null is `messagesStatus = 'not_found'`, rendered as a not-found state with the composer disabled; an owned empty session stays ready. Tests `WEB-7` in `useChatStore.test.ts` and `chatService.test.ts`.
+
+### WEB-8 · Low · The call banner says "Poziv u tijeku" twice (R-W5)
+
+- Fixed 2026-10-30 on fix/web-review (`600e877`): `call.banner` no longer starts with the `call.live` words in hr and en; test `WEB-8` in `locales.test.ts` (which also pins identical key sets, `I01`). <!-- needs native review -->
+
+### WEB-9 · Low · Stopping or leaving a brand-new conversation plants the interrupted marker in the fresh view (R-W6)
+
+- Fixed 2026-10-30 on fix/web-review (`bb8792c`): the store counts view replacements (new conversation, select, user change) and a stream whose view was replaced ends without touching it; a plain stop still leaves the typed row and the marker. Tests `WEB-9` in `useChatStore.test.ts`.
+
+### WEB-10 · Low · `useVoiceCall`: a closed tab never ends the call; tracks are removed without `detach()`; `TrackUnsubscribed` is unhandled (R-W7)
+
+- Fixed 2026-10-30 on fix/web-review (`7556ceb`): a `pagehide` listener ends the call through `endVoiceCall(id, { keepalive: true })`; tracks are kept and `detach()`ed before their elements are removed; `TrackUnsubscribed` detaches its track. Tests `WEB-10` in `useVoiceCall.test.ts` (livekit-client is a scripted module there: WebRTC has no wire a fetch fake could answer).
+
+### WEB-11 · Low · No stall detection on the chat stream (R-W8)
+
+- Fixed 2026-11-02 on fix/web-review (`5335320`): `readSseBody` races every read against a stall clock (`stallMs`, reset by any chunk, keepalive comments included) and throws `SseStallError` after cancelling the body; `streamMessage` passes 45 s (three missed keepalives) and the store renders it as the `stream_stalled` inline error. Tests `WEB-11` in `sse.test.ts`, `chatService.test.ts` and `useChatStore.test.ts`.
+
+### WEB-13 · Low · The language switcher swallows a failed `updateLanguage` (R-W10)
+
+- Fixed 2026-11-02 on fix/web-review (`700ed74`): `setLanguage` puts i18next back on the previous language when `updateLanguage` fails and rethrows; the switcher shows the `common.language_save_failed` toast (hr/en). Test `WEB-13` in `AuthContext.test.tsx`.
+
+### WEB-14 · Low · Accessibility gaps in the shell (R-W11)
+
+- Fixed 2026-11-02 on fix/web-review (`628903f`): the drawer is a `dialog` (`aria-modal`, focus moves in, Tab cycles, Escape closes, focus returns to the toggle); toasts have a labelled dismiss button and Escape dismisses the newest; the message list is a `log` live region with the provisional bubble excluded; every Spinner has a label; `<html lang>` follows the switch. Tests `WEB-14` in `i18n.test.ts` and `Toast.test.tsx`. The manifest `description` stays Croatian: the manifest is static and the product name is a placeholder.
+
+### WEB-15 · Low · The store, auth context, voice hook and services have no tests; `isChatEvent` checks only `type` (R-W12)
+
+- Fixed 2026-11-02 on fix/web-review (`b7164e0` the suites, `56b97c3` `isChatEvent` and the routes): tests for the store (`useChatStore.test.ts`), the auth context, the voice hook, the chat service and `lib/api` over the fakes in `src/test/`; `isChatEvent` checks the required fields of every event type (`types/api.test.ts`); `sw-routes.test.ts` builds the PWA and reads `sw.js` back, which showed that the function `urlPattern` lost its closure and matched the worker's own origin, so the routes are RegExps carrying the origin now.

@@ -55,10 +55,44 @@ export function createSseParser(onFrame: (frame: SseFrame) => void): SseParser {
   }
 }
 
+/** The connection went silent for longer than `stallMs`: a half-open stream, not an answer. */
+export class SseStallError extends Error {
+  constructor() {
+    super('SSE stream stalled')
+    this.name = 'SseStallError'
+  }
+}
+
+export interface ReadSseOptions {
+  /**
+   * Fail with SseStallError when no bytes arrive for this long. The API writes `: keepalive`
+   * every 15 s, so any chunk, comment frames included, resets the clock (WEB-11).
+   */
+  stallMs?: number
+}
+
+/** `reader.read()` raced against the stall clock; the clock is armed per read. */
+async function readWithStall(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  stallMs: number | undefined,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (stallMs === undefined) return reader.read()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const stalled = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new SseStallError()), stallMs)
+  })
+  try {
+    return await Promise.race([reader.read(), stalled])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Reads a whole response body, dispatching each parsed JSON `data:` payload; non-JSON data is dropped. */
 export async function readSseBody(
   body: ReadableStream<Uint8Array>,
   onData: (payload: unknown) => void,
+  options: ReadSseOptions = {},
 ): Promise<void> {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -74,12 +108,15 @@ export async function readSseBody(
   })
   try {
     for (;;) {
-      const { done, value } = await reader.read()
+      const { done, value } = await readWithStall(reader, options.stallMs)
       if (done) break
       parser.push(decoder.decode(value, { stream: true }))
     }
     parser.push(decoder.decode())
     parser.end()
+  } catch (error) {
+    if (error instanceof SseStallError) await reader.cancel().catch(() => {})
+    throw error
   } finally {
     reader.releaseLock()
   }
