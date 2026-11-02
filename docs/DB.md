@@ -18,8 +18,9 @@ or OAuth return lands on the PWA, never on the API (DB-4). Docker Desktop with W
 for this distro is required.
 
 The dev project is `kdplqbldohrzsewhckgl` (EU). Linking (`supabase link`), applying migrations
-and enabling extensions there are the operator's steps, listed in `docs/backlog/release.md`;
-nothing in this repo pushes to a linked project without being asked in the conversation.
+and enabling extensions there are the operator's steps, listed in `docs/backlog/release.md` and
+written out command by command in `docs/RELEASE-RUNBOOK.md`; nothing in this repo pushes to a
+linked project without being asked in the conversation.
 
 ### Seed users (local only)
 
