@@ -167,6 +167,10 @@ format: the voice worker runs the loop in-process and hands `say` to the TTS ada
 - `toolCall` and `toolResult` are no-ops: nothing about tools is spoken.
 - `done` flushes what is pending; on `refusal` with nothing spoken it says
   `MESSAGES_HR.model_refused`. `error` flushes, then speaks the Croatian message. Both call `end`.
+- `abort()` is the owner's exit on a barge-in, where the loop returns silently: it disarms the
+  hold and drops the pending text, so a timer armed before the abort speaks nothing after it
+  (`S14`; the voice turn calls it when its signal fires). A `say` that fails when the hold
+  releases on its own is logged (`hold release failed`), never an unhandled rejection (`S14b`).
 - Everything goes through `speakable()`. `spoken` holds the whole spoken text; `firstOutputAt`
   (`performance.now()`) is when the first text reached `say`, for the worker's timing log.
 

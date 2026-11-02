@@ -122,12 +122,16 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   const config = voiceLoopConfig(deps, ctx)
   const settings = deps.settings
 
+  const sink = new SpokenTextSink(input.say, input.end, input.pickFiller)
   const controller = new AbortController()
   const state: { outcome: TurnOutcome } = { outcome: 'completed' }
   const cancel = (why: TurnOutcome): void => {
     if (controller.signal.aborted) return
     state.outcome = why
     controller.abort()
+    // A barge-in: the loop returns silently, so a held sentence must not surface after it (a
+    // timeout is spoken below, and `error` clears the hold itself).
+    if (why === 'cancelled') sink.abort()
   }
   if (signal.aborted) cancel('cancelled')
   else signal.addEventListener('abort', () => cancel('cancelled'), { once: true })
@@ -146,7 +150,6 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
       usage.cacheWrite += u.cacheWrite
     },
   }
-  const sink = new SpokenTextSink(input.say, input.end, input.pickFiller)
   const store = new DeferredStore()
   const userRowId = randomUUID()
   const userRow: CallRow = {

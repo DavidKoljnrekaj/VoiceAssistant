@@ -15,9 +15,12 @@
 //     (the loop's own messages: the iteration cap, truncation);
 //   - toolCall and toolResult are not spoken;
 //   - done flushes what is pending and, after a refusal with nothing said, speaks the refusal
-//     line; error flushes and speaks the Croatian message. Both then call `end`.
+//     line; error flushes and speaks the Croatian message. Both then call `end`;
+//   - abort (a barge-in: the loop returns silently) disarms the hold and drops what is pending,
+//     so nothing is spoken after the owner has given up on the turn.
 
 import { MESSAGES_HR, type ErrorCode } from '../errors.js'
+import { errorReason, log } from '../log.js'
 import type { EventSink, Usage } from '../loop/ports.js'
 import { speakable } from './speakable.js'
 
@@ -105,7 +108,10 @@ export class SpokenTextSink implements EventSink {
     if (this.holdTimer !== null) return
     this.holdTimer = setTimeout(() => {
       this.holdTimer = null
-      void this.releaseHold()
+      // Off the loop's call chain: a `say` that fails here has nobody awaiting it.
+      this.releaseHold().catch((err: unknown) => {
+        log('warn', '[core]', 'hold release failed', { reason: errorReason(err) })
+      })
     }, this.holdMs)
   }
 
@@ -121,6 +127,13 @@ export class SpokenTextSink implements EventSink {
     this.holding = false
     if (/[.!?]\s*$/.test(this.pending)) await this.flushAll()
     else await this.flushWords()
+  }
+
+  /** The owner gave up on the turn (a barge-in): the hold is disarmed and the pending text
+   * dropped, so a timer armed before the abort speaks nothing after it. */
+  abort(): void {
+    this.clearHold()
+    this.pending = ''
   }
 
   async toolStarting(): Promise<void> {

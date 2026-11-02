@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MESSAGES_HR } from '../errors.js'
+import { logs, reset } from '../test/harness.js'
 import { speakable } from './speakable.js'
 import { HOLD_MS, SpokenTextSink, type SpokenEnd } from './spoken.js'
 
@@ -215,5 +216,34 @@ describe('SpokenTextSink hold timer (VOICE-8)', () => {
     await d.sink.textDelta('5 eura. Dostupno')
     expect(d.text()).toBe('Cijena je 3.5 eura. ')
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('S14 (V-6) abort disarms the hold: nothing is spoken after a barge-in, no timer is left', async () => {
+    const h = harness()
+    await h.sink.textDelta('Imamo dva stola.')
+    expect(vi.getTimerCount()).toBe(1)
+    h.sink.abort()
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(HOLD_MS * 2)
+    expect(h.said).toEqual([])
+    expect(h.sink.spoken).toBe('')
+    expect(h.ends).toEqual([])
+  })
+
+  it('S14b (V-6) a say that fails when the hold releases is caught and logged, not an unhandled rejection', async () => {
+    reset()
+    const sink = new SpokenTextSink(
+      async () => {
+        throw new Error('tts gone')
+      },
+      async () => {},
+      () => 'Samo trenutak.',
+    )
+    await sink.textDelta('Imamo dva stola.')
+    await vi.advanceTimersByTimeAsync(HOLD_MS)
+    const line = logs.find((l) => l.line.includes('"hold release failed"'))
+    expect(line?.level).toBe('warn')
+    expect(line?.line).toContain('"reason":"Error: tts gone"')
+    expect(line?.line).not.toContain('Imamo')
   })
 })
