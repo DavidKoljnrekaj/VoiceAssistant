@@ -24,7 +24,7 @@ Schema, RLS, functions, triggers, pgTAP, generated types (`supabase/`, `packages
 
 ### DB-2 · Low · No database cap on `voice_calls.expires_at` (R-D1)
 
-- Fixed on `fix/db-review` (`feat(db): a CHECK caps voice_calls.expires_at at 15 minutes from the start`):
+- Fixed on `fix/db-review` (PR #24, `b35e237`; `feat(db): a CHECK caps voice_calls.expires_at at 15 minutes from the start`):
   `20261102100000_voice_calls_expiry_cap.sql` adds `voice_calls_expires_within_cap`
   (`expires_at <= created_at + interval '15 minutes'`); `voice_calls_service_only.test.sql`
   refuses an insert and a refresh past the cap (`23514`) and accepts one at the cap. Apply item:
@@ -32,7 +32,7 @@ Schema, RLS, functions, triggers, pgTAP, generated types (`supabase/`, `packages
 
 ### DB-3 · Low · pgTAP gaps (R-D2)
 
-- Closed on `fix/db-review` (`test(db): the pgTAP cases from the review`), one case each, every
+- Closed on `fix/db-review` (PR #24, `b35e237`; `test(db): the pgTAP cases from the review`), one case each, every
   one seen failing with its grant, policy or function removed on the local stack: an
   `ai_messages` UPDATE as `authenticated` is `42501`; `anon` has no EXECUTE on `app_user_id()`
   or `app_user_role()` (`has_function_privilege`); `handle_new_auth_user` fired again for an
@@ -43,7 +43,7 @@ Schema, RLS, functions, triggers, pgTAP, generated types (`supabase/`, `packages
 
 ### DB-4 · Low · Auth URLs point at the API, and two trigger couplings are undocumented (R-D3)
 
-- Fixed on `fix/db-review` (`fix(db): auth site_url and redirect URLs point at the PWA`):
+- Fixed on `fix/db-review` (PR #24, `b35e237`; `fix(db): auth site_url and redirect URLs point at the PWA`):
   `config.toml` `site_url` is the PWA dev server (`127.0.0.1:5173`), the redirect list is
   `localhost:5173` and the compose origin `8080` on both hosts. `docs/DB.md` documents that
   `touch_session_on_message` runs as the inserting role (an INSERT grant on `ai_messages` for

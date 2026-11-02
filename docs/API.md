@@ -54,9 +54,9 @@ sessions and loads messages through supabase-js (RLS); the API only mutates them
 profile re-read, raced, since GoTrue's client takes no abort signal) and, on `/chat`, the
 pipeline below with whatever the budget has left, where every query carries the deadline's abort
 signal so a hung PostgREST request is released. A timeout is 500 `internal_error` and one
-`pre-stream timeout` log line naming the step (`auth` or `prepare`). The stream has its own 90 s
-timeout from `: ready` on. Voice start's own queries run after authentication without a signal
-(`P20`, `P21`).
+`pre-stream timeout` log line naming the step (`auth` or `prepare`; `P20`, `P21`). The stream
+has its own 90 s timeout from `: ready` on. Voice start's own queries run after authentication
+without a signal (`API-12`).
 
 ### `POST /chat`, before the stream
 

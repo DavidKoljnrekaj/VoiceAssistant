@@ -60,38 +60,38 @@ The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
 ### CORE-11 · Low · A summary boundary inside a turn yields a history the API rejects (R-C8)
 
-Resolved in `fix(core)` for CORE-11: `selectKeptChain` keeps the chain from the next user turn
+Resolved on `fix/core-review` (PR #20, `eaa4460`) for CORE-11: `selectKeptChain` keeps the chain from the next user turn
 after the boundary and ignores a boundary inside the last turn (`H09`).
 
 ### CORE-10 · Low · The registry hardcodes the demo pack's voice allowlist (R-C7)
 
-Resolved in `fix(core,api,voice)` for CORE-10: `ChannelAllowlist` is partial (an absent channel
+Resolved on `fix/core-review` (PR #20, `eaa4460`) for CORE-10: `ChannelAllowlist` is partial (an absent channel
 gets nothing), `CHANNEL_ALLOWLIST` is gone from core, and each app composes the packs with its
 own list (`API_ALLOWLIST`, `VOICE_ALLOWLIST`); `T08`, `W20`, `R01`.
 
 ### CORE-9 · Low · A `model_bad_request` is logged without its reason (R-C6)
 
-Resolved in `fix(core)` for CORE-9: `model call failed` carries `reason: errorReason(err)`
+Resolved on `fix/core-review` (PR #20, `eaa4460`) for CORE-9: `model call failed` carries `reason: errorReason(err)`
 (`E37`).
 
 ### CORE-8 · Low · Abort after the model call: the terminal paths ignore the signal and the dispatch timer keeps running (R-C4, R-C5)
 
-Resolved in two `fix(core)` commits for CORE-8: the terminal paths check the signal after the
+Resolved on `fix/core-review` (PR #20, `eaa4460`), two commits for CORE-8: the terminal paths check the signal after the
 assistant row (`E35`, `E35b`) and the loop's abort clears the per-tool timer (`E36`).
 
 ### CORE-7 · Medium · `tools` is omitted when none is advertised while the history still holds tool blocks, and the API answers 400 (R-C3)
 
-Resolved in `fix(core)` for CORE-7: the fake enforces the API rule (`F10`) and the loop applies
+Resolved on `fix/core-review` (PR #20, `eaa4460`) for CORE-7: the fake enforces the API rule (`F10`) and the loop applies
 `withoutToolBlocks` to the history when no tool is advertised (`E34`).
 
 ### CORE-6 · Medium · The loop mutates arrays it has already handed to the store (R-C2)
 
-Resolved in `fix(core)` for CORE-6: the loop pushes copies of the assistant content and the
+Resolved on `fix/core-review` (PR #20, `eaa4460`) for CORE-6: the loop pushes copies of the assistant content and the
 tool_result blocks, so a deferred store never sees the cache marker (`E33`); `ports.ts` says so.
 
 ### CORE-5 · High · A handler that resolves `undefined` crashes the loop after a malformed row is written; a `BigInt` output leaves a bare `tool_use` (R-C1)
 
-Resolved in `fix(core)` for CORE-5: dispatch persists `undefined` as `null` and an output JSON
+Resolved on `fix/core-review` (PR #20, `eaa4460`) for CORE-5: dispatch persists `undefined` as `null` and an output JSON
 cannot serialise as an `is_error` envelope; the sink gets the outcome, not a re-parse of the row
 (`E31`, `E32`).
 

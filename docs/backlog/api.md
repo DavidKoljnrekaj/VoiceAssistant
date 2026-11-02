@@ -63,19 +63,19 @@ The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpo
 
 ### API-4 · Medium · A throwing `joinToken` leaves the session, the credential and the dispatch in place; `rollback()` ignores its results (R-A1)
 
-- Fixed on `fix/api-review` (`fix(api): a failed join token cleans up the call rows; rollback failures are logged`): `joinToken` inside the guarded section, 500 after the rollback, each rollback delete logged as `rollback failed`. `V11`, `V12`.
+- Fixed on `fix/api-review` (PR #21, `410a0dc`; `fix(api): a failed join token cleans up the call rows; rollback failures are logged`): `joinToken` inside the guarded section, 500 after the rollback, each rollback delete logged as `rollback failed`. `V11`, `V12`.
 
 ### API-5 · Medium · The user's email reaches LiveKit as the participant `name` (R-A2)
 
-- Fixed on `fix/api-review` (`fix(api): the LiveKit participant carries no name`): `name` dropped from the join token and from `JoinTokenInput`; LiveKit learns the user id only. `V13`; the personal-data table in `docs/SECURITY.md` names what LiveKit receives.
+- Fixed on `fix/api-review` (PR #21, `410a0dc`; `fix(api): the LiveKit participant carries no name`): `name` dropped from the join token and from `JoinTokenInput`; LiveKit learns the user id only. `V13`; the personal-data table in `docs/SECURITY.md` names what LiveKit receives.
 
 ### API-6 · Low · `refresh` answers 200 on an expired, unswept call and 500 when the row vanished (R-A3)
 
-- Fixed on `fix/api-review` (`fix(api): refresh answers 404 for an expired call and for a row lost under it`): the lookup filters `expires_at > now()`, zero rows affected is `not_found`. `V14`, `V15`.
+- Fixed on `fix/api-review` (PR #21, `410a0dc`; `fix(api): refresh answers 404 for an expired call and for a row lost under it`): the lookup filters `expires_at > now()`, zero rows affected is `not_found`. `V14`, `V15`.
 
 ### API-7 · Low · `session_id` is optional in the chat body (R-A4)
 
-- Fixed on `fix/api-review` (`fix(api): session_id is required in the chat body`): `.nullable()` only. `P19`.
+- Fixed on `fix/api-review` (PR #21, `410a0dc`; `fix(api): session_id is required in the chat body`): `.nullable()` only. `P19`.
 
 ### API-8 · Low · The concurrent-call cap counts the caller's own stale row and ignores idle (R-A5)
 
@@ -83,8 +83,8 @@ The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpo
 
 ### API-9 · Low · No timeout on the pre-stream phase (R-A6)
 
-- Fixed on `fix/api-review` (`fix(api): a 10 s deadline on the pre-stream phase`): `deadline.ts`; auth raced, prepare queries carry the abort signal; 500 `internal_error` plus a `pre-stream timeout` line. `P20`, `P21`.
+- Fixed on `fix/api-review` (PR #21, `410a0dc`; `fix(api): a 10 s deadline on the pre-stream phase`): `deadline.ts`; auth raced, prepare queries carry the abort signal; 500 `internal_error` plus a `pre-stream timeout` line. `P20`, `P21`.
 
 ### API-11 · Low · Untested API paths (R-A9)
 
-- Closed on `fix/api-review` (`test(api): the untested paths from the review`): `C15` write failure via `res.body.cancel()`, `C16` `onError` envelope, `C17` timeout during dispatch, `C18` `done.usage` (R-A7), `P22` CORS origin list, `P23` missing bearer on `/sessions` and `/voice`, `P24` non-UUID id, `P25` `X-Request-Id` over 128, `V18` previous-call delete failure; `API-4`, `API-6`, `API-7` through their own tests.
+- Closed on `fix/api-review` (PR #21, `410a0dc`; `test(api): the untested paths from the review`): `C15` write failure via `res.body.cancel()`, `C16` `onError` envelope, `C17` timeout during dispatch, `C18` `done.usage` (R-A7), `P22` CORS origin list, `P23` missing bearer on `/sessions` and `/voice`, `P24` non-UUID id, `P25` `X-Request-Id` over 128, `V18` previous-call delete failure; `API-4`, `API-6`, `API-7` through their own tests.

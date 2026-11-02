@@ -69,7 +69,9 @@ auth.users (id, email)` is enough: the sign-up trigger creates the `public.users
 
 Two suites read the source tree instead of running it. `L04` (`packages/core/src/log-fields.test.ts`)
 finds every `log(` call under `apps/*` and `packages/*` and fails on a field named `text`,
-`message`, `content`, `transcript`, `token` or `jwt` (invariant 9; `docs/OPS.md` → Logging).
+`message`, `content`, `transcript`, `token`, `jwt` or a variant that carries the same content
+(`callToken`, `access_token`, `prompt`, `answer`, `body`, `email`, `input`; the list is
+`FORBIDDEN_LOG_FIELDS`, invariant 9; `docs/OPS.md` → Logging).
 `X01`–`X03` (`env-matrix.test.ts` in each app) fail when the first column of the matrix in
 `docs/OPS.md` does not name a variable an `env.ts` validates, and `X01b`–`X03b` when the matrix
 names one for an app whose `env.ts` does not validate it. Both exist so a rule in a doc cannot drift from the code silently.
