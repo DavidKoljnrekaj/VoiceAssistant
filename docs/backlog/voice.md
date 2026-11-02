@@ -13,7 +13,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **What happens:** the worker runs on a developer machine; no call can be taken when it is off
 - **Fix direction:** choose LiveKit Cloud agent hosting (EU) or an own container next to the
   Supabase project, write `docs/decisions/0011`, and add the deploy to `docs/OPS.md` (Part 7).
-  Either way the secrets in `apps/voice/.env.example` must be set where it runs
+  Either way the secrets in `apps/voice/env.example` must be set where it runs
 
 ### VOICE-2 · Low · Croatian voice text in the worker has not had a native review
 

@@ -269,7 +269,7 @@ read in parallel with the model call.
 ## Running locally
 
 The keys and the LiveKit project are the operator's; they live outside the repo, e.g.
-`~/.config/va/voice.env`, never in `apps/voice/`. `apps/voice/.env.example` lists every
+`~/.config/va/voice.env`, never in `apps/voice/`. `apps/voice/env.example` lists every
 variable.
 
 ```

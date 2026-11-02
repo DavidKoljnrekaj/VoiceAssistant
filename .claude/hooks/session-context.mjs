@@ -25,7 +25,7 @@ for (const app of apps) {
   const dir = join(root, 'apps', app)
   const envFiles = readdirSync(dir).filter((f) => /^\.env(\..+)?$/.test(f) && !f.endsWith('.example'))
   lines.push(
-    `apps/${app}: ${envFiles.length ? `env files present: ${envFiles.join(', ')}` : 'no .env file (copy .env.example)'}`,
+    `apps/${app}: ${envFiles.length ? `env files present: ${envFiles.join(', ')}` : 'no .env file (copy env.example)'}`,
   )
 }
 

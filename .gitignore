@@ -3,10 +3,9 @@ dist/
 coverage/
 .vitest/
 
-# Secrets: only the empty examples are committed
+# Secrets: the committed examples are apps/<app>/env.example (no leading dot, outside this rule)
 .env
 .env.*
-!.env*.example
 *.local
 .claude/settings.local.json
 

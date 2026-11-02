@@ -25,7 +25,7 @@ Every app parses its environment once at startup with zod (`apps/api/src/env.ts`
 `apps/voice/src/env.ts`, `apps/web/src/lib/env.ts` at boot in the browser, `packages/db/src/env.ts`
 for the three Supabase variables). A missing or malformed variable fails the process with the
 variable's name and never its value. Nothing else reads `process.env`
-(`.claude/rules/architecture.md`). `apps/<app>/.env.example` lists every variable with a one-line
+(`.claude/rules/architecture.md`). `apps/<app>/env.example` lists every variable with a one-line
 comment and no values; `X01`–`X03` (`env-matrix.test.ts` in each app) read the first column of
 the matrix below and fail when it misses a variable an `env.ts` validates, or names one for an
 app whose `env.ts` does not validate it (`X01b`–`X03b`).
@@ -39,13 +39,14 @@ app whose `env.ts` does not validate it (`X01b`–`X03b`).
 | CI                       | `test.yml`: placeholders for the PWA build only, no secrets. `e2e.yml`: the `E2E_*` repository secrets below                                                                                                    |
 | dev, prod                | the host's secret store (proposal below: an env file readable by root on the VM, or `fly secrets`; LiveKit Cloud agent secrets if the worker is hosted there); Supabase dashboard for Auth settings and pg_cron |
 
-Secrets never sit in the repository: `.gitignore` keeps every `.env` and `.env.*` out except the
-`.example` files, `.dockerignore` keeps them out of the images, the Claude Code harness is denied
-`Read` on `.env*` at any depth and on `~/.config/va/**` (`.claude/settings.json`; never work
-around it; the deny reaches `Edit`, `Write`, the file commands Claude Code recognises in Bash and,
-best-effort, `Grep` and `Glob`, which take no path rule of their own), and the `session-context`
-hook prints only which env files exist. The same deny covers the committed `.env.example` files,
-so a session cannot read or write them (`REL-6`). The service-role key reaches the API and the worker only;
+Secrets never sit in the repository: `.gitignore` keeps every `.env` and `.env.*` out,
+`.dockerignore` keeps them out of the images, the Claude Code harness is denied `Read` on `.env*`
+at any depth and on `~/.config/va/**` (`.claude/settings.json`; never work around it; the deny
+reaches `Edit`, `Write`, the file commands Claude Code recognises in Bash and, best-effort,
+`Grep` and `Glob`, which take no path rule of their own), and the `session-context` hook prints
+only which env files exist. The committed examples are `apps/<app>/env.example`, with no leading
+dot, so neither the ignore rules nor the deny touch them (they hold names and comments, never
+values; renamed from `.env.example` on 2026-11-02, `B-5`). The service-role key reaches the API and the worker only;
 never the browser, never CI, never LiveKit metadata. Rotation is a dashboard action at the
 vendor (Supabase, Anthropic, LiveKit, Soniox, ElevenLabs), then the new value in the secret
 store and a restart; `IDENTITY_CACHE_MS` bounds how long a running call keeps an old JWT.

@@ -15,7 +15,7 @@ apps/api/src/
 ├── app.ts              createApp(deps): middleware order, routes, 405 / 404 / error handlers
 ├── deps.ts             AppDeps (anthropic, registry, env, livekit | null, clock) and the request variables
 ├── tools.ts            createRegistry(): the demo pack with API_ALLOWLIST ({ chat: 'all' }; voice is the worker's)
-├── env.ts              zod env (see .env.example)
+├── env.ts              zod env (see env.example)
 ├── errors.ts           the flat envelope and the status table
 ├── deadline.ts         PRE_STREAM_TIMEOUT_MS (10 s over auth and the /chat pipeline) and withDeadline()
 ├── rate-limit.ts       chat burst/daily, voice calls per day and concurrent calls
@@ -210,7 +210,7 @@ when sent (≤ 128 characters) and generated otherwise; it is on every response.
 ## Running locally
 
 ```
-cp apps/api/.env.example apps/api/.env      # fill SUPABASE_* from `supabase status`, ANTHROPIC_API_KEY
+cp apps/api/env.example apps/api/.env       # fill SUPABASE_* from `supabase status`, ANTHROPIC_API_KEY
 supabase start
 pnpm --filter @va/api dev                   # tsx watch src/index.ts on PORT (3000)
 ```
