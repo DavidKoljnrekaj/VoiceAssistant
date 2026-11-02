@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-8 (next free)
+Ids: REL-9 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -15,8 +15,13 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       `supabase db push`, both run by the operator), enable pg_cron (Dashboard → Database → Extensions)
       and re-run the last DO block of the voice_calls migration so `voice-calls-sweep` is scheduled.
       Check after applying: `select jobname, schedule from cron.job` shows `voice-calls-sweep` every
-      minute; sign up a user and see a `public.users` row appear; then `/db-types` and commit
-      `packages/db/src/database.ts`. Also check whether `DB-1` reproduces on the project's image.
+      minute, and the sweep's DELETE really removes a row (it has run nowhere yet, `DB-3`): as the
+      service role insert a `voice_calls` row with `expires_at = now() - interval '1 minute'` (and
+      one with `last_seen_at = now() - interval '4 minutes'`), wait for the next minute, and see
+      both rows gone while a live row stays; the newest `cron.job_run_details` row for the job
+      has `status = 'succeeded'`. Sign up a user and see a `public.users` row appear; then
+      `/db-types` and commit `packages/db/src/database.ts`.
+      Also check whether `DB-1` reproduces on the project's image.
 
 - [x] REL-2 · Part 5: the live checklist of `docs/plan/05-voice-worker.md` §10 ran on 2026-10-29
       (`docs/VOICE.md` → The live checklist): worker, greeting, answers, rows, hang-up, bench and
@@ -65,6 +70,14 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       insert into `voice_calls` with `expires_at = now() + interval '16 minutes'` is refused with
       `23514`. Then `/db-types`: a CHECK changes no generated type, so expect
       `packages/db/src/database.ts` unchanged; commit it if it moves.
+
+- [ ] REL-8 · DB-4: point the hosted dev project's auth URLs at the PWA (the `config.toml` change
+      covers the local stack only). In the Dashboard (Authentication → URL Configuration) set
+      `site_url` to the PWA's origin and the redirect allow-list to the PWA's origin(s) and the
+      local dev origins (`http://localhost:5173`, `http://127.0.0.1:5173`, the compose origin
+      `8080`); never the API's. Check after: a sign-up confirmation or a magic link from the dev
+      project opens the PWA, not the API; `supabase link` and a `supabase db push --dry-run` report
+      no config drift once the hosting origin (`OPS-3`) is known and written into `config.toml`.
 
 ## Resolved
 

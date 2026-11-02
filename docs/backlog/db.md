@@ -39,8 +39,7 @@ Schema, RLS, functions, triggers, pgTAP, generated types (`supabase/`, `packages
   auth user with a profile keeps the profile (through a temporary UPDATE trigger on `auth.users`,
   since a profile cannot precede its auth row); a valid JWT without a profile gets null helpers
   and no rows; `ai_session_history` returns the branch under another user's claims, so the API
-  must check ownership first. Still open from the finding: the sweep's DELETE has run nowhere;
-  it is checked on the dev project under `REL-1` (pg_cron on).
+  must check ownership first. The sweep's DELETE is exercised on the dev project under `REL-1`.
 
 ### DB-4 · Low · Auth URLs point at the API, and two trigger couplings are undocumented (R-D3)
 
