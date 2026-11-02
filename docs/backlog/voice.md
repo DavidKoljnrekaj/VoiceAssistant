@@ -13,7 +13,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **What happens:** the worker runs on a developer machine; no call can be taken when it is off
 - **Fix direction:** choose LiveKit Cloud agent hosting (EU) or an own container next to the
   Supabase project, write `docs/decisions/0011`, and add the deploy to `docs/OPS.md` (Part 7).
-  Either way the secrets in `apps/voice/.env.example` must be set where it runs
+  Either way the secrets in `apps/voice/env.example` must be set where it runs
 
 ### VOICE-2 · Low · Croatian voice text in the worker has not had a native review
 
@@ -62,9 +62,12 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** in order of expected gain, each measured before and after: release the held
   sentence after a short timer as well as on the next sentence; drop the announcement heuristic
   for the filler-less case; collapse paragraph breaks inside the answer. Measured 2026-10-30
-  (`docs/VOICE.md` → Measurements): the hold timer (`HOLD_MS` 200 ms) is kept, it takes about
+  (`docs/VOICE.md` → Measurements): the hold timer (`HOLD_MS` 200 ms, the channel setting
+  `holdMs` since 2026-11-02) is kept, it takes about
   0.17 s off the one-sentence answers and nothing off the catalogue ones, whose first text is
-  the filler; the paragraph-break collapse is not kept, the model wrote no paragraph break in
+  the filler, a gain that is unproven at the bench's resolution (medians of three repeats, no
+  spread; `V-10`), so the next bench run prints min–max per question before the value is
+  touched; the paragraph-break collapse is not kept, the model wrote no paragraph break in
   any bench answer (0/12), and no instrument counts TTS seams anyway. It stays on
   `exp/voice-latency` with its test. The announcement heuristic was not touched. Further levers from the
   review: Landmark's entity list in the per-user block (saves a round, ~1.3 s on lookups);
@@ -90,7 +93,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Check:** Confirmed (R-V11)
 - **Where:** all of `agent.ts` (entry wiring, keepalive, the `endCall` paths, event handlers, the
   warm fire-and-forget); `redact` against
-  real pino (`W18b` uses a bare `Writable`); overlapping turns (`VOICE-9`); a `\n\n` inside an
+  real pino (`W18b` uses a bare `Writable`); a `\n\n` inside an
   answer producing extra flushes; `request_timeout` during a tool round (`W16` hangs the model
   only); the 6 s tool timeout as a spoken outcome; a `persistTurn` leaf-read failure;
   `callHistory` at `HISTORY_CEILING_TOKENS`
@@ -104,7 +107,7 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
 ### VOICE-5 · Medium · The call's context carries no tool rounds, so the model disowns its own earlier answer
 
-Resolved by decision 0011: the model's history is the call's own rows (tool rounds included),
+Resolved by decision 0011 on `feat/voice-worker` (PR #11, `8b14b05`): the model's history is the call's own rows (tool rounds included),
 kept in worker memory by `CallSession` and assembled by `callHistory`; LiveKit's context supplies
 only the new user turn. A prompt line and filler stripping were tried live first and did not
 help. Confirmed live on 2026-10-29: the second question ("Koliko košta stolna lampa?") was
@@ -112,36 +115,36 @@ answered directly from the first turn's tool result, no retraction, no new looku
 
 ### VOICE-6 · Medium · `transcription_delay_ms` and `end_of_turn_delay_ms` are always null (R-V1)
 
-Resolved on `fix/voice-review`: `createTurnMetrics` joins the user item's Soniox delays with
+Resolved on `fix/voice-review` (PR #22, `d764023`): `createTurnMetrics` joins the user item's Soniox delays with
 the reply that follows it (test `VOICE-6` builds both from real 1.9.2 `ChatMessage` items).
 
 ### VOICE-7 · Medium · The `timing` line's `marks` carry names but no times (R-V2)
 
-Resolved on `fix/voice-review`: the worker stamps each mark as it arrives (`TimedMark`), the
+Resolved on `fix/voice-review` (PR #22, `d764023`): the worker stamps each mark as it arrives (`TimedMark`), the
 line prints `name@ms`; test `VOICE-7`.
 
 ### VOICE-9 · Low · Overlapping turns race the save chain (R-V4)
 
-Resolved on `fix/voice-review`: `CallSession.turn` runs the turns one after another, so a turn
+Resolved on `fix/voice-review` (PR #22, `d764023`): `CallSession.turn` runs the turns one after another, so a turn
 started during a barge-in waits for the cancelled loop to unwind; test `VOICE-9`.
 
 ### VOICE-11 · Low · After the 15-minute cap the call stays open and apologises on every question (R-V6)
 
-Resolved on `fix/voice-review`: `call_ended` speaks `CALL_ENDED_HR` once and fires `onEnded`;
+Resolved on `fix/voice-review` (PR #22, `d764023`): `call_ended` speaks `CALL_ENDED_HR` once and fires `onEnded`;
 the worker's `HangUp` deletes the credential and shuts down after the agent has spoken it; test
 `VOICE-11`.
 
 ### VOICE-12 · Low · Call end paths: any participant's disconnect ends the call, an STT or TTS failure never does (R-V7, R-V8)
 
-Resolved on `fix/voice-review`: `participantLeft` compares the identity with the caller's user
+Resolved on `fix/voice-review` (PR #22, `d764023`): `participantLeft` compares the identity with the caller's user
 id; `sessionErrorAction` speaks `internal_error` on an unrecoverable provider error (not after a
 TTS failure) and `HangUp` ends the call; the session's `close` event hangs up too.
 
 ### VOICE-13 · Low · `callHistory` keeps at least 20 rows, not at most (R-V9)
 
-Resolved on `fix/voice-review`: the window is at most 20 rows from a user row (the newest turn
+Resolved on `fix/voice-review` (PR #22, `d764023`): the window is at most 20 rows from a user row (the newest turn
 always whole); `W04e` with three-row turns.
 
 ### VOICE-14 · Low · `connected` logs a random `request_id` (R-V9)
 
-Resolved on `fix/voice-review`: the field is gone; `session_id` is the correlation key.
+Resolved on `fix/voice-review` (PR #22, `d764023`): the field is gone; `session_id` is the correlation key.

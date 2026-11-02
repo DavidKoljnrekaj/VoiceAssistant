@@ -19,6 +19,10 @@ export interface ChannelSettings {
    * context for voice). */
   historyMaxRows: number
   compaction: boolean
+  /** How long the spoken sink holds a finished first sentence for the next token before it is
+   * spoken anyway (`SpokenTextSink`, VOICE-8). Chat's SSE sink holds nothing; the value is the
+   * same so one shape serves every channel. */
+  holdMs: number
 }
 
 export const CHANNEL_DEFAULTS: Record<Channel, ChannelSettings> = {
@@ -32,6 +36,7 @@ export const CHANNEL_DEFAULTS: Record<Channel, ChannelSettings> = {
     requestTimeoutMs: 90_000,
     historyMaxRows: 200,
     compaction: false,
+    holdMs: 200,
   },
   voice: {
     model: 'claude-sonnet-5-5',
@@ -43,6 +48,7 @@ export const CHANNEL_DEFAULTS: Record<Channel, ChannelSettings> = {
     requestTimeoutMs: 25_000,
     historyMaxRows: 20,
     compaction: false,
+    holdMs: 200,
   },
 }
 

@@ -171,6 +171,18 @@ export const bigint = defineTool({
   },
 })
 
+/** Resolves a value `JSON.stringify` turns into `undefined` without throwing. */
+export const unserialisable = defineTool({
+  name: 'unserialisable',
+  description: 'Returns a function or a Symbol.',
+  input: z.object({ kind: z.enum(['function', 'symbol']).describe('Which one.') }),
+  requiredRoles: ['admin', 'member'],
+  readOnly: true,
+  async handler(input): Promise<unknown> {
+    return input.kind === 'function' ? () => 'x' : Symbol('x')
+  },
+})
+
 export const TEST_PACK: ToolPack = {
   name: 'test',
   tools: [echo, whoami, gateTool, fail, boom, adminOnly, writeNote] as ToolPack['tools'],
@@ -195,7 +207,7 @@ export const ignoresSignal = defineTool({
  * pins stays the same. */
 export const EDGE_PACK: ToolPack = {
   name: 'edge',
-  tools: [nothing, bigint, ignoresSignal] as ToolPack['tools'],
+  tools: [nothing, bigint, unserialisable, ignoresSignal] as ToolPack['tools'],
 }
 
 export const TEST_ALLOWLIST = {

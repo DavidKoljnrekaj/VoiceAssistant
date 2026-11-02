@@ -6,7 +6,13 @@ import type { ReadableStream } from 'node:stream/web'
 
 import { ChatContext, isFlushSentinel } from '@livekit/agents'
 
-import { type ChannelAllowlist, type ChannelSettings, channelSettings, type ToolPack, ToolRegistry } from '@va/core'
+import {
+  type ChannelAllowlist,
+  type ChannelSettings,
+  channelSettings,
+  type ToolPack,
+  ToolRegistry,
+} from '@va/core'
 import { anthropicClient, db, scenario as coreScenario, USERS, uuid } from '@va/core/test'
 import { createServiceClient } from '@va/db'
 import { demoPack } from '@va/tools-demo'
@@ -132,6 +138,7 @@ export async function openCall(opts: OpenCallOptions = {}): Promise<OpenedCall> 
   const session = new CallSession(d, identity, {
     pickFiller: () => FILLER,
     ...(opts.maxTurns !== undefined ? { maxTurns: opts.maxTurns } : {}),
+    ...(opts.identityTimeoutMs !== undefined ? { identityTimeoutMs: opts.identityTimeoutMs } : {}),
     ...(opts.onEnded ? { onEnded: opts.onEnded } : {}),
   })
   const call: OpenedCall = {
@@ -169,6 +176,8 @@ export const FLUSH = '⏎'
 
 export interface StreamHandle {
   done: Promise<Collected>
+  /** The chunks read so far (a flush is `'⏎'`), for a scenario that looks before the end. */
+  chunks: string[]
   /** What LiveKit does on a barge-in. */
   cancel(): Promise<void>
 }
@@ -190,7 +199,7 @@ export function collect(stream: ReadableStream<EngineChunk | unknown>): StreamHa
       .filter(Boolean)
     return { chunks, text: chunks.filter((c) => c !== FLUSH).join(''), paragraphs }
   })()
-  return { done, cancel: () => reader.cancel() }
+  return { done, chunks, cancel: () => reader.cancel() }
 }
 
 /** One user turn through `llmNode`: the context is the greeting, the prior turns and the text. */

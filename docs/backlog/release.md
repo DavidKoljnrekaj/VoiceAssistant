@@ -53,20 +53,20 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       shell with the caching rules, the api and voice images fail fast naming the missing
       variables and the api image answers `/health`; watch the first `docker (*)` CI jobs on this
       branch's pull request. (c) The repository secrets for
-      `e2e.yml` (`E2E_SUPABASE_URL` = the dev project URL, `E2E_SUPABASE_ANON_KEY`,
-      `E2E_ALLOWED_SUPABASE_URL` = the same URL, optional `E2E_API_URL`, `E2E_EMAIL`, `E2E_PASSWORD`
-      for a test user created on the dev project after `REL-1`), then one manual run of the
-      workflow (`OPS-6`). (d) Diff each `apps/*/.env.example` against the matrix in `docs/OPS.md`:
-      the session that wrote the matrix could not read the example files (the harness denies
-      `.env*`), so a stale comment or a missing name there is possible; `X01`–`X03` only check the
-      matrix against the code. (e) `apps/web/.env.example` is a one-line placeholder with no
-      variables (review R-O3): write it by hand with `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-      and `VITE_API_URL`, a one-line comment each and no values; the triage session of 2026-10-30
-      could not, the deny covers writes too.
+      `e2e.yml` (`E2E_SUPABASE_URL` = the dev project URL, which must equal the
+      `E2E_ALLOWED_SUPABASE_URL` the workflow hardcodes, `E2E_SUPABASE_ANON_KEY`, optional
+      `E2E_API_URL`, `E2E_EMAIL`, `E2E_PASSWORD` for a test user created on the dev project after
+      `REL-1`), then one manual run of the workflow (`OPS-6`). (d) Diff each `apps/*/env.example` against the matrix in `docs/OPS.md`: the
+      session that wrote the matrix could not read the example files (they were `.env.example`,
+      under the harness deny, until 2026-11-02), so a stale comment or a missing name there is
+      possible; `X01`–`X03` only check the matrix against the code. (e) Done 2026-11-02 (`B-5`):
+      the example files are `apps/<app>/env.example`, outside the deny, and
+      `apps/web/env.example` lists `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and
+      `VITE_API_URL` with a one-line comment each and no values.
 
 - [ ] REL-7 · DB-2: apply `20261102100000_voice_calls_expiry_cap.sql` to the dev project (after
       `REL-1`, by the operator). Check after applying: `select conname from pg_constraint where
-    conname = 'voice_calls_expires_within_cap'` returns one row, and as the service role an
+conname = 'voice_calls_expires_within_cap'` returns one row, and as the service role an
       insert into `voice_calls` with `expires_at = now() + interval '16 minutes'` is refused with
       `23514`. Then `/db-types`: a CHECK changes no generated type, so expect
       `packages/db/src/database.ts` unchanged; commit it if it moves.

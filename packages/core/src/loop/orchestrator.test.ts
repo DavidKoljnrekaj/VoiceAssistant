@@ -467,6 +467,34 @@ describe('orchestration loop', () => {
   )
 
   scenario(
+    'E38 (V-6) a handler that resolves a function or a Symbol is persisted as a null result, like undefined',
+    async () => {
+      anthropic.script(
+        callTools(
+          toolUse('unserialisable', { kind: 'function' }),
+          toolUse('unserialisable', { kind: 'symbol' }),
+        ),
+        answer('Ništa.'),
+      )
+      const ctx = await authAs('member')
+      const run = await runChat(ctx, 'x', { packs: [TEST_PACK, EDGE_PACK] })
+      expect(run.sink.errorEvent).toBeNull()
+      expect(run.sink.toolResults.map((r) => [r.isError, r.output])).toEqual([
+        [false, null],
+        [false, null],
+      ])
+      expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      for (const block of blocksOf(run.rows()[2]!.content, 'tool_result')) {
+        expect(block).toMatchObject({ content: 'null', is_error: false })
+      }
+      expect(toolResultSentToModel(1, run.sink.toolCalls[0]!.id)).toBeNull()
+      expect(toolResultSentToModel(1, run.sink.toolCalls[1]!.id)).toBeNull()
+      expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
+      expect(run.completed).toBe(1)
+    },
+  )
+
+  scenario(
     'E33 CORE-6: a store that serialises after the loop (voice) gets the rows exactly as the model and the tools produced them, with no cache marker',
     async () => {
       anthropic.script(callTools(toolUse('echo', { text: 'a' })), answer('ok'))
@@ -489,7 +517,9 @@ describe('orchestration loop', () => {
       const rows = run.rows()
       expect(kinds(run.sessionId)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
       const toolUseId = run.sink.toolCalls[0]!.id
-      expect(rows[1]!.content).toEqual([{ type: 'tool_use', id: toolUseId, name: 'echo', input: { text: 'a' } }])
+      expect(rows[1]!.content).toEqual([
+        { type: 'tool_use', id: toolUseId, name: 'echo', input: { text: 'a' } },
+      ])
       expect(rows[2]!.content).toEqual([
         {
           type: 'tool_result',
@@ -525,7 +555,10 @@ describe('orchestration loop', () => {
       expect(call.body.tools).toBeUndefined()
       expect(call.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
       expect(
-        call.body.messages.flatMap((m) => [...blocksOf(m.content, 'tool_use'), ...blocksOf(m.content, 'tool_result')]),
+        call.body.messages.flatMap((m) => [
+          ...blocksOf(m.content, 'tool_use'),
+          ...blocksOf(m.content, 'tool_result'),
+        ]),
       ).toEqual([])
       expect(blocksOf(call.body.messages[1]!.content, 'text').map((b) => b.text)).toEqual(['Provjeravam.'])
       expect(run.sink.doneEvent?.stopReason).toBe('end_turn')

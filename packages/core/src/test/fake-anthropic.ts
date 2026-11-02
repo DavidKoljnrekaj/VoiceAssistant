@@ -41,6 +41,9 @@ export type Scripted =
   | ScriptedTurn
   | { error: { status: number; type: string; message: string } }
   | { hangUntilAborted: true }
+  /** Streams the turn's content blocks, then holds the stream open (no `message_delta`, no
+   * `message_stop`) until the request's signal aborts: a model that stalls mid-answer. */
+  | { hangAfterContent: ScriptedTurn }
   | { connectionError: true }
   | ((req: CapturedCall) => Scripted)
 
@@ -145,29 +148,35 @@ export class FakeAnthropic {
       })
     }
 
+    const stall = 'hangAfterContent' in next
+    const turn = stall ? next.hangAfterContent : next
     const message: FakeMessage = {
       id: `msg_fake_${++this.msgCounter}`,
       type: 'message',
       role: 'assistant',
-      model: next.model ?? body.model,
-      content: next.content,
-      stop_reason: next.stop_reason,
+      model: turn.model ?? body.model,
+      content: turn.content,
+      stop_reason: turn.stop_reason,
       stop_sequence: null,
-      stop_details: next.stop_details ?? null,
+      stop_details: turn.stop_details ?? null,
       usage: {
-        input_tokens: next.usage?.input_tokens ?? 100,
-        output_tokens: next.usage?.output_tokens ?? 20,
-        cache_creation_input_tokens: next.usage?.cache_creation_input_tokens ?? 0,
-        cache_read_input_tokens: next.usage?.cache_read_input_tokens ?? 0,
+        input_tokens: turn.usage?.input_tokens ?? 100,
+        output_tokens: turn.usage?.output_tokens ?? 20,
+        cache_creation_input_tokens: turn.usage?.cache_creation_input_tokens ?? 0,
+        cache_read_input_tokens: turn.usage?.cache_read_input_tokens ?? 0,
       },
     }
     if (!body.stream) {
+      if (stall) throw new Error('fake-anthropic: hangAfterContent needs a streamed request')
       return new Response(JSON.stringify(message), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     }
-    return new Response(sseFor(message), { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    return new Response(sseFor(message, stall ? signal : null), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    })
   }
 }
 
@@ -266,7 +275,12 @@ export function validateConversation(
   return null
 }
 
-function sseFor(message: FakeMessage): ReadableStream<Uint8Array> {
+/** The message as SSE frames. With `stallUntilAbort`, the frames stop after the last content
+ * block and the stream errors (as an aborted fetch would) when that signal fires. */
+function sseFor(
+  message: FakeMessage,
+  stallUntilAbort: AbortSignal | null = null,
+): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
   const frames: string[] = []
   const emit = (event: string, data: unknown) =>
@@ -328,16 +342,21 @@ function sseFor(message: FakeMessage): ReadableStream<Uint8Array> {
     }
     emit('content_block_stop', { type: 'content_block_stop', index })
   })
-  emit('message_delta', {
-    type: 'message_delta',
-    delta: { stop_reason: message.stop_reason, stop_sequence: null, stop_details: message.stop_details },
-    usage: { output_tokens: message.usage.output_tokens },
-  })
-  emit('message_stop', { type: 'message_stop' })
+  if (!stallUntilAbort) {
+    emit('message_delta', {
+      type: 'message_delta',
+      delta: { stop_reason: message.stop_reason, stop_sequence: null, stop_details: message.stop_details },
+      usage: { output_tokens: message.usage.output_tokens },
+    })
+    emit('message_stop', { type: 'message_stop' })
+  }
   return new ReadableStream({
     start(controller) {
       for (const f of frames) controller.enqueue(enc.encode(f))
-      controller.close()
+      if (!stallUntilAbort) return controller.close()
+      const abort = () => controller.error(new DOMException('The operation was aborted.', 'AbortError'))
+      if (stallUntilAbort.aborted) abort()
+      else stallUntilAbort.addEventListener('abort', abort, { once: true })
     },
   })
 }

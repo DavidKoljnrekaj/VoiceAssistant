@@ -148,6 +148,27 @@ describe('voice call lifecycle', () => {
       const count = db.requestsTo('voice_calls', 'HEAD')[0]!
       expect(count.params.get('expires_at')).toMatch(/^gt\./)
       expect(count.params.get('last_seen_at')).toMatch(/^gt\./)
+      // The caller's own live call is the one this start replaces: it is left out of the count
+      // rather than deleted before it (V-4).
+      expect(count.params.get('user_id')).toBe(`neq.${M.id}`)
+    },
+  )
+
+  scenario(
+    "V20 (API-8, V-4) a refused start leaves the caller's live credential in place: the previous call's row goes only when the new call is allowed",
+    async () => {
+      const first = (await (await call('/voice/sessions')).json()) as { session_id: string }
+      db.seed('voice_calls', [liveRow(USERS.admin.id), liveRow(USERS.admin.id), liveRow(USERS.admin.id)])
+      const res = await call('/voice/sessions')
+      expect(await flatError(res)).toMatchObject({ status: 429, code: 'rate_limited' })
+      expect(
+        calls()
+          .filter((c) => c.user_id === M.id)
+          .map((c) => c.session_id),
+      ).toEqual([first.session_id])
+      expect(voiceSessions().map((s) => s.id)).toEqual([first.session_id])
+      expect(db.requestsTo('voice_calls', 'DELETE')).toHaveLength(1)
+      expect(livekit.dispatches).toHaveLength(1)
     },
   )
 

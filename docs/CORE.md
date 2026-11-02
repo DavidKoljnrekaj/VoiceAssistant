@@ -87,14 +87,16 @@ onto and moves the cache breakpoint in holds copies, so a store that serialises 
 (voice's `DeferredStore`) writes the rows exactly as the model and the tools produced them
 (`E33`).
 
-Abort is checked before each model call, after the assistant row is persisted (before the
-turn's terminal events), between the model call and dispatch, and after dispatch. On abort the
+Abort is checked before each model call, after the assistant row is persisted (on a terminal
+stop, before any of its blocks is emitted), between the model call and dispatch, and after
+dispatch. On abort the
 loop persists synthetic `is_error` results for tools that did not finish (`cancelled before the
 tool ran` / `cancelled before the tool returned`; finished tools keep their real output), emits
 no result event and returns silently; the request owner decides whether to emit `error`. An
-abort that lands during the assistant-row insert of a terminal turn leaves the row, emits no
-`done` and runs no `onComplete` (`aborted after model call`; a truncation still closes its tool
-calls out, `E35`, `E35b`). A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
+abort that lands during the assistant-row insert of a terminal turn leaves the row, emits none
+of its blocks, no `done`, and runs no `onComplete` (`aborted after model call`; a truncation
+still closes its tool calls out, `E35`, `E35b`; the check sat after the block events until
+2026-11-02, `V-7`). A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
 fallback and unknown block types are persisted verbatim and never emitted. A terminal stop with
 `tool_use` blocks (truncation) persists synthetic results and one Croatian explanation row
 (`TRUNCATED_HR`). The manual loop over `messages.stream` is a decision (`docs/decisions/0009`),
@@ -112,11 +114,12 @@ timer is cleared on every exit, the loop's abort included (a handler that ignore
 leaves no timer behind, `E36`); a timeout is `{ error: 'tool execution failed: tool_timeout' }`
 and the handler is told to stop through its signal. A handler's `{ error }` return is an error
 result too; a throw becomes `{ error: 'tool execution failed: <message>' }`. The outcome always
-serialises: a handler that resolves `undefined` (a `Promise<void>` handler type-checks) is
+serialises: a handler that resolves `undefined` (a `Promise<void>` handler type-checks), a
+function or a Symbol (`JSON.stringify` returns `undefined` for those without throwing) is
 persisted as `null`, and an output `JSON.stringify` rejects (a BigInt, a cycle) becomes
 `{ error: 'tool output not serialisable: …' }` with a `tool output not serialisable` log line,
-so the `tool_result` row can always be written (`E31`, `E32`). The sink receives the outcome
-itself, the same value the row's `content` holds.
+so the `tool_result` row can always be written (`E31`, `E32`, `E38`). The sink receives the
+outcome itself, the same value the row's `content` holds.
 
 ### History assembly
 
@@ -148,8 +151,9 @@ it.
 `new SpokenTextSink(say, end, pickFiller?, holdMs?)` turns the loop's events into sentences for
 text-to-speech and nothing else: `say(text)` receives what to speak, `end('done' | 'error')` is
 called once after `done` or `error`, `pickFiller` picks the filler sentence (random from
-`FILLERS_HR` by default; tests pin one), `holdMs` (default `HOLD_MS`, 200) is how long a
-finished first sentence waits for the next token. Landmark's `OpenAiChunkSink` without its wire
+`FILLERS_HR` by default; tests pin one), `holdMs` is how long a finished first sentence waits
+for the next token: the owner passes its channel settings' `holdMs` (the voice worker does,
+`W21`), `HOLD_MS` (200, the voice default) stands in when it does not. Landmark's `OpenAiChunkSink` without its wire
 format: the voice worker runs the loop in-process and hands `say` to the TTS adapter.
 
 - `textDelta` is spoken a word at a time, up to the last whitespace, so an abbreviation is never
@@ -167,6 +171,10 @@ format: the voice worker runs the loop in-process and hands `say` to the TTS ada
 - `toolCall` and `toolResult` are no-ops: nothing about tools is spoken.
 - `done` flushes what is pending; on `refusal` with nothing spoken it says
   `MESSAGES_HR.model_refused`. `error` flushes, then speaks the Croatian message. Both call `end`.
+- `abort()` is the owner's exit on a barge-in, where the loop returns silently: it disarms the
+  hold and drops the pending text, so a timer armed before the abort speaks nothing after it
+  (`S14`; the voice turn calls it when its signal fires). A `say` that fails when the hold
+  releases on its own is logged (`hold release failed`), never an unhandled rejection (`S14b`).
 - Everything goes through `speakable()`. `spoken` holds the whole spoken text; `firstOutputAt`
   (`performance.now()`) is when the first text reached `say`, for the worker's timing log.
 
@@ -184,6 +192,7 @@ collapse to two. The Croatian strings are marked for native review (`CORE-1`).
 | tool / request timeout    | 15 s / 90 s                         | 6 s / 25 s                          |
 | history rows              | 200 (`ai_session_history`)          | 20 (the call's own context)         |
 | compaction                | off (later)                         | off                                 |
+| hold (spoken sink)        | 200 ms (no sink holds)              | 200 ms (`holdMs`, `VOICE-8`)        |
 | env overrides             | `AI_CHAT_MODEL`, `AI_CHAT_EFFORT`   | `AI_VOICE_MODEL`, `AI_VOICE_EFFORT` |
 
 `CHANNEL_DEFAULTS` is the table as data; `channelSettings(channel, env)` applies the overrides

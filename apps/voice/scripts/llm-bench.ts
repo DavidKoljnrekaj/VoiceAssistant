@@ -62,6 +62,11 @@ const pct = (xs: number[], p: number): number => {
 }
 const median = (xs: number[]): number => pct(xs, 50)
 const sec = (ms: number): string => (Number.isFinite(ms) ? `${(ms / 1000).toFixed(2)} s` : '—')
+/** The spread of the repeats, so a small move of the median can be judged against it (V-10). */
+const range = (xs: number[]): string => {
+  const s = xs.filter((x) => Number.isFinite(x))
+  return s.length ? `${sec(Math.min(...s))}–${sec(Math.max(...s))}` : '—'
+}
 
 async function signIn(): Promise<AuthContext> {
   const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/token?grant_type=password`, {
@@ -175,11 +180,13 @@ async function main(): Promise<void> {
         )
       }
     }
-    console.log(`\nper question (median of ${repeats}):`)
+    console.log(`\nper question (median of ${repeats}, min–max of the repeats in brackets):`)
     for (const q of qs) {
       const rs = rows.filter((x) => x.id === q.id).map((x) => x.r)
+      const first = rs.map((r) => r.first_text_ms ?? NaN)
+      const total = rs.map((r) => r.total_ms)
       console.log(
-        `  ${q.id.padEnd(7)} first ${sec(median(rs.map((r) => r.first_text_ms ?? NaN)))}  total ${sec(median(rs.map((r) => r.total_ms)))}  rounds ${median(rs.map((r) => r.rounds))}`,
+        `  ${q.id.padEnd(7)} first ${sec(median(first))} (${range(first)})  total ${sec(median(total))} (${range(total)})  rounds ${median(rs.map((r) => r.rounds))}`,
       )
     }
     const all = rows.map((x) => x.r)

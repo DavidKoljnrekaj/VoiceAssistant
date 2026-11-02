@@ -34,6 +34,7 @@ apps/voice/
 │   ├── tools.ts            createRegistry(): the demo pack with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
 │   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, turns one after another, the timing line, settle()
+│   ├── deadline.ts         withDeadline: the identity read's 5 s deadline (the API's helper, same shape)
 │   ├── lifecycle.ts        participantLeft, sessionErrorAction, HangUp: how a call ends from the worker's side, LiveKit-free
 │   ├── session-options.ts  turn handling as data: Soniox end of turn, VAD barge-in, no preemptive generation, no recording
 │   ├── assistant-llm.ts    AssistantAgent (llmNode override), engineStream, EngineLLM (the stub LiveKit requires)
@@ -117,7 +118,9 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    transcripts or traces); the agent connects and says `GREETING_HR`.
 6. Every user turn: `CallSession.turn` applies the per-call cap (50; the 51st hears
    `rate_limited`), reads the identity (cached up to `IDENTITY_CACHE_MS`, then the row and
-   `authenticateToken` again, which picks up a rotated JWT and a changed role), bumps
+   `authenticateToken` again, which picks up a rotated JWT and a changed role; under a 5 s
+   deadline, `IDENTITY_TIMEOUT_MS`, past which the caller hears `internal_error` rather than
+   the whole call stalling behind one hung read, `V-3`), bumps
    `last_seen_at` off the critical path, runs the turn and logs one
    `timing` line. The model's history is the call's own rows kept in worker memory, exactly as
    the loop wrote them (user text, assistant blocks with `tool_use`, the `tool_result` rows),
@@ -126,10 +129,14 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    earlier answer with no lookup behind it retracted it on the next question (`VOICE-5`). The
    call's turns run one after another: a turn LiveKit starts while the cancelled one is still
    unwinding (a barge-in) waits for it, so its history carries the cut-short turn's rows and
-   its save chains off them (`VOICE-9`); the saves themselves are chained too. A gone row (the
+   its save chains off them (`VOICE-9`); the saves themselves are chained too. A queued turn
+   LiveKit cancels before it runs is dropped (`turn dropped`): it counts for nothing and writes
+   nothing (`V-3`). A gone row (the
    15-minute cap, or the API's `/end`) is `call_ended`: the caller hears `CALL_ENDED_HR` once,
-   the session reports it (`onEnded`) and the worker hangs up after the agent has spoken it
-   (`HangUp`, or after a 10 s grace); a question that still arrives hears nothing (`VOICE-11`).
+   the session reports it (`onEnded`) and the worker hangs up once that reply's speech has
+   played out (`HangUp` waits for the `SpeechHandle` LiveKit created for the turn, or 10 s of
+   grace; an earlier answer still draining does not pre-empt it, `V-2`); a question that still
+   arrives hears nothing (`VOICE-11`).
    After a barge-in the rows keep the whole answer the model wrote, not what was played
    (decision 0011, `VOICE-10`).
 7. While the participant is connected the worker bumps `last_seen_at` every minute, so a quiet
@@ -141,8 +148,9 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    failed delete is retried by the next path), then shuts the job down. The API's `/end` and
    the sweep are the other two paths; Landmark's four rules (`docs/API.md`) all hold. A Soniox
    or ElevenLabs error LiveKit reports as unrecoverable is spoken as `internal_error` where
-   speech still works (not after a TTS failure), then the call hangs up after that line or the
-   10 s grace (`sessionErrorAction`); a recoverable one is only logged, LiveKit retries it. The
+   speech still works (not after a TTS failure), then the call hangs up after that line's
+   playout or the 10 s grace (`sessionErrorAction`); a recoverable one is only logged, LiveKit
+   retries it. The
    session's own `close` event (LiveKit's unrecoverable-error limit, or the drain on shutdown)
    hangs up as well (`VOICE-12`).
 
@@ -171,7 +179,8 @@ Fixed in code, not settings: `turnDetection: 'stt'` (LiveKit's turn detector has
 `interruption.mode: 'vad'` (never LiveKit's hosted "adaptive" model), the Soniox EU host and
 `stt-rt-v5`, `languageHints: ['hr']` strict, `eleven_v4_turbo` with `language: 'hr'`, and the
 voice channel's engine settings (`docs/CORE.md` → Channels: Sonnet 5.5, `low`, `between_tools`,
-1024 tokens, 4 iterations, 6 s per tool, 25 s per request, last 20 messages).
+1024 tokens, 4 iterations, 6 s per tool, 25 s per request, last 20 messages, the sink's 200 ms
+hold, which `runVoiceTurn` takes from `settings.holdMs`).
 
 ## Latency budget and measurements
 
@@ -191,9 +200,9 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | ---------- | --------- | -------------------------------------------------------- | -------------------------- | -------------------- | ---------------------- | ------ | --- |
 | 2026-10-29 | `6490fc2` | Part 5 baseline (bench)                                  | `claude-sonnet-5-5`, `low` | 1.77 s / 4.95 s      | 5.94 s / 9.37 s        | 2.69   | 36  |
 | 2026-10-29 | `e57f31c` | demo tables seeded                                       | `claude-sonnet-5-5`, `low` | 1.85 s / 2.84 s      | 4.22 s / 9.08 s        | 2.08   | 36  |
-| 2026-10-30 | `9dfe2b5` | review fixes, baseline for `VOICE-8`                     | `claude-sonnet-5-5`, `low` | 1.83 s / 2.86 s      | 4.33 s / 8.76 s        | 2.06   | 36  |
-| 2026-10-30 | `288f9a3` | `VOICE-8` lever 1: the sink's 200 ms hold timer (kept)   | `claude-sonnet-5-5`, `low` | 1.79 s / 2.87 s      | 4.18 s / 13.79 s       | 2.03   | 36  |
-| 2026-10-30 | `ab9891b` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
+| 2026-10-30 | `d764023` | review fixes, baseline for `VOICE-8` (PR #22)            | `claude-sonnet-5-5`, `low` | 1.83 s / 2.86 s      | 4.33 s / 8.76 s        | 2.06   | 36  |
+| 2026-10-30 | `1bde7af` | `VOICE-8` lever 1: the sink's 200 ms hold timer (PR #23) | `claude-sonnet-5-5`, `low` | 1.79 s / 2.87 s      | 4.18 s / 13.79 s       | 2.03   | 36  |
+| 2026-10-30 | `d5240fa` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
@@ -205,13 +214,20 @@ answer 1.7 s, one round. Prompt cache hit on 36/36 first calls in both runs.
 
 The three 2026-10-30 runs are the `VOICE-8` levers, one commit each on `exp/voice-latency`,
 against the fix branch's head as the baseline (same day, same stack, three repeats each). The
+commits the bench ran at (`9dfe2b5`, `288f9a3`, `ab9891b`) were squashed or rebased away: the
+baseline is `fix/voice-review`'s head, on `main` as `d764023`; lever 1 is `1bde7af` on `main`;
+lever 2 is `d5240fa` on `exp/voice-latency` only. The
 hold timer moves what it can move: on the catalogue questions the first text is the filler,
 which the hold never touched, and the overall p50 differences (0.04 s first text, 0.15 s
 whole answer) are inside the run-to-run noise; on the one-sentence answers, where the hold
 used to wait for the end of the generation, the first text went from 1.68 / 1.69 s (hello,
 thanks) to 1.52 / 1.51 s, about 0.17 s, the generation time of the sentence. The p95 whole
 answer of 13.79 s is one q10 take at three rounds, not the lever. Kept (cherry-picked onto
-`fix/voice-review`). The paragraph-break collapse cannot show in this bench (it acts on TTS
+`fix/voice-review`). **The gain is unproven at this bench's resolution** (`V-10`): the 0.17 s is
+a difference of medians over three repeats with no spread recorded, and the 200 ms value itself
+was chosen, not measured. Low risk, so it stays; the next run prints each question's min–max
+beside its median (`llm-bench.ts`), which is what a 0.15 s claim needs to be judged against,
+and a hold value is changed only on that evidence. The paragraph-break collapse cannot show in this bench (it acts on TTS
 segments, and no instrument counts seams: the call test and `turns.jsonl` measure the first
 audio only), and the bench now counts the breaks the model writes: 0 of 12 answers had one
 (`breaks` in `llm-bench.jsonl`, the filler's own break not counted). With nothing to act on it
@@ -253,7 +269,7 @@ read in parallel with the model call.
 ## Running locally
 
 The keys and the LiveKit project are the operator's; they live outside the repo, e.g.
-`~/.config/va/voice.env`, never in `apps/voice/`. `apps/voice/.env.example` lists every
+`~/.config/va/voice.env`, never in `apps/voice/`. `apps/voice/env.example` lists every
 variable.
 
 ```
@@ -270,8 +286,9 @@ WebSocket client of LiveKit). The worker's `prewarm` loads Silero once per proce
 
 Logs are one JSON line per event with `tag: '[voice]'`: `job refused`, `call accepted`, `warm`,
 `timing` per turn (`auth_ms`, `first_text_ms`, `total_ms`, the engine's marks as `name@ms`,
-`spoken_len`, token and cache counts, `outcome`), `turn limit reached`, `identity refused`,
-`call ended` (the cap), `call ending` (with its `reason`).
+`spoken_len`, token and cache counts, `outcome`), `turn dropped`, `turn limit reached`, `identity timeout`
+(with `timeout_ms`), `identity refused`, `call ended` (the cap), `call ending` (with its
+`reason`).
 Never the transcript, the audio or the call token. LiveKit's own logger (pino, JSON) writes the
 caller's words and the agent's answer under `lk.pii.*` keys at `info` and `warn`; the worker
 forces JSON output in the job process and strips every `lk.pii.*` key from what reaches stdout
@@ -299,7 +316,7 @@ it at the end. Needs `SUPABASE_*`, `ANTHROPIC_API_KEY`, `VA_BENCH_EMAIL`, `VA_BE
 `AI_VOICE_MODEL` / `AI_VOICE_EFFORT` to compare models; `LABEL` tags the rows.
 
 ```
-pnpm --filter @va/voice bench 3            # p50/p95 first text and whole answer, rounds, paragraph breaks, cache hits
+pnpm --filter @va/voice bench 3            # p50/p95 first text and whole answer, per-question median with min–max, rounds, breaks, cache hits
 pnpm --filter @va/voice bench first warm   # one call's first question after the warm-up (cold-start runs)
 SHOW_ANSWERS=1 pnpm --filter @va/voice bench 1   # prints the answers to the console (never to the log)
 ```
@@ -355,7 +372,7 @@ scenario's deferred rows never land in the next one's world.
 | W05        | filler then answer in order, a flush after the filler; the tool ran with the caller's JWT                                                                                                                                                              |
 | W06        | a tool outside the voice allowlist is refused at dispatch even when the model names it                                                                                                                                                                 |
 | W07        | rows written after the answer, chained, newest row first for the next turn, one insert                                                                                                                                                                 |
-| VOICE-9    | a turn started while the cancelled one is still unwinding sees its rows (the repaired `tool_use`) and chains off them; one parent chain                                                                                                                |
+| VOICE-9    | a turn started while the cancelled one is still unwinding sees its rows (the repaired `tool_use`) and chains off them; one parent chain; `V-3b`: a queued turn cancelled before it ran counts for nothing and writes nothing                           |
 | W08        | stream cancel (barge-in) aborts the loop; the synthetic `tool_result` row is persisted                                                                                                                                                                 |
 | W09        | `warm` sends the same model/system/tools/thinking/output_config as a real turn, `max_tokens: 0`                                                                                                                                                        |
 | W10        | the voice model profile (Sonnet 5.5, `between_tools`, low, fallbacks + beta) on every request                                                                                                                                                          |
@@ -371,6 +388,7 @@ scenario's deferred rows never land in the next one's world.
 | W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                                                                           |
 | W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                                                                              |
 | W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat                                                                                                            |
+| W21        | the channel setting `holdMs` reaches the sink: with a 10 ms hold a one-sentence answer the model stalls after is spoken within 100 ms (`V-10`)                                                                                                         |
 
 ```
 pnpm exec vitest run apps/voice

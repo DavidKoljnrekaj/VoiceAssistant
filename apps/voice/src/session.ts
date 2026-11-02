@@ -3,10 +3,11 @@
 // (`assistant-llm.ts`) hands every user turn here; the bench runs turns through it too.
 import { randomUUID } from 'node:crypto'
 
-import { type ErrorCode, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
+import { type AuthContext, type ErrorCode, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
 
 import type { CallIdentity } from './call.js'
 import { LOG_TAG, type VoiceDeps } from './config.js'
+import { withDeadline } from './deadline.js'
 import { CALL_ENDED_HR } from './greeting.js'
 import { type CallRow, callHistory } from './messages.js'
 import { runVoiceTurn, type VoiceTurnResult } from './turn.js'
@@ -24,6 +25,11 @@ export function identityCode(
 /** The brief's voice rate limit: turns per call. */
 export const MAX_TURNS_PER_CALL = 50
 
+/** How long a turn waits for the identity read (normally 0.2–0.3 s, cached for a minute) before
+ * the caller hears `internal_error` instead of silence: well inside the turn's 25 s budget, and
+ * the turns behind it in the chain wait no longer than this. */
+export const IDENTITY_TIMEOUT_MS = 5_000
+
 export interface TurnIO {
   /** What the caller just said. */
   userText: string
@@ -34,6 +40,8 @@ export interface TurnIO {
 
 export interface CallSessionOptions {
   maxTurns?: number
+  /** The deadline on the identity read (`IDENTITY_TIMEOUT_MS`). */
+  identityTimeoutMs?: number
   pickFiller?: () => string
   /** Called once, after the goodbye was handed to the stream, when the call's row is gone (the
    * 15-minute cap, or the API's end): the owner hangs up. */
@@ -52,6 +60,7 @@ export class CallSession {
   /** The call's own rows so far, the model's history (tool rounds included; VOICE-5). */
   private readonly rows: CallRow[] = []
   private readonly maxTurns: number
+  private readonly identityTimeoutMs: number
   /** Set once the goodbye was spoken: later turns (the caller spoke before the hang-up landed)
    * say nothing. */
   private ended = false
@@ -62,6 +71,7 @@ export class CallSession {
     private readonly options: CallSessionOptions = {},
   ) {
     this.maxTurns = options.maxTurns ?? MAX_TURNS_PER_CALL
+    this.identityTimeoutMs = options.identityTimeoutMs ?? IDENTITY_TIMEOUT_MS
   }
 
   /** A user turn: what is spoken goes to `say`; `end` is called once unless a barge-in cancels
@@ -77,6 +87,12 @@ export class CallSession {
   private async runTurn(io: TurnIO): Promise<VoiceTurnResult | null> {
     const requestId = randomUUID()
     const ids = { request_id: requestId, user_id: this.identity.userId, session_id: this.identity.sessionId }
+    // LiveKit cancelled this turn (a barge-in) while it waited behind the one before it: nobody
+    // is listening for it, so it counts for nothing and reads and writes nothing (V-3).
+    if (io.signal.aborted) {
+      log('info', LOG_TAG, 'turn dropped', { ...ids, turns: this.turns })
+      return null
+    }
     if (++this.turns > this.maxTurns) {
       log('warn', LOG_TAG, 'turn limit reached', { ...ids, turns: this.turns, limit: this.maxTurns })
       await io.say(MESSAGES_HR.rate_limited)
@@ -90,7 +106,7 @@ export class CallSession {
     const t0 = performance.now()
     let ctx
     try {
-      ctx = await this.identity.ctx()
+      ctx = await this.identityWithinDeadline(ids)
     } catch (err) {
       // The row is gone: the cap, or the API ended the call. One goodbye, then the owner hangs up.
       if (err instanceof Error && err.message === 'call_ended') {
@@ -144,6 +160,19 @@ export class CallSession {
       outcome: result.outcome,
     })
     return result
+  }
+
+  /** The identity read under its deadline; a read that outlives it is the same failure as a
+   * failed lookup (`internal_error`), logged with the timeout. The late result is discarded. */
+  private async identityWithinDeadline(ids: Record<string, unknown>): Promise<AuthContext> {
+    const read = this.identity.ctx()
+    read.catch(() => {})
+    const result = await withDeadline(read, this.identityTimeoutMs)
+    if (result.timedOut) {
+      log('error', LOG_TAG, 'identity timeout', { ...ids, timeout_ms: this.identityTimeoutMs })
+      throw new Error('identity_timeout')
+    }
+    return result.value
   }
 
   private track(p: Promise<unknown>): void {

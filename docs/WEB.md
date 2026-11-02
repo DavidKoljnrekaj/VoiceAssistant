@@ -13,7 +13,7 @@ apps/web/
 ├── index.html  vite.config.ts  public/icons/   (icon-192.png, icon-512.png: placeholders)
 ├── vitest.config.ts  playwright.config.ts  tsconfig.e2e.json   the unit suites; the smoke (docs/TESTING.md)
 ├── Dockerfile  nginx.conf      the static image (docs/OPS.md → Containers)
-├── .env.example                the three VITE_ variables, no values
+├── env.example                 the three VITE_ variables, no values
 ├── e2e/smoke.spec.ts           the Playwright smoke (E01–E03)
 ├── e2e/support/                env.ts (loads the build's env), prod-safety.ts (the guard, G01–G04)
 ├── src/
@@ -261,7 +261,7 @@ Chunks: `vendor-react`, `vendor-supabase`, `vendor-livekit` (dynamic), `vendor-m
 
 ```
 supabase start                                   # the local stack (docs/DB.md)
-cp apps/web/.env.example apps/web/.env           # then fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (supabase status), VITE_API_URL
+cp apps/web/env.example apps/web/.env            # then fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (supabase status), VITE_API_URL
 pnpm --filter @va/api dev                        # the API on :3000 (docs/API.md → Running locally)
 pnpm --filter @va/web dev                        # Vite on http://127.0.0.1:5173
 pnpm --filter @va/web build && pnpm --filter @va/web preview   # the production build with the service worker

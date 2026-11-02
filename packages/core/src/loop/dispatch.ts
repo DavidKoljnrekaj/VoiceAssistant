@@ -9,8 +9,9 @@ import type { ToolHandlerExtras } from '../tools/define.js'
 import type { ToolRegistry } from '../tools/registry.js'
 
 /** What a tool round persists and emits for one `tool_use`. `output` always serialises to JSON:
- * `dispatchToolWithTimeout` turns `undefined` into `null` and anything `JSON.stringify` rejects
- * into an error envelope, so the `tool_result` row can always be written (invariant 3). */
+ * `dispatchToolWithTimeout` turns `undefined` (and a function or a Symbol, which `JSON.stringify`
+ * drops the same way) into `null` and anything `JSON.stringify` rejects into an error envelope,
+ * so the `tool_result` row can always be written (invariant 3). */
 export interface ToolOutcome {
   output: unknown
   isError: boolean
@@ -125,8 +126,10 @@ export async function dispatchToolWithTimeout(
 
 /**
  * A handler's return as the row will hold it: `undefined` (a `Promise<void>` handler) becomes
- * `null`; a value `JSON.stringify` rejects (a BigInt, a cycle) becomes an `is_error` envelope,
- * logged, instead of a row that cannot be written or read back.
+ * `null`, as does a function or a Symbol, which `JSON.stringify` returns `undefined` for
+ * instead of throwing (a block with no `content` otherwise, V-6); a value `JSON.stringify`
+ * rejects (a BigInt, a cycle) becomes an `is_error` envelope, logged, instead of a row that
+ * cannot be written or read back.
  */
 export function serialisableOutcome(
   raw: unknown,
@@ -135,9 +138,8 @@ export function serialisableOutcome(
   extras: ToolHandlerExtras,
   logTag: string,
 ): ToolOutcome {
-  const output = raw === undefined ? null : raw
   try {
-    JSON.stringify(output)
+    const output = JSON.stringify(raw) === undefined ? null : raw
     return { output, isError: isErrorEnvelope(output) }
   } catch (err) {
     log('warn', logTag, 'tool output not serialisable', {

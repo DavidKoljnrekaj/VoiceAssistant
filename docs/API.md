@@ -15,7 +15,7 @@ apps/api/src/
 ├── app.ts              createApp(deps): middleware order, routes, 405 / 404 / error handlers
 ├── deps.ts             AppDeps (anthropic, registry, env, livekit | null, clock) and the request variables
 ├── tools.ts            createRegistry(): the demo pack with API_ALLOWLIST ({ chat: 'all' }; voice is the worker's)
-├── env.ts              zod env (see .env.example)
+├── env.ts              zod env (see env.example)
 ├── errors.ts           the flat envelope and the status table
 ├── deadline.ts         PRE_STREAM_TIMEOUT_MS (10 s over auth and the /chat pipeline) and withDeadline()
 ├── rate-limit.ts       chat burst/daily, voice calls per day and concurrent calls
@@ -54,9 +54,9 @@ sessions and loads messages through supabase-js (RLS); the API only mutates them
 profile re-read, raced, since GoTrue's client takes no abort signal) and, on `/chat`, the
 pipeline below with whatever the budget has left, where every query carries the deadline's abort
 signal so a hung PostgREST request is released. A timeout is 500 `internal_error` and one
-`pre-stream timeout` log line naming the step (`auth` or `prepare`). The stream has its own 90 s
-timeout from `: ready` on. Voice start's own queries run after authentication without a signal
-(`P20`, `P21`).
+`pre-stream timeout` log line naming the step (`auth` or `prepare`; `P20`, `P21`). The stream
+has its own 90 s timeout from `: ready` on. Voice start's own queries run after authentication
+without a signal (`API-12`).
 
 ### `POST /chat`, before the stream
 
@@ -141,24 +141,26 @@ never ends on a bare `tool_use`. The writer is always closed.
 Counted from the rows that exist, with two parallel `count: 'exact', head: true` queries through
 the service role, user-filtered:
 
-| limit                     | counts                                                                                                                                                                | window |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| chat burst: 20            | `ai_messages` with `turn_kind = 'user'` in the user's `channel = 'chat'` sessions                                                                                     | 5 min  |
-| chat daily: 200           | same                                                                                                                                                                  | 24 h   |
-| voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                                                                                                                   | 24 h   |
-| voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future and `last_seen_at` within the worker's 3-minute idle window (`VOICE_CALL_IDLE_MS` from `@va/db`), across all users | now    |
+| limit                     | counts                                                                                                                                                                               | window |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| chat burst: 20            | `ai_messages` with `turn_kind = 'user'` in the user's `channel = 'chat'` sessions                                                                                                    | 5 min  |
+| chat daily: 200           | same                                                                                                                                                                                 | 24 h   |
+| voice calls per user: 20  | `ai_sessions` with `channel = 'voice'` for the user                                                                                                                                  | 24 h   |
+| voice concurrent calls: 3 | `voice_calls` rows with `expires_at` in the future and `last_seen_at` within the worker's 3-minute idle window (`VOICE_CALL_IDLE_MS` from `@va/db`), across all users but the caller | now    |
 
 Tool-result rows never count. A failing count fails **open** and logs an error line, the one
 sanctioned exception to invariant 10 (`docs/SECURITY.md` → Abuse). A refused request writes
-nothing, with one exception: a voice start has already deleted the caller's own previous
-`voice_calls` row before it counts (one live call per user, and the caller's own row must not
-count against the concurrent cap: `V16`). Known: the check-then-act race (`API-1`); no
-`Retry-After` (`API-3`).
+nothing: a voice start counts first and deletes the caller's previous `voice_calls` row only
+once the new call is allowed; the caller's own live row is left out of the concurrent count
+instead, since the start replaces it (`V16`, `V17`, `V20`; the order was the other way round
+until 2026-11-02, when a refused start could delete the credential of a call in progress, `V-4`).
+Known: the check-then-act race (`API-1`); no `Retry-After` (`API-3`).
 
 ## Voice call lifecycle
 
-Landmark §4.4 ported. `POST /voice/sessions`: the user's previous `voice_calls` row is deleted
-(one live call per user; a failed delete is 500 and writes nothing, `V18`) → rate limits →
+Landmark §4.4 ported. `POST /voice/sessions`: rate limits (the caller's own live row left out of
+the concurrent count) → the user's previous `voice_calls` row is deleted (one live call per user;
+a failed delete is 500 and writes nothing, `V18`) →
 `ai_sessions { channel: 'voice', external_id: room, title: 'Glasovni poziv' }` with `room =
 'voice-' + uuid` → an opaque call token (32 random bytes, base64url) whose SHA-256 goes into
 `voice_calls` with `platform_call_id = room`, `access_token` = the caller's JWT and `expires_at
@@ -208,7 +210,7 @@ when sent (≤ 128 characters) and generated otherwise; it is on every response.
 ## Running locally
 
 ```
-cp apps/api/.env.example apps/api/.env      # fill SUPABASE_* from `supabase status`, ANTHROPIC_API_KEY
+cp apps/api/env.example apps/api/.env       # fill SUPABASE_* from `supabase status`, ANTHROPIC_API_KEY
 supabase start
 pnpm --filter @va/api dev                   # tsx watch src/index.ts on PORT (3000)
 ```

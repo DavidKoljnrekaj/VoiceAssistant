@@ -1,7 +1,7 @@
 // W05–W08, W10–W12, W14: a turn through `AssistantAgent.llmNode`, the stream LiveKit reads,
 // the rows written after the answer, and the gates. Assertions are on what is spoken, the rows,
 // and the requests sent; the loop itself is tested in @va/core.
-import { describe, expect } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 
 import { FALLBACK_BETA, MESSAGES_HR } from '@va/core'
 import {
@@ -200,7 +200,12 @@ describe('a spoken turn', () => {
       for (let i = 1; i < rows.length; i++) expect(rows[i]!.parent_id).toBe(rows[i - 1]!.id)
       // The model saw the cut-short turn (its tool_use answered) before the new question.
       expect(anthropic.calls).toHaveLength(2)
-      expect(anthropic.calls[1]!.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'user'])
+      expect(anthropic.calls[1]!.body.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'user',
+      ])
       expect(blocksOf(anthropic.calls[1]!.body.messages[2]!.content, 'tool_result')[0]).toMatchObject({
         is_error: true,
       })
@@ -235,7 +240,9 @@ describe('a spoken turn', () => {
   scenario('VOICE-7 the timing line carries the marks with their times, name@ms, in order', async () => {
     anthropic.script(callTools(toolUse('search_items', { query: 'a' })), answer('Da.'))
     const call = await openCall()
-    await (await ask(call, 'Ima li artikala?')).done
+    await (
+      await ask(call, 'Ima li artikala?')
+    ).done
     await call.session.settle()
     const timing = logs.find((l) => l.line.includes('"timing"') && l.line.includes('[voice]'))
     const marks = /"marks":"([^"]*)"/.exec(timing?.line ?? '')?.[1]
@@ -322,6 +329,66 @@ describe('a spoken turn', () => {
       logs.some((l) => l.line.includes('identity refused') && l.line.includes('"code":"internal_error"')),
     ).toBe(true)
   })
+
+  scenario(
+    'V-3 a hung identity re-read is cut by its deadline and spoken as internal_error; no model is called',
+    async () => {
+      const call = await openCall({ identityTimeoutMs: 50 })
+      await call.identity.ctx()
+      call.clock.ms += 60_000
+      db.fault((r) => r.table === 'voice_calls' && r.method === 'GET', { hang: true })
+      const out = await (await ask(call, 'Halo?')).done
+      expect(out.text).toBe(MESSAGES_HR.internal_error)
+      expect(anthropic.calls).toHaveLength(0)
+      expect(
+        logs.some((l) => l.line.includes('"identity timeout"') && l.line.includes('"timeout_ms":50')),
+      ).toBe(true)
+      expect(
+        logs.some((l) => l.line.includes('identity refused') && l.line.includes('"code":"internal_error"')),
+      ).toBe(true)
+    },
+  )
+
+  scenario(
+    'V-3b a turn LiveKit cancelled while it waited behind another is dropped: it counts for nothing and writes nothing',
+    async () => {
+      anthropic.script({ hangUntilAborted: true }, answer('Treći.'))
+      const call = await openCall({ maxTurns: 2 })
+      const first = await ask(call, 'Jedan.')
+      await vi.waitFor(() => expect(anthropic.calls).toHaveLength(1))
+      // The caller speaks again (LiveKit starts the next llmNode, which queues behind the first
+      // turn) and then interrupts that one too before the first has unwound.
+      const second = await ask(call, 'Dva.')
+      await second.cancel()
+      await first.cancel()
+      await Promise.all([first.done, second.done])
+      const third = await (await ask(call, 'Tri.')).done
+      expect(third.text).toBe('Treći.')
+      expect(anthropic.calls).toHaveLength(2)
+      await call.session.settle()
+      expect(kinds(call.sessionId)).toEqual(['user', 'user', 'assistant'])
+      expect(logs.some((l) => l.line.includes('"turn dropped"'))).toBe(true)
+      expect(logs.some((l) => l.line.includes('turn limit reached'))).toBe(false)
+    },
+  )
+
+  scenario(
+    "W21 (V-10) the channel's holdMs bounds the held first sentence: with a short hold the sentence is spoken before the model goes on",
+    async () => {
+      anthropic.script({ hangAfterContent: answer('Imamo dva stola.') })
+      const call = await openCall({ settings: { holdMs: 10 } })
+      const handle = await ask(call, 'Koliko stolova imamo?')
+      await vi.waitFor(() => expect(handle.chunks).toEqual(['Imamo dva stola.']))
+      await handle.cancel()
+      await handle.done
+      await call.session.settle()
+      const timing = logs.find((l) => l.line.includes('"event":"timing"'))
+      const fields = JSON.parse(timing!.line) as { first_text_ms: number; outcome: string }
+      expect(fields.outcome).toBe('cancelled')
+      // The default hold is 200 ms (`HOLD_MS`); a setting that reached the sink speaks well before it.
+      expect(fields.first_text_ms).toBeLessThan(100)
+    },
+  )
 
   scenario(
     'W16 the request timeout aborts the loop and is spoken; only the user row is written',
