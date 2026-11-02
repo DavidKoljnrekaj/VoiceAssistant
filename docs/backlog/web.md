@@ -46,19 +46,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** a `vite:preloadError` listener in `main.tsx` that reloads the page;
   optionally `onNeedRefresh` instead of `autoUpdate`
 
-### WEB-14 · Low · Accessibility gaps in the shell (R-W11)
-
-- **Check:** Confirmed (R-W11)
-- **Where:** `ChatPanel.tsx` mobile drawer (no `role="dialog"`, focus trap or Escape);
-  `Toast.tsx` (click-only dismiss); `MessageList.tsx` (the streamed answer is not in a live
-  region; `Spinner` without `label` there, in `ProtectedRoute.tsx` and `LoginPage.tsx`);
-  `index.html` `<html lang="hr">` never follows the switch; the manifest `description` is
-  Croatian only
-- **What happens:** keyboard and screen-reader users cannot close the drawer or hear the answer
-  arrive
-- **Fix direction:** dialog semantics with a focus trap and Escape, `aria-live="polite"` on the
-  streaming bubble, labelled spinners, `document.documentElement.lang` set on language change
-
 ### WEB-15 · Low · The store, auth context, voice hook and services have no tests; `isChatEvent` checks only `type` (R-W12)
 
 - **Check:** Confirmed (R-W12)
@@ -110,3 +97,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-13 · Low · The language switcher swallows a failed `updateLanguage` (R-W10)
 
 - Fixed 2026-11-02 on fix/web-review: `setLanguage` puts i18next back on the previous language when `updateLanguage` fails and rethrows; the switcher shows the `common.language_save_failed` toast (hr/en). Test `WEB-13` in `AuthContext.test.tsx`.
+
+### WEB-14 · Low · Accessibility gaps in the shell (R-W11)
+
+- Fixed 2026-11-02 on fix/web-review: the drawer is a `dialog` (`aria-modal`, focus moves in, Tab cycles, Escape closes, focus returns to the toggle); toasts have a labelled dismiss button and Escape dismisses the newest; the message list is a `log` live region with the provisional bubble excluded; every Spinner has a label; `<html lang>` follows the switch. Tests `WEB-14` in `i18n.test.ts` and `Toast.test.tsx`. The manifest `description` stays Croatian: the manifest is static and the product name is a placeholder.

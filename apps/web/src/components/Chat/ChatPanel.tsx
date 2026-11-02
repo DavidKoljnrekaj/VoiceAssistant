@@ -2,7 +2,7 @@
 // the message list and the composer. The route (`/c/:sessionId`) selects the session; a session
 // created mid-stream moves the route so a refresh reopens the same conversation.
 import { Menu, Phone, SquarePen, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -24,6 +24,45 @@ export default function ChatPanel() {
   const call = useVoiceCall()
   const toast = useToast()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const drawerRef = useRef<HTMLDivElement>(null)
+  const drawerToggleRef = useRef<HTMLButtonElement>(null)
+
+  // The slide-over is a modal dialog: focus moves in, Tab cycles inside, Escape closes, and focus
+  // returns to the button that opened it (WEB-14).
+  useEffect(() => {
+    if (!drawerOpen) return
+    const focusables = () =>
+      Array.from(
+        drawerRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      )
+    focusables()[0]?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDrawerOpen(false)
+        return
+      }
+      if (e.key !== 'Tab') return
+      const items = focusables()
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (!first || !last) return
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const toggle = drawerToggleRef.current
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      toggle?.focus()
+    }
+  }, [drawerOpen])
 
   // The route selects the session; a new conversation's id, learned from the `session` event,
   // moves the route (replace, so Back does not return to an empty /).
@@ -81,9 +120,18 @@ export default function ChatPanel() {
       </aside>
       {drawerOpen && (
         <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="w-72 max-w-[85vw] bg-gray-100 shadow-xl dark:bg-gray-800">{sessionList}</div>
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('chat.conversations')}
+            className="w-72 max-w-[85vw] bg-gray-100 shadow-xl dark:bg-gray-800"
+          >
+            {sessionList}
+          </div>
           <button
             type="button"
+            tabIndex={-1}
             className="flex-1 bg-black/40"
             aria-label={t('chat.close_sessions')}
             onClick={() => setDrawerOpen(false)}
@@ -94,8 +142,10 @@ export default function ChatPanel() {
       <section className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
           <button
+            ref={drawerToggleRef}
             type="button"
             onClick={() => setDrawerOpen((o) => !o)}
+            aria-expanded={drawerOpen}
             aria-label={drawerOpen ? t('chat.close_sessions') : t('chat.open_sessions')}
             className="rounded-md p-1.5 hover:bg-gray-200 md:hidden dark:hover:bg-gray-700"
           >

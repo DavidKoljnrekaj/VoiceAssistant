@@ -15,7 +15,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Spinner className="h-8 w-8" />
+        <Spinner className="h-8 w-8" label={t('common.loading')} />
       </div>
     )
   }

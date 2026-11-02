@@ -16,7 +16,8 @@
     "sign_out": "Odjava",
     "language": "Jezik",
     "language_save_failed": "Jezik nije spremljen. Pokušajte ponovno.",
-    "menu": "Izbornik"
+    "menu": "Izbornik",
+    "dismiss": "Zatvori obavijest"
   },
   "auth": {
     "title": "Prijava",

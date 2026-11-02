@@ -15,7 +15,8 @@
     "sign_out": "Sign out",
     "language": "Language",
     "language_save_failed": "The language could not be saved. Try again.",
-    "menu": "Menu"
+    "menu": "Menu",
+    "dismiss": "Dismiss notification"
   },
   "auth": {
     "title": "Sign in",
