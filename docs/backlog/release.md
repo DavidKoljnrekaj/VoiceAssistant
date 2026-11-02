@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-7 (next free)
+Ids: REL-8 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -58,6 +58,13 @@ to set, and checks nobody has run. Tick an item when it is done on every environ
       variables (review R-O3): write it by hand with `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
       and `VITE_API_URL`, a one-line comment each and no values; the triage session of 2026-10-30
       could not, the deny covers writes too.
+
+- [ ] REL-7 · DB-2: apply `20261102100000_voice_calls_expiry_cap.sql` to the dev project (after
+      `REL-1`, by the operator). Check after applying: `select conname from pg_constraint where
+    conname = 'voice_calls_expires_within_cap'` returns one row, and as the service role an
+      insert into `voice_calls` with `expires_at = now() + interval '16 minutes'` is refused with
+      `23514`. Then `/db-types`: a CHECK changes no generated type, so expect
+      `packages/db/src/database.ts` unchanged; commit it if it moves.
 
 ## Resolved
 
