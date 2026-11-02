@@ -39,7 +39,7 @@ apps/web/
 │   ├── components/Chat/
 │   │   ├── ChatProvider.tsx    context + useChat(); calls useChatStore once
 │   │   ├── hooks/useChatStore.ts        the state (below); its tests H01–H07, WEB-4, WEB-7, WEB-9, WEB-11; hooks/useAutoGrowTextarea.ts
-│   │   ├── services/chatService.ts      streamMessage (SSE client), listSessions, loadSession, findSession, renameSession, deleteSession; tests C01–C08, WEB-6, WEB-7, WEB-11
+│   │   ├── services/chatService.ts      streamMessage (SSE client), listSessions, loadSession, findSession, renameSession, deleteSession; tests C01–C08, WEB-6, WEB-7, WEB-11, V-9
 │   │   ├── lib/sse.ts                   the frame parser (pure) and the stall clock; lib/normalizeMessages.ts (rows / events → RenderMessage[]); lib/labels.ts
 │   │   ├── ChatPanel.tsx  MessageList.tsx  Message.tsx  ToolChip.tsx  Composer.tsx  SessionList.tsx
 │   │   └── components/VoiceCallButton.tsx  hooks/useVoiceCall.ts (tests V01–V02, WEB-10)  services/voiceCallService.ts
@@ -157,8 +157,13 @@ non-OK status is thrown as `ApiHttpError(status, code, message)` from the flat e
 History is read through supabase-js: `listSessions` (`ai_sessions`, chat only, newest activity
 first), `loadSession` (every row of the session, oldest first) and `findSession` (one session
 row by id). PostgREST answers at most `max_rows` (1000) per request, so both list reads page
-with `range()` until a short page, ordered by the timestamp and then the id so pages never
-overlap or skip; without that a long conversation lost its newest rows and the leaf went stale.
+with `range()`, ordered by the timestamp and then the id so pages never overlap or skip;
+without that a long conversation lost its newest rows and the leaf went stale. Each page starts
+where the rows received so far end, and the read stops on an empty page, not on a short one: a
+short page also means a server cap below the client's page, and stopping there truncated the
+read again when `max_rows` was lowered (V-9). The price is one empty request per read. The
+session list pages newest first, so a session updated between two pages moves to the front and
+can appear twice or be missed once; the list is refreshed on every change, so this is cosmetic.
 The API's bounded history (`ai_session_history`, 200 rows, service role only) was not used: it
 is the model's context window, not what a reader of the conversation should see, and the
 PWA's contract is to read under RLS while the API only mutates. `normalizeFromPersistedRows`

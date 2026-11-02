@@ -254,9 +254,16 @@ function project(row: Row, select: string | null): Row {
 
 /**
  * One table. Reads honour `eq.` filters, `order`, `offset`/`limit` and the project's `max_rows`
- * cap of 1000 (`supabase/config.toml`); a PATCH updates the filtered rows and returns them.
+ * cap (`supabase/config.toml`, 1000; a test lowers it with `maxRows` to model a smaller cap
+ * than the client's page); a PATCH updates the filtered rows and returns them.
  */
-export function fakeTable(backend: FakeBackend, name: string, rows: Row[] = []): FakeTable {
+export function fakeTable(
+  backend: FakeBackend,
+  name: string,
+  rows: Row[] = [],
+  options: { maxRows?: number } = {},
+): FakeTable {
+  const maxRows = options.maxRows ?? 1000
   const origin = new URL(env.VITE_SUPABASE_URL).origin
   const table: FakeTable = {
     rows,
@@ -277,7 +284,7 @@ export function fakeTable(backend: FakeBackend, name: string, rows: Row[] = []):
     const params = req.url.searchParams
     const matched = applyOrder(applyFilters(table.rows, params), params.get('order'))
     const offset = Number(params.get('offset') ?? 0)
-    const limit = Math.min(params.get('limit') !== null ? Number(params.get('limit')) : Infinity, 1000)
+    const limit = Math.min(params.get('limit') !== null ? Number(params.get('limit')) : Infinity, maxRows)
     const page = matched.slice(offset, offset + limit).map((r) => project(r, params.get('select')))
     return json(page, 200, { 'Content-Range': `${offset}-${offset + page.length - 1}/*` })
   })

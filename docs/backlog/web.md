@@ -62,7 +62,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 
 ### WEB-6 · Medium · Conversation and session loads are capped at 1000 rows, and the leaf goes stale (R-W3)
 
-- Fixed 2026-10-30 on fix/web-review (`3abbd04`): `listSessions` and `loadSession` page with `range()` (1000 per page) until a short page, ordered by `updated_at desc, id desc` and `created_at asc, id asc`; the API's bounded history was not used because it is the model's 200-row context window behind a service-role-only function, not what a reader of the conversation should see. Tests `WEB-6` in `chatService.test.ts`.
+- Fixed 2026-10-30 on fix/web-review (`3abbd04`): `listSessions` and `loadSession` page with `range()` (1000 per page) until an empty page (V-9, 2026-11-02; a short page was the stop before), ordered by `updated_at desc, id desc` and `created_at asc, id asc`; the API's bounded history was not used because it is the model's 200-row context window behind a service-role-only function, not what a reader of the conversation should see. Tests `WEB-6` in `chatService.test.ts`.
 
 ### WEB-7 · Medium · A foreign or deleted conversation id renders as an empty new conversation (R-W4)
 

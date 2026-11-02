@@ -11,26 +11,35 @@ export type SessionSummary = Pick<SessionRow, 'id' | 'title' | 'channel' | 'crea
 
 /**
  * PostgREST answers at most `max_rows` (1000, `supabase/config.toml`) per request, so both reads
- * page with `range()` until a short page, in an order made stable by the id (WEB-6). Without this
- * a long conversation lost its newest rows and the leaf went stale.
+ * page with `range()` in an order made stable by the id (WEB-6). Without this a long conversation
+ * lost its newest rows and the leaf went stale.
  */
 const PAGE_SIZE = 1000
 
-/** Reads every page of a query; `page(from, to)` runs one request for that range. */
+/**
+ * Reads every page of a query; `page(from, to)` runs one request for that range. Each page starts
+ * where the rows received so far end and the read stops on an empty page, never on a short one:
+ * a short page also means the server's cap is below PAGE_SIZE, and stopping there truncated the
+ * read again when `max_rows` was lowered (V-9). The price is one empty request per read.
+ */
 async function readAllPages<T>(
   page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
 ): Promise<T[]> {
   const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+  for (;;) {
+    const { data, error } = await page(out.length, out.length + PAGE_SIZE - 1)
     if (error) throw error
     const rows = data ?? []
+    if (rows.length === 0) return out
     out.push(...rows)
-    if (rows.length < PAGE_SIZE) return out
   }
 }
 
-/** The user's chat sessions, newest activity first. Voice calls are sessions too and are left out. */
+/**
+ * The user's chat sessions, newest activity first. Voice calls are sessions too and are left out.
+ * A session updated while the list is being paged moves to the front and can appear twice or be
+ * missed once; the list is refreshed on every change, so this is cosmetic (V-9).
+ */
 export async function listSessions(): Promise<SessionSummary[]> {
   return readAllPages((from, to) =>
     supabase

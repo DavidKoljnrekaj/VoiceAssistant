@@ -79,7 +79,8 @@ names one for an app whose `env.ts` does not validate it. Both exist so a rule i
 `apps/web` has its own fakes under `apps/web/src/test/` (the PWA depends on no other workspace
 package but `@va/db`, so `@va/core/test` is not reused). `fake-backend.ts` answers GoTrue (the
 password and refresh grants, `/user`, `/logout`), PostgREST (`eq.` filters, `order`,
-`offset`/`limit` with the 1000-row cap, PATCH with `return=representation`) and the API (`/chat`
+`offset`/`limit` with the 1000-row cap, lowerable per table with `maxRows`, PATCH with
+`return=representation`) and the API (`/chat`
 as a frame-by-frame SSE body, the session and voice endpoints) over `globalThis.fetch`, records
 every request, and errors a body with `AbortError` when the request's signal aborts; the real
 `supabase-js` and `lib/api.ts` run on top. `vitest.config.ts` sets the three `VITE_` variables

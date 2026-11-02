@@ -132,10 +132,13 @@ describe('chatService paging (WEB-6)', () => {
     expect(requests.map((r) => r.url.searchParams.get('order'))).toEqual([
       'created_at.asc,id.asc',
       'created_at.asc,id.asc',
+      'created_at.asc,id.asc',
     ])
+    // The third request is the empty page that ends the read (V-9: a short page is not the end).
     expect(requests.map((r) => [r.url.searchParams.get('offset'), r.url.searchParams.get('limit')])).toEqual([
       ['0', '1000'],
       ['1000', '1000'],
+      ['1203', '1000'],
     ])
   })
 
@@ -152,8 +155,38 @@ describe('chatService paging (WEB-6)', () => {
     expect(requests.map((r) => r.url.searchParams.get('order'))).toEqual([
       'updated_at.desc,id.desc',
       'updated_at.desc,id.desc',
+      'updated_at.desc,id.desc',
     ])
-    expect(requests.map((r) => r.url.searchParams.get('offset'))).toEqual(['0', '1000'])
+    expect(requests.map((r) => r.url.searchParams.get('offset'))).toEqual(['0', '1000', '1001'])
+  })
+
+  it('V-9: a server cap below the page size (max_rows 500) still reads every row, in four requests', async () => {
+    const rows = Array.from({ length: 1203 }, (_, i) =>
+      message(`m${String(i).padStart(4, '0')}`, i === 0 ? null : `m${String(i - 1).padStart(4, '0')}`, at(i)),
+    )
+    fakeTable(backend, 'ai_messages', rows, { maxRows: 500 })
+    const loaded = await loadSession(S1)
+    expect(loaded.map((r) => r.id)).toEqual(rows.map((r) => r.id))
+    const requests = backend.sent('GET', '/rest/v1/ai_messages')
+    // Each page starts where the rows received so far end; the empty page is the stop.
+    expect(requests.map((r) => r.url.searchParams.get('offset'))).toEqual(['0', '500', '1000', '1203'])
+  })
+
+  it('V-9: the session list under the same cap is read whole too', async () => {
+    const rows = Array.from({ length: 1001 }, (_, i) =>
+      session(`s${String(i).padStart(4, '0')}`, 'chat', at(i)),
+    )
+    fakeTable(backend, 'ai_sessions', rows, { maxRows: 500 })
+    const loaded = await listSessions()
+    expect(loaded).toHaveLength(1001)
+    expect(loaded[0]?.id).toBe('s1000')
+    expect(loaded.at(-1)?.id).toBe('s0000')
+    expect(backend.sent('GET', '/rest/v1/ai_sessions').map((r) => r.url.searchParams.get('offset'))).toEqual([
+      '0',
+      '500',
+      '1000',
+      '1001',
+    ])
   })
 })
 
