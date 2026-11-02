@@ -79,7 +79,7 @@ The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpo
 
 ### API-8 · Low · The concurrent-call cap counts the caller's own stale row and ignores idle (R-A5)
 
-- Fixed on `fix/api-review` in two commits: the caller's previous row is deleted before the counts (`V16`), and the concurrent count carries `last_seen_at > now - 3 min` (`CALL_IDLE_MS`, `V17`); the fake applies the DDL default for `last_seen_at`.
+- Fixed on `fix/api-review` (PR #21, `410a0dc`) in two commits: the caller's previous row was deleted before the counts (`V16`), and the concurrent count carries `last_seen_at > now - 3 min` (`VOICE_CALL_IDLE_MS`, `V17`); the fake applies the DDL default for `last_seen_at`. Decision 2026-11-02 (`V-4`, `fix/review-followup`): the delete-first order let a refused start (429) remove the credential of a call in progress, so the count now leaves the caller's own row out (`.neq('user_id')`) and the delete runs only once the new call is allowed; a refused start writes nothing again. `V17` pins the filter, `V20` the kept credential.
 
 ### API-9 · Low · No timeout on the pre-stream phase (R-A6)
 

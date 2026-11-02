@@ -19,8 +19,8 @@ item says so in its description.
       rows they touched where a row must exist.** `apps/api/src/chat/prepare.ts`,
       `routes/sessions.ts`, `voice/calls.ts`, `apps/voice/src/call.ts`, `turn.ts`; the loop's
       `MessageStore` implementations carry the session id. Best-effort by design, no assertion:
-      the delete of a caller's previous call before a new one (a PostgREST error is still a 500,
-      `V18`), the rollback after a failed start (each failed delete logged as `rollback failed`,
+      the delete of a caller's previous call once a new one is allowed (a PostgREST error is
+      still a 500, `V18`), the rollback after a failed start (each failed delete logged as `rollback failed`,
       `V12`) and the end-of-call delete (`voice/calls.ts`). Tests: `V01`–`V18`, `W03b`, `W03c`,
       `W07`.
 - [ ] **Tools read as the user; permissive-RLS tables get explicit scoping; no raw input in
@@ -47,10 +47,10 @@ item says so in its description.
       `V11`, `V14`, `V15`, `W02`, `voice_calls_service_only.test.sql`.
 - [ ] **Rate limits on chat turns, voice calls per day, concurrent calls; a deadline before the
       first byte.** `apps/api/src/rate-limit.ts` (20 / 5 min, 200 / day, 20 calls / day, 3
-      concurrent over rows neither expired nor idle, the caller's own previous call removed
-      first), 50 turns per call in the worker; `apps/api/src/deadline.ts` bounds authentication
+      concurrent over rows neither expired nor idle, the caller's own row left out), 50 turns
+      per call in the worker; `apps/api/src/deadline.ts` bounds authentication
       and the `/chat` pipeline to 10 s so a hung Supabase cannot pin requests open. Tests:
-      `P09`–`P11`, `P20`, `P21`, `V03`, `V04`, `V16`, `V17`, `W14`. Known: check-then-act race
+      `P09`–`P11`, `P20`, `P21`, `V03`, `V04`, `V16`, `V17`, `V20`, `W14`. Known: check-then-act race
       `API-1`.
 - [ ] **No content in logs; error messages truncated.** `log()` and `errorReason()` in `@va/core`;
       `L04` scans every call site; the worker strips LiveKit's `lk.pii.*` keys (`W18`); the metrics
@@ -114,8 +114,9 @@ without the token refuses the job; a job for a room the token was not bound to i
 nothing and a flaky count fails open, the one sanctioned exception to invariant 10: a limiter
 that failed closed would take the product down with its database (Anthropic's own limits and the
 request timeout are the backstop). The concurrent-call cap is global and counts only rows that
-are neither expired nor idle (the worker's own definition of a live call), after the caller's own
-previous call is removed; a start refused by it has made that one delete. The pre-stream
+are neither expired nor idle (the worker's own definition of a live call), the caller's own row
+left out; the previous call is removed only once the new one is allowed, so a refused start has
+written nothing. The pre-stream
 deadline (10 s) keeps a hung Supabase from pinning connections open before the first byte. The
 known check-then-act race bounds the excess by what fits in one round trip (`API-1`).
 
