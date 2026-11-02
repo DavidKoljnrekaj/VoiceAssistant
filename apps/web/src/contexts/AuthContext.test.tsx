@@ -187,4 +187,19 @@ describe('AuthContext', () => {
     expect(result.current.authError).toBe('no_profile')
     await waitFor(() => expect(backend.sent('POST', '/auth/v1/logout').length).toBeGreaterThan(0))
   })
+
+  it('WEB-13: a failed language save keeps the previous language and profile and rejects, so the switcher can say so', async () => {
+    await supabase.auth.signInWithPassword({ email: 'ana@example.com', password: 'pw' })
+    const { result } = render()
+    await waitFor(() => expect(result.current.profile?.id).toBe('user-1'))
+    expect(i18n.language).toBe('hr')
+    vi.mocked(updateLanguage).mockRejectedValueOnce(new Error('PostgREST down'))
+    let failure: unknown = null
+    await act(async () => {
+      failure = await result.current.setLanguage('en').catch((e: unknown) => e)
+    })
+    expect(failure).toBeInstanceOf(Error)
+    expect(i18n.language).toBe('hr')
+    expect(result.current.profile?.language).toBe('hr')
+  })
 })

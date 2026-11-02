@@ -205,11 +205,21 @@ export function AuthProvider({
     }
   }, [cancelRetry])
 
+  /**
+   * Switches the UI, then writes `users.language`. A failed write puts the UI back on the previous
+   * language and rethrows, so the caller can say so (WEB-13); the preference is never half-saved.
+   */
   const setLanguage = useCallback(
     async (language: Language) => {
+      const previous = i18n.language
       await i18n.changeLanguage(language)
       if (!profile) return
-      await updateLanguage(profile.id, language)
+      try {
+        await updateLanguage(profile.id, language)
+      } catch (error) {
+        await i18n.changeLanguage(previous)
+        throw error
+      }
       profileRef.current = { ...profile, language }
       setProfile(profileRef.current)
     },

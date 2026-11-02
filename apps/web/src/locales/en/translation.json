@@ -14,6 +14,7 @@
     "load_error_description": "Check your connection and try again.",
     "sign_out": "Sign out",
     "language": "Language",
+    "language_save_failed": "The language could not be saved. Try again.",
     "menu": "Menu"
   },
   "auth": {

@@ -46,14 +46,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** a `vite:preloadError` listener in `main.tsx` that reloads the page;
   optionally `onNeedRefresh` instead of `autoUpdate`
 
-### WEB-13 · Low · The language switcher swallows a failed `updateLanguage` (R-W10)
-
-- **Check:** Confirmed (R-W10)
-- **Where:** `apps/web/src/components/Layout/LanguageSwitcher.tsx` (an empty `catch`)
-- **What happens:** the UI switches, the preference silently reverts on the next load
-  (invariant 10 in the UI)
-- **Fix direction:** a toast worded in both locales, and the switcher keeps the previous language
-
 ### WEB-14 · Low · Accessibility gaps in the shell (R-W11)
 
 - **Check:** Confirmed (R-W11)
@@ -114,3 +106,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-11 · Low · No stall detection on the chat stream (R-W8)
 
 - Fixed 2026-11-02 on fix/web-review: `readSseBody` races every read against a stall clock (`stallMs`, reset by any chunk, keepalive comments included) and throws `SseStallError` after cancelling the body; `streamMessage` passes 45 s (three missed keepalives) and the store renders it as the `stream_stalled` inline error. Tests `WEB-11` in `sse.test.ts`, `chatService.test.ts` and `useChatStore.test.ts`.
+
+### WEB-13 · Low · The language switcher swallows a failed `updateLanguage` (R-W10)
+
+- Fixed 2026-11-02 on fix/web-review: `setLanguage` puts i18next back on the previous language when `updateLanguage` fails and rethrows; the switcher shows the `common.language_save_failed` toast (hr/en). Test `WEB-13` in `AuthContext.test.tsx`.
