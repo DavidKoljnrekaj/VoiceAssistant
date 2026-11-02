@@ -8,7 +8,14 @@
   row violates it. created_at is set once (nothing updates it), so a refresh that moves
   expires_at is checked against the call's start.
 
-  After applying: nothing to do by hand. Regenerate packages/db/src/database.ts with /db-types.
+  The CHECK compares two timestamps that must come from one clock. The API computes expires_at
+  on its own host's clock (min(JWT expiry, now + 15 minutes)); if created_at were left to the
+  column default (the database's now()) and the API host ran ahead of the database by more than
+  the start's preceding round trips, every start would fail with 23514. So startCall sends
+  created_at explicitly from the same clock as expires_at (apps/api/src/voice/calls.ts, pinned
+  by the API scenario V19), and the constraint only ever sees the API's arithmetic.
+
+  After applying: nothing to do by hand; a CHECK changes no generated type (REL-7).
 */
 
 DO $$

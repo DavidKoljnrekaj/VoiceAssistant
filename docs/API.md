@@ -176,7 +176,11 @@ The four rules a `voice_calls` row lives by:
 
 1. **Short TTL, enforced at lookup.** Valid only while `expires_at > now()` (the 15-minute cap
    from call start, never moved by a refresh) and, in the worker, `last_seen_at` within the idle
-   window. The worker treats an expired row as absent before it is deleted.
+   window. The worker treats an expired row as absent before it is deleted. Start writes
+   `created_at` and `expires_at` from the one injected clock (`V19`): the database's
+   `voice_calls_expires_within_cap` CHECK compares the two, and a `created_at` left to the
+   column default would be the database's clock, so skew between the hosts could refuse a
+   start.
 2. **Deleted on call end.** `POST /voice/sessions/:id/end` (the user's JWT plus the ownership
    check; idempotent) and, later, the platform's end-of-call webhook keyed by `platform_call_id`.
    The session and its messages stay; only the credential goes.
@@ -251,7 +255,7 @@ demo pack, a `FakeLiveKit` (records dispatches and join tokens, `failNextDispatc
 `{ raw, comments, events, types }` (`timeoutMs: 0` under fake timers); `flatError(res)`;
 `memberJwt(exp)` makes a JWT-shaped token the fake GoTrue accepts; `buildApp(overrides)` for a
 different env or no LiveKit. Scenarios: `P01`–`P25` (pre-stream), `C01`–`C18` (stream),
-`V01`–`V18` (voice and sessions); a scenario that fixes or pins a review finding carries the
+`V01`–`V19` (voice and sessions); a scenario that fixes or pins a review finding carries the
 backlog id in its name (`V11 (API-4) …`). `P15` differs from the plan's wording: the history
 read only runs on an existing session (a new session has no leaf), so it asserts the 500 and
 that no user row is written; `P16` covers the deleted session. Tests that need the clock to

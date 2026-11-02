@@ -304,6 +304,23 @@ describe('voice call lifecycle', () => {
   })
 
   scenario(
+    'V19 (V-1) the voice_calls insert carries created_at from the same clock as expires_at, so the database cap never sees two clocks',
+    async () => {
+      const fixed = new Date('2026-11-02T10:00:00.000Z')
+      const app = buildApp({ clock: () => fixed })
+      const res = await call('/voice/sessions', undefined, { app })
+      expect(res.status).toBe(200)
+      const insert = db.requestsTo('voice_calls', 'POST')
+      expect(insert).toHaveLength(1)
+      expect(insert[0]!.body).toMatchObject({
+        created_at: fixed.toISOString(),
+        expires_at: new Date(fixed.getTime() + CALL_CAP_MS).toISOString(),
+      })
+      expect(calls()[0]).toMatchObject({ created_at: fixed.toISOString() })
+    },
+  )
+
+  scenario(
     'V10 sessions: PATCH renames and DELETE removes with the user filter; zero rows affected is 404',
     async () => {
       const { session_id } = (await (await call('/voice/sessions')).json()) as { session_id: string }

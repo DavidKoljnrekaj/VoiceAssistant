@@ -2,6 +2,8 @@
 // sits in `voice_calls` next to the caller's JWT for at most 15 minutes, dispatches the agent
 // with the token in the job metadata (never the JWT), and hands the browser only a LiveKit join
 // token; refresh rotates the stored JWT under the cap that never moves; end deletes the row.
+// Start writes created_at and expires_at from one clock (`deps.clock`), the database's CHECK
+// compares the two.
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import { type AuthContext, type ErrorCode, log } from '@va/core'
@@ -105,12 +107,16 @@ export async function startCall(
   }
 
   const callToken = randomBytes(32).toString('base64url')
+  // created_at comes from the same clock as expires_at: the database's CHECK compares the two
+  // (`voice_calls_expires_within_cap`), and a column default of now() would be the database's
+  // clock, so an API host running ahead of it would fail every start with 23514 (V-1).
   const { error: callError } = await service.from('voice_calls').insert({
     session_id: session.id,
     user_id: ctx.userId,
     call_token_hash: sha256Hex(callToken),
     platform_call_id: room,
     access_token: jwt,
+    created_at: now.toISOString(),
     expires_at: cappedExpiry(jwt, now.getTime() + CALL_CAP_MS),
   })
   if (callError) {
