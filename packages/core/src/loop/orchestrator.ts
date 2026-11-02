@@ -102,23 +102,13 @@ export async function runOrchestrationLoop(
     // breakpoint is moved inside the loop's own array only.
     messages.push({ role: 'assistant', content: [...response.content] })
 
-    // Content-block order. Thinking, fallback and unknown block types stay in the row only.
-    const toolUses: ToolUseBlock[] = []
-    for (const block of response.content) {
-      if (block.type === 'text') await sink.textBlock((block as TextBlock).text, assistantRow.id)
-      else if (block.type === 'tool_use') {
-        const tu = block as ToolUseBlock
-        toolUses.push(tu)
-        await sink.toolCall(tu.name, tu.input, tu.id)
-      }
-    }
-
+    const toolUses = response.content.filter((b): b is ToolUseBlock => b.type === 'tool_use')
     const stopReason = response.stop_reason ?? 'end_turn'
     const terminal = stopReason !== 'tool_use' || toolUses.length === 0
 
-    // An abort that landed during the assistant-row insert: the row stands, nothing more is
-    // said. The tool path checks for itself in runToolRound; a truncation still closes its
-    // tool calls out (invariant 3), silently.
+    // An abort that landed during the assistant-row insert: the row stands, nothing of it is
+    // emitted and nothing more is said. The tool path checks for itself in runToolRound; a
+    // truncation still closes its tool calls out (invariant 3), silently.
     if (terminal && (signal.aborted || (await hooks.isCancelled()))) {
       log('info', logTag, 'aborted after model call', { ...ids, iteration, toolCount: toolUses.length })
       if (toolUses.length > 0) {
@@ -131,6 +121,15 @@ export async function runOrchestrationLoop(
         )
       }
       return
+    }
+
+    // Content-block order. Thinking, fallback and unknown block types stay in the row only.
+    for (const block of response.content) {
+      if (block.type === 'text') await sink.textBlock((block as TextBlock).text, assistantRow.id)
+      else if (block.type === 'tool_use') {
+        const tu = block as ToolUseBlock
+        await sink.toolCall(tu.name, tu.input, tu.id)
+      }
     }
 
     // A refusal runs no tools; the sinks decide what to say.

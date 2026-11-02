@@ -87,14 +87,16 @@ onto and moves the cache breakpoint in holds copies, so a store that serialises 
 (voice's `DeferredStore`) writes the rows exactly as the model and the tools produced them
 (`E33`).
 
-Abort is checked before each model call, after the assistant row is persisted (before the
-turn's terminal events), between the model call and dispatch, and after dispatch. On abort the
+Abort is checked before each model call, after the assistant row is persisted (on a terminal
+stop, before any of its blocks is emitted), between the model call and dispatch, and after
+dispatch. On abort the
 loop persists synthetic `is_error` results for tools that did not finish (`cancelled before the
 tool ran` / `cancelled before the tool returned`; finished tools keep their real output), emits
 no result event and returns silently; the request owner decides whether to emit `error`. An
-abort that lands during the assistant-row insert of a terminal turn leaves the row, emits no
-`done` and runs no `onComplete` (`aborted after model call`; a truncation still closes its tool
-calls out, `E35`, `E35b`). A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
+abort that lands during the assistant-row insert of a terminal turn leaves the row, emits none
+of its blocks, no `done`, and runs no `onComplete` (`aborted after model call`; a truncation
+still closes its tool calls out, `E35`, `E35b`; the check sat after the block events until
+2026-11-02, `V-7`). A `refusal` stop runs no tools: the sinks decide what to say. Thinking,
 fallback and unknown block types are persisted verbatim and never emitted. A terminal stop with
 `tool_use` blocks (truncation) persists synthetic results and one Croatian explanation row
 (`TRUNCATED_HR`). The manual loop over `messages.stream` is a decision (`docs/decisions/0009`),

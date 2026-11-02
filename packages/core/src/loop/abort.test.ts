@@ -138,7 +138,12 @@ describe('abort, timeout and the no-bare-tool_use invariant', () => {
       })
       const run = await runChat(ctx, 'x', { controller })
       expect(kinds(run.sessionId)).toEqual(['user', 'assistant'])
-      expect(run.rows()[1]).toMatchObject({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Gotovo.' }] })
+      expect(run.rows()[1]).toMatchObject({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'Gotovo.' }],
+      })
+      // Nothing of the row is emitted either (V-7): the check runs before its blocks go out.
+      expect(run.sink.blocks).toEqual([])
       expect(run.sink.doneEvent).toBeNull()
       expect(run.sink.errorEvent).toBeNull()
       expect(run.completed).toBe(0)
@@ -162,6 +167,7 @@ describe('abort, timeout and the no-bare-tool_use invariant', () => {
       expect(blocksOf(run.rows()[2]!.content, 'tool_result')[0]).toMatchObject({ is_error: true })
       expect(run.sink.toolResults).toEqual([])
       expect(run.sink.blocks).toEqual([])
+      expect(run.sink.toolCalls).toEqual([])
       expect(run.sink.doneEvent).toBeNull()
       expect(run.sink.errorEvent).toBeNull()
       expect(run.completed).toBe(0)
