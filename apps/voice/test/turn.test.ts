@@ -200,7 +200,12 @@ describe('a spoken turn', () => {
       for (let i = 1; i < rows.length; i++) expect(rows[i]!.parent_id).toBe(rows[i - 1]!.id)
       // The model saw the cut-short turn (its tool_use answered) before the new question.
       expect(anthropic.calls).toHaveLength(2)
-      expect(anthropic.calls[1]!.body.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'user'])
+      expect(anthropic.calls[1]!.body.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'user',
+      ])
       expect(blocksOf(anthropic.calls[1]!.body.messages[2]!.content, 'tool_result')[0]).toMatchObject({
         is_error: true,
       })
@@ -235,7 +240,9 @@ describe('a spoken turn', () => {
   scenario('VOICE-7 the timing line carries the marks with their times, name@ms, in order', async () => {
     anthropic.script(callTools(toolUse('search_items', { query: 'a' })), answer('Da.'))
     const call = await openCall()
-    await (await ask(call, 'Ima li artikala?')).done
+    await (
+      await ask(call, 'Ima li artikala?')
+    ).done
     await call.session.settle()
     const timing = logs.find((l) => l.line.includes('"timing"') && l.line.includes('[voice]'))
     const marks = /"marks":"([^"]*)"/.exec(timing?.line ?? '')?.[1]
@@ -322,6 +329,25 @@ describe('a spoken turn', () => {
       logs.some((l) => l.line.includes('identity refused') && l.line.includes('"code":"internal_error"')),
     ).toBe(true)
   })
+
+  scenario(
+    'V-3 a hung identity re-read is cut by its deadline and spoken as internal_error; no model is called',
+    async () => {
+      const call = await openCall({ identityTimeoutMs: 50 })
+      await call.identity.ctx()
+      call.clock.ms += 60_000
+      db.fault((r) => r.table === 'voice_calls' && r.method === 'GET', { hang: true })
+      const out = await (await ask(call, 'Halo?')).done
+      expect(out.text).toBe(MESSAGES_HR.internal_error)
+      expect(anthropic.calls).toHaveLength(0)
+      expect(
+        logs.some((l) => l.line.includes('"identity timeout"') && l.line.includes('"timeout_ms":50')),
+      ).toBe(true)
+      expect(
+        logs.some((l) => l.line.includes('identity refused') && l.line.includes('"code":"internal_error"')),
+      ).toBe(true)
+    },
+  )
 
   scenario(
     'W16 the request timeout aborts the loop and is spoken; only the user row is written',

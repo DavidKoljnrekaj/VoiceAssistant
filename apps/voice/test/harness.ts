@@ -6,7 +6,13 @@ import type { ReadableStream } from 'node:stream/web'
 
 import { ChatContext, isFlushSentinel } from '@livekit/agents'
 
-import { type ChannelAllowlist, type ChannelSettings, channelSettings, type ToolPack, ToolRegistry } from '@va/core'
+import {
+  type ChannelAllowlist,
+  type ChannelSettings,
+  channelSettings,
+  type ToolPack,
+  ToolRegistry,
+} from '@va/core'
 import { anthropicClient, db, scenario as coreScenario, USERS, uuid } from '@va/core/test'
 import { createServiceClient } from '@va/db'
 import { demoPack } from '@va/tools-demo'
@@ -132,6 +138,7 @@ export async function openCall(opts: OpenCallOptions = {}): Promise<OpenedCall> 
   const session = new CallSession(d, identity, {
     pickFiller: () => FILLER,
     ...(opts.maxTurns !== undefined ? { maxTurns: opts.maxTurns } : {}),
+    ...(opts.identityTimeoutMs !== undefined ? { identityTimeoutMs: opts.identityTimeoutMs } : {}),
     ...(opts.onEnded ? { onEnded: opts.onEnded } : {}),
   })
   const call: OpenedCall = {

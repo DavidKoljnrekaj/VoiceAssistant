@@ -34,6 +34,7 @@ apps/voice/
 │   ├── tools.ts            createRegistry(): the demo pack with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
 │   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, turns one after another, the timing line, settle()
+│   ├── deadline.ts         withDeadline: the identity read's 5 s deadline (the API's helper, same shape)
 │   ├── lifecycle.ts        participantLeft, sessionErrorAction, HangUp: how a call ends from the worker's side, LiveKit-free
 │   ├── session-options.ts  turn handling as data: Soniox end of turn, VAD barge-in, no preemptive generation, no recording
 │   ├── assistant-llm.ts    AssistantAgent (llmNode override), engineStream, EngineLLM (the stub LiveKit requires)
@@ -117,7 +118,9 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    transcripts or traces); the agent connects and says `GREETING_HR`.
 6. Every user turn: `CallSession.turn` applies the per-call cap (50; the 51st hears
    `rate_limited`), reads the identity (cached up to `IDENTITY_CACHE_MS`, then the row and
-   `authenticateToken` again, which picks up a rotated JWT and a changed role), bumps
+   `authenticateToken` again, which picks up a rotated JWT and a changed role; under a 5 s
+   deadline, `IDENTITY_TIMEOUT_MS`, past which the caller hears `internal_error` rather than
+   the whole call stalling behind one hung read, `V-3`), bumps
    `last_seen_at` off the critical path, runs the turn and logs one
    `timing` line. The model's history is the call's own rows kept in worker memory, exactly as
    the loop wrote them (user text, assistant blocks with `tool_use`, the `tool_result` rows),
@@ -273,8 +276,9 @@ WebSocket client of LiveKit). The worker's `prewarm` loads Silero once per proce
 
 Logs are one JSON line per event with `tag: '[voice]'`: `job refused`, `call accepted`, `warm`,
 `timing` per turn (`auth_ms`, `first_text_ms`, `total_ms`, the engine's marks as `name@ms`,
-`spoken_len`, token and cache counts, `outcome`), `turn limit reached`, `identity refused`,
-`call ended` (the cap), `call ending` (with its `reason`).
+`spoken_len`, token and cache counts, `outcome`), `turn limit reached`, `identity timeout`
+(with `timeout_ms`), `identity refused`, `call ended` (the cap), `call ending` (with its
+`reason`).
 Never the transcript, the audio or the call token. LiveKit's own logger (pino, JSON) writes the
 caller's words and the agent's answer under `lk.pii.*` keys at `info` and `warn`; the worker
 forces JSON output in the job process and strips every `lk.pii.*` key from what reaches stdout
