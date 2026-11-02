@@ -62,9 +62,12 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 - **Fix direction:** in order of expected gain, each measured before and after: release the held
   sentence after a short timer as well as on the next sentence; drop the announcement heuristic
   for the filler-less case; collapse paragraph breaks inside the answer. Measured 2026-10-30
-  (`docs/VOICE.md` → Measurements): the hold timer (`HOLD_MS` 200 ms) is kept, it takes about
+  (`docs/VOICE.md` → Measurements): the hold timer (`HOLD_MS` 200 ms, the channel setting
+  `holdMs` since 2026-11-02) is kept, it takes about
   0.17 s off the one-sentence answers and nothing off the catalogue ones, whose first text is
-  the filler; the paragraph-break collapse is not kept, the model wrote no paragraph break in
+  the filler, a gain that is unproven at the bench's resolution (medians of three repeats, no
+  spread; `V-10`), so the next bench run prints min–max per question before the value is
+  touched; the paragraph-break collapse is not kept, the model wrote no paragraph break in
   any bench answer (0/12), and no instrument counts TTS seams anyway. It stays on
   `exp/voice-latency` with its test. The announcement heuristic was not touched. Further levers from the
   review: Landmark's entity list in the per-user block (saves a round, ~1.3 s on lookups);

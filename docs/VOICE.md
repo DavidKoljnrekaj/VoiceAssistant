@@ -200,9 +200,9 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | ---------- | --------- | -------------------------------------------------------- | -------------------------- | -------------------- | ---------------------- | ------ | --- |
 | 2026-10-29 | `6490fc2` | Part 5 baseline (bench)                                  | `claude-sonnet-5-5`, `low` | 1.77 s / 4.95 s      | 5.94 s / 9.37 s        | 2.69   | 36  |
 | 2026-10-29 | `e57f31c` | demo tables seeded                                       | `claude-sonnet-5-5`, `low` | 1.85 s / 2.84 s      | 4.22 s / 9.08 s        | 2.08   | 36  |
-| 2026-10-30 | `9dfe2b5` | review fixes, baseline for `VOICE-8`                     | `claude-sonnet-5-5`, `low` | 1.83 s / 2.86 s      | 4.33 s / 8.76 s        | 2.06   | 36  |
-| 2026-10-30 | `288f9a3` | `VOICE-8` lever 1: the sink's 200 ms hold timer (kept)   | `claude-sonnet-5-5`, `low` | 1.79 s / 2.87 s      | 4.18 s / 13.79 s       | 2.03   | 36  |
-| 2026-10-30 | `ab9891b` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
+| 2026-10-30 | `d764023` | review fixes, baseline for `VOICE-8` (PR #22)            | `claude-sonnet-5-5`, `low` | 1.83 s / 2.86 s      | 4.33 s / 8.76 s        | 2.06   | 36  |
+| 2026-10-30 | `1bde7af` | `VOICE-8` lever 1: the sink's 200 ms hold timer (PR #23) | `claude-sonnet-5-5`, `low` | 1.79 s / 2.87 s      | 4.18 s / 13.79 s       | 2.03   | 36  |
+| 2026-10-30 | `d5240fa` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
@@ -214,13 +214,20 @@ answer 1.7 s, one round. Prompt cache hit on 36/36 first calls in both runs.
 
 The three 2026-10-30 runs are the `VOICE-8` levers, one commit each on `exp/voice-latency`,
 against the fix branch's head as the baseline (same day, same stack, three repeats each). The
+commits the bench ran at (`9dfe2b5`, `288f9a3`, `ab9891b`) were squashed or rebased away: the
+baseline is `fix/voice-review`'s head, on `main` as `d764023`; lever 1 is `1bde7af` on `main`;
+lever 2 is `d5240fa` on `exp/voice-latency` only. The
 hold timer moves what it can move: on the catalogue questions the first text is the filler,
 which the hold never touched, and the overall p50 differences (0.04 s first text, 0.15 s
 whole answer) are inside the run-to-run noise; on the one-sentence answers, where the hold
 used to wait for the end of the generation, the first text went from 1.68 / 1.69 s (hello,
 thanks) to 1.52 / 1.51 s, about 0.17 s, the generation time of the sentence. The p95 whole
 answer of 13.79 s is one q10 take at three rounds, not the lever. Kept (cherry-picked onto
-`fix/voice-review`). The paragraph-break collapse cannot show in this bench (it acts on TTS
+`fix/voice-review`). **The gain is unproven at this bench's resolution** (`V-10`): the 0.17 s is
+a difference of medians over three repeats with no spread recorded, and the 200 ms value itself
+was chosen, not measured. Low risk, so it stays; the next run prints each question's min–max
+beside its median (`llm-bench.ts`), which is what a 0.15 s claim needs to be judged against,
+and a hold value is changed only on that evidence. The paragraph-break collapse cannot show in this bench (it acts on TTS
 segments, and no instrument counts seams: the call test and `turns.jsonl` measure the first
 audio only), and the bench now counts the breaks the model writes: 0 of 12 answers had one
 (`breaks` in `llm-bench.jsonl`, the filler's own break not counted). With nothing to act on it
@@ -309,7 +316,7 @@ it at the end. Needs `SUPABASE_*`, `ANTHROPIC_API_KEY`, `VA_BENCH_EMAIL`, `VA_BE
 `AI_VOICE_MODEL` / `AI_VOICE_EFFORT` to compare models; `LABEL` tags the rows.
 
 ```
-pnpm --filter @va/voice bench 3            # p50/p95 first text and whole answer, rounds, paragraph breaks, cache hits
+pnpm --filter @va/voice bench 3            # p50/p95 first text and whole answer, per-question median with min–max, rounds, breaks, cache hits
 pnpm --filter @va/voice bench first warm   # one call's first question after the warm-up (cold-start runs)
 SHOW_ANSWERS=1 pnpm --filter @va/voice bench 1   # prints the answers to the console (never to the log)
 ```
