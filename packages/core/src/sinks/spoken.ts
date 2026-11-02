@@ -19,6 +19,7 @@
 //   - abort (a barge-in: the loop returns silently) disarms the hold and drops what is pending,
 //     so nothing is spoken after the owner has given up on the turn.
 
+import { CHANNEL_DEFAULTS } from '../channel.js'
 import { MESSAGES_HR, type ErrorCode } from '../errors.js'
 import { errorReason, log } from '../log.js'
 import type { EventSink, Usage } from '../loop/ports.js'
@@ -34,10 +35,11 @@ export const FILLERS_HR: readonly string[] = [
 
 export type SpokenEnd = 'done' | 'error'
 
-/** How long a finished first sentence waits for the next token before it is spoken anyway. A
+/** How long a finished first sentence waits for the next token before it is spoken anyway: the
+ * voice channel's `holdMs` (the owner passes its own settings' value; this is the default). A
  * token follows within a few tens of milliseconds while the model is still writing; a tool
  * call's `between_tools` thinking takes longer, which is the trade-off S13c pins. */
-export const HOLD_MS = 200
+export const HOLD_MS = CHANNEL_DEFAULTS.voice.holdMs
 
 function randomFiller(): string {
   return FILLERS_HR[Math.floor(Math.random() * FILLERS_HR.length)]!

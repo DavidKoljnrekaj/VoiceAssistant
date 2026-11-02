@@ -179,7 +179,8 @@ Fixed in code, not settings: `turnDetection: 'stt'` (LiveKit's turn detector has
 `interruption.mode: 'vad'` (never LiveKit's hosted "adaptive" model), the Soniox EU host and
 `stt-rt-v5`, `languageHints: ['hr']` strict, `eleven_v4_turbo` with `language: 'hr'`, and the
 voice channel's engine settings (`docs/CORE.md` → Channels: Sonnet 5.5, `low`, `between_tools`,
-1024 tokens, 4 iterations, 6 s per tool, 25 s per request, last 20 messages).
+1024 tokens, 4 iterations, 6 s per tool, 25 s per request, last 20 messages, the sink's 200 ms
+hold, which `runVoiceTurn` takes from `settings.holdMs`).
 
 ## Latency budget and measurements
 
@@ -380,6 +381,7 @@ scenario's deferred rows never land in the next one's world.
 | W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                                                                           |
 | W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                                                                              |
 | W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat                                                                                                            |
+| W21        | the channel setting `holdMs` reaches the sink: with a 10 ms hold a one-sentence answer the model stalls after is spoken within 100 ms (`V-10`)                                                                                                         |
 
 ```
 pnpm exec vitest run apps/voice

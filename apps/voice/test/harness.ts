@@ -176,6 +176,8 @@ export const FLUSH = '⏎'
 
 export interface StreamHandle {
   done: Promise<Collected>
+  /** The chunks read so far (a flush is `'⏎'`), for a scenario that looks before the end. */
+  chunks: string[]
   /** What LiveKit does on a barge-in. */
   cancel(): Promise<void>
 }
@@ -197,7 +199,7 @@ export function collect(stream: ReadableStream<EngineChunk | unknown>): StreamHa
       .filter(Boolean)
     return { chunks, text: chunks.filter((c) => c !== FLUSH).join(''), paragraphs }
   })()
-  return { done, cancel: () => reader.cancel() }
+  return { done, chunks, cancel: () => reader.cancel() }
 }
 
 /** One user turn through `llmNode`: the context is the greeting, the prior turns and the text. */

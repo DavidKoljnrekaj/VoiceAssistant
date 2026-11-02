@@ -373,6 +373,24 @@ describe('a spoken turn', () => {
   )
 
   scenario(
+    "W21 (V-10) the channel's holdMs bounds the held first sentence: with a short hold the sentence is spoken before the model goes on",
+    async () => {
+      anthropic.script({ hangAfterContent: answer('Imamo dva stola.') })
+      const call = await openCall({ settings: { holdMs: 10 } })
+      const handle = await ask(call, 'Koliko stolova imamo?')
+      await vi.waitFor(() => expect(handle.chunks).toEqual(['Imamo dva stola.']))
+      await handle.cancel()
+      await handle.done
+      await call.session.settle()
+      const timing = logs.find((l) => l.line.includes('"event":"timing"'))
+      const fields = JSON.parse(timing!.line) as { first_text_ms: number; outcome: string }
+      expect(fields.outcome).toBe('cancelled')
+      // The default hold is 200 ms (`HOLD_MS`); a setting that reached the sink speaks well before it.
+      expect(fields.first_text_ms).toBeLessThan(100)
+    },
+  )
+
+  scenario(
     'W16 the request timeout aborts the loop and is spoken; only the user row is written',
     async () => {
       anthropic.script({ hangUntilAborted: true })

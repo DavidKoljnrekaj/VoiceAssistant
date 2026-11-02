@@ -151,8 +151,9 @@ it.
 `new SpokenTextSink(say, end, pickFiller?, holdMs?)` turns the loop's events into sentences for
 text-to-speech and nothing else: `say(text)` receives what to speak, `end('done' | 'error')` is
 called once after `done` or `error`, `pickFiller` picks the filler sentence (random from
-`FILLERS_HR` by default; tests pin one), `holdMs` (default `HOLD_MS`, 200) is how long a
-finished first sentence waits for the next token. Landmark's `OpenAiChunkSink` without its wire
+`FILLERS_HR` by default; tests pin one), `holdMs` is how long a finished first sentence waits
+for the next token: the owner passes its channel settings' `holdMs` (the voice worker does,
+`W21`), `HOLD_MS` (200, the voice default) stands in when it does not. Landmark's `OpenAiChunkSink` without its wire
 format: the voice worker runs the loop in-process and hands `say` to the TTS adapter.
 
 - `textDelta` is spoken a word at a time, up to the last whitespace, so an abbreviation is never
@@ -191,6 +192,7 @@ collapse to two. The Croatian strings are marked for native review (`CORE-1`).
 | tool / request timeout    | 15 s / 90 s                         | 6 s / 25 s                          |
 | history rows              | 200 (`ai_session_history`)          | 20 (the call's own context)         |
 | compaction                | off (later)                         | off                                 |
+| hold (spoken sink)        | 200 ms (no sink holds)              | 200 ms (`holdMs`, `VOICE-8`)        |
 | env overrides             | `AI_CHAT_MODEL`, `AI_CHAT_EFFORT`   | `AI_VOICE_MODEL`, `AI_VOICE_EFFORT` |
 
 `CHANNEL_DEFAULTS` is the table as data; `channelSettings(channel, env)` applies the overrides

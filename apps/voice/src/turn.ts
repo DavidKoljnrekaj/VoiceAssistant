@@ -122,7 +122,7 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   const config = voiceLoopConfig(deps, ctx)
   const settings = deps.settings
 
-  const sink = new SpokenTextSink(input.say, input.end, input.pickFiller)
+  const sink = new SpokenTextSink(input.say, input.end, input.pickFiller, settings.holdMs)
   const controller = new AbortController()
   const state: { outcome: TurnOutcome } = { outcome: 'completed' }
   const cancel = (why: TurnOutcome): void => {

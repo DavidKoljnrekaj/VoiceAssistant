@@ -21,6 +21,7 @@ describe('channelSettings', () => {
       maxIterations: 4,
       toolTimeoutMs: 6_000,
       requestTimeoutMs: 25_000,
+      holdMs: 200,
     })
   })
 
