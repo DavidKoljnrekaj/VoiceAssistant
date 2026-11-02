@@ -15,6 +15,15 @@ function originOf(value: string | undefined): string | null {
   }
 }
 
+/**
+ * Every URL on `origin`, as a RegExp. generateSW serialises the route into sw.js as text, so a
+ * function pattern would lose its closure (`url.origin === origin` then compares against the
+ * worker's own origin); a RegExp carries the origin with it (WEB-15, `sw-routes.test.ts`).
+ */
+function originPattern(origin: string): RegExp {
+  return new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(/|$)`)
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const networkOnlyOrigins = [originOf(env.VITE_API_URL), originOf(env.VITE_SUPABASE_URL)].filter(
@@ -51,7 +60,7 @@ export default defineConfig(({ mode }) => {
           // Streams and auth answers must never come from a cache; NetworkOnly makes that explicit
           // even though these origins are not precached either.
           runtimeCaching: networkOnlyOrigins.map((origin) => ({
-            urlPattern: ({ url }: { url: URL }) => url.origin === origin,
+            urlPattern: originPattern(origin),
             handler: 'NetworkOnly' as const,
           })),
         },

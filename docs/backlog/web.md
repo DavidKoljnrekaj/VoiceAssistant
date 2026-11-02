@@ -46,20 +46,6 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 - **Fix direction:** a `vite:preloadError` listener in `main.tsx` that reloads the page;
   optionally `onNeedRefresh` instead of `autoUpdate`
 
-### WEB-15 · Low · The store, auth context, voice hook and services have no tests; `isChatEvent` checks only `type` (R-W12)
-
-- **Check:** Confirmed (R-W12)
-- **Where:** `hooks/useChatStore.ts`, `contexts/AuthContext.tsx`, `hooks/useVoiceCall.ts`,
-  `services/chatService.ts`, `lib/api.ts` (`ApiHttpError` mapping, non-JSON bodies);
-  `types/api.ts` `isChatEvent`; the built service worker's `NetworkOnly` routes
-- **What happens:** web coverage is 28 %; `WEB-4`, `WEB-5`, `WEB-7` and `WEB-9` have nowhere to
-  put their failing test; a `delta` without `text` renders "undefined"
-  (`lib/normalizeMessages.ts`); nothing asserts the built `sw.js` has `NetworkOnly` for the two
-  origins
-- **Fix direction:** a store harness over a fake `fetch` (the SSE fixtures exist) and a fake
-  supabase-js; a shape check per event type in `isChatEvent`; a build-output grep for the two
-  routes
-
 ## Resolved
 
 ### WEB-4 · High · A failed turn on an existing conversation is wiped, with the typed text (R-W1)
@@ -101,3 +87,7 @@ The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 ### WEB-14 · Low · Accessibility gaps in the shell (R-W11)
 
 - Fixed 2026-11-02 on fix/web-review: the drawer is a `dialog` (`aria-modal`, focus moves in, Tab cycles, Escape closes, focus returns to the toggle); toasts have a labelled dismiss button and Escape dismisses the newest; the message list is a `log` live region with the provisional bubble excluded; every Spinner has a label; `<html lang>` follows the switch. Tests `WEB-14` in `i18n.test.ts` and `Toast.test.tsx`. The manifest `description` stays Croatian: the manifest is static and the product name is a placeholder.
+
+### WEB-15 · Low · The store, auth context, voice hook and services have no tests; `isChatEvent` checks only `type` (R-W12)
+
+- Fixed 2026-11-02 on fix/web-review: tests for the store (`useChatStore.test.ts`), the auth context, the voice hook, the chat service and `lib/api` over the fakes in `src/test/`; `isChatEvent` checks the required fields of every event type (`types/api.test.ts`); `sw-routes.test.ts` builds the PWA and reads `sw.js` back, which showed that the function `urlPattern` lost its closure and matched the worker's own origin, so the routes are RegExps carrying the origin now.
