@@ -42,8 +42,9 @@ item says so in its description.
       a failed start removes what it created.** `apps/api/src/voice/calls.ts` (refresh sees only a
       row with `expires_at > now()`; a failed dispatch or join token rolls both rows back),
       `apps/voice/src/call.ts`, the `voice-calls-sweep` pg_cron job
-      (`20261028100200_voice_calls.sql`). Tests: `V01`, `V02`, `V05`, `V06`, `V08`, `V11`, `V14`,
-      `V15`, `W02`, `voice_calls_service_only.test.sql`.
+      (`20261028100200_voice_calls.sql`), and the 15-minute cap is also a CHECK constraint
+      (`20261102100000_voice_calls_expiry_cap.sql`). Tests: `V01`, `V02`, `V05`, `V06`, `V08`,
+      `V11`, `V14`, `V15`, `W02`, `voice_calls_service_only.test.sql`.
 - [ ] **Rate limits on chat turns, voice calls per day, concurrent calls; a deadline before the
       first byte.** `apps/api/src/rate-limit.ts` (20 / 5 min, 200 / day, 20 calls / day, 3
       concurrent over rows neither expired nor idle, the caller's own previous call removed

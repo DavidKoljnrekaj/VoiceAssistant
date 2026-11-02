@@ -1,15 +1,18 @@
 -- ai_session_history (20261028100100_ai_sessions_and_messages.sql): from a leaf it returns the
 -- active branch root -> leaf, never a sibling branch; p_max_rows keeps the newest rows; a summary
--- boundary stops the walk and is included; only the service role may call it.
+-- boundary stops the walk and is included; only the service role may call it, and it does not
+-- check who owns the session: the API does, before calling (DB-3).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(12);
 
 -- Fixtures, as the database owner. One session, a chain of 7 rows m1 -> m7 and a sibling branch
 -- m5b under m4:
 --   m1 user -> m2 assistant -> m3 tool_result -> m4 assistant -> m5 user -> m6 assistant -> m7 user
 --                                                             \-> m5b user
-insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000040a1', 'h@test.local');
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000040a1', 'h@test.local'),
+  ('00000000-0000-0000-0000-0000000040a2', 'other@test.local');
 insert into public.ai_sessions (id, user_id)
 select '00000000-0000-0000-0000-0000000040b1', u.id
 from public.users u where u.auth_user_id = '00000000-0000-0000-0000-0000000040a1';
@@ -83,6 +86,17 @@ select results_eq(
             ('00000000-0000-0000-0000-0000000040c5'), ('00000000-0000-0000-0000-0000000040c6'),
             ('00000000-0000-0000-0000-0000000040c7') $$,
   'with a summary boundary the walk stops there and includes the boundary row'
+);
+
+-- DB-3: the function does not check ownership. The service role carries no user identity, and
+-- even with another user's claims attached the branch comes back whole. This pins the contract
+-- the API relies on: apps/api/src/chat/prepare.ts selects the session by id and user_id before
+-- it calls ai_session_history; a widened grant would need a policy, not this function.
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000040a2","role":"service_role"}';
+select is(
+  (select count(*)::int from public.ai_session_history('00000000-0000-0000-0000-0000000040c7')),
+  5,
+  'DB-3: ai_session_history does not check ownership (another user''s claims still get the branch); the API checks the session belongs to the caller before calling it'
 );
 
 -- Signed-in users and anon may not call it, even for their own session. The grant is asserted

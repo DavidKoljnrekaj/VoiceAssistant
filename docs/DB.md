@@ -12,7 +12,10 @@ env schema, and never a query. The plan is `docs/plan/02-database.md`.
 `supabase test db` (`pnpm test:db`) are the only ways this repo applies SQL. Ports are one block
 above Landmark's so both stacks run side by side: API 54431, database 54432, shadow 54430, pooler
 54439, Studio 54433, Mailpit 54434, analytics 54437. Email sign-in is on and confirmations are off
-locally. Docker Desktop with WSL integration for this distro is required.
+locally. The auth `site_url` is the PWA dev server (`http://127.0.0.1:5173`) and the redirect
+allow-list adds `localhost:5173` and the compose origin `8080` on both hosts, so an email link
+or OAuth return lands on the PWA, never on the API (DB-4). Docker Desktop with WSL integration
+for this distro is required.
 
 The dev project is `kdplqbldohrzsewhckgl` (EU). Linking (`supabase link`), applying migrations
 and enabling extensions there are the operator's steps, listed in `docs/backlog/release.md`;
@@ -96,8 +99,10 @@ The hand-over of the caller's JWT to the voice worker, ported from Landmark. One
 call: `session_id` (unique, cascade), `user_id`, `call_token_hash` (SHA-256 of the opaque token,
 unique; the token is never stored), `platform_call_id` (the LiveKit room, unique),
 `access_token` (the caller's JWT, a live credential), `expires_at` (hard cap: min(JWT expiry,
-start + 15 min)), `last_seen_at`, `created_at`. A row counts as absent once expired or idle for
-3 minutes; the `voice-calls-sweep` pg_cron job deletes such rows every minute where pg_cron is
+start + 15 min); the constraint `voice_calls_expires_within_cap`,
+`20261102100000_voice_calls_expiry_cap.sql`, refuses any row or refresh past
+`created_at + 15 minutes`, so the cap holds even if the API's arithmetic is wrong),
+`last_seen_at`, `created_at`. A row counts as absent once expired or idle for 3 minutes; the `voice-calls-sweep` pg_cron job deletes such rows every minute where pg_cron is
 enabled (the migration skips the schedule with a notice otherwise; re-run its last block after
 enabling pg_cron). The guard checks `pg_extension`, not `to_regproc('cron.schedule')`: that name
 is overloaded, so `to_regproc` is NULL even with pg_cron installed.
@@ -120,8 +125,8 @@ hand-written `DemoDatabase` cast (`packages/tools-demo/src/demo-db.ts`).
 | `app_user_id()`                             | definer          | authenticated, service_role | the caller's `users.id` (from `auth.uid()`); the owner-scoping helper every policy uses                                                                          |
 | `app_user_role()`                           | definer          | authenticated, service_role | the caller's role                                                                                                                                                |
 | `set_updated_at()`                          | trigger          | —                           | `updated_at = now()` on `users`, `ai_sessions` and `demo_items`                                                                                                  |
-| `handle_new_auth_user()`                    | definer, trigger | —                           | creates the profile when an auth user is created                                                                                                                 |
-| `touch_session_on_message()`                | trigger          | —                           | bumps the session on message insert                                                                                                                              |
+| `handle_new_auth_user()`                    | definer, trigger | —                           | creates the profile when an auth user is created; `ON CONFLICT DO NOTHING`, so an existing profile is kept as it is                                              |
+| `touch_session_on_message()`                | invoker, trigger | —                           | bumps the session on message insert, as the inserting role (see the coupling below)                                                                              |
 | `ai_session_history(p_leaf_id, p_max_rows)` | invoker          | service_role only           | the active branch from a leaf, root → leaf, at most `p_max_rows` (default 200), stopping after the session's `summary_through_message_id` and including that row |
 
 `ai_session_history` replaces Landmark's unbounded "select every row of the session". It is
@@ -130,7 +135,25 @@ SECURITY INVOKER on purpose (the plan sketched DEFINER): the service role bypass
 and if the grant is ever widened, RLS still applies. The walk never follows a `parent_id` into
 another session, so a wrong pointer written by a future bug cannot pull another user's rows into
 a prompt. An unknown leaf yields no rows; the API treats that as an error, never as an empty
-history (invariant 10).
+history (invariant 10). It does not check who owns the session: the service role has no user
+identity, and `ai_session_history.test.sql` pins that another user's claims still get the whole
+branch, so the API selects the session by id and `user_id` before it calls the function
+(`apps/api/src/chat/prepare.ts`). If the grant is ever widened to `authenticated`, the owner
+check has to be a policy on `ai_messages`, which RLS already applies, not a change to the function.
+
+**`touch_session_on_message` runs as the inserting role.** The trigger is SECURITY INVOKER and
+issues `UPDATE public.ai_sessions`, so a message insert needs UPDATE on `ai_sessions` as the
+role doing the insert. Today only the service role inserts messages, so it works. If
+`authenticated` ever gets INSERT on `ai_messages`, every such insert fails with `42501` on the
+missing UPDATE grant: the same change must grant `UPDATE (updated_at)` on `ai_sessions` to
+`authenticated` with an owner policy, or make the trigger SECURITY DEFINER with its own ownership
+check, and add the pgTAP case (DB-4).
+
+**`users.email` is copied once.** `handle_new_auth_user` inserts and never updates, so a change
+of the email in auth (a future "change email" flow) leaves `users.email` stale; the prompt names
+the user by it and the shell shows it when `display_name` is null. Documented rather than synced
+(DB-4): an UPDATE trigger on `auth.users` comes with the flow that changes emails, with its
+pgTAP case.
 
 ## RLS posture
 
@@ -169,6 +192,10 @@ import type { Database, Tables } from '@va/db'
 - `createServiceClient()` uses the service role key. Persistence only, always with an explicit
   user or session filter (`ctx.serviceClient`).
 - Both set `persistSession: false, autoRefreshToken: false`: the apps are servers.
+- `VOICE_CALL_IDLE_MS` (`voice-calls.ts`) is the 3-minute idle window of a `voice_calls` row,
+  the one TypeScript value behind the worker's lookup and the API's concurrent count; it mirrors
+  the `interval '3 minutes'` literal of the sweep in `20261028100200_voice_calls.sql`, and the
+  two change together.
 - `database.ts` is generated. During Part 2 it came from the local stack
   (`supabase gen types typescript --local`); from now on `/db-types` (`pnpm db:types`) regenerates
   it from the linked project after a migration is applied there, and the file is committed with
@@ -176,14 +203,14 @@ import type { Database, Tables } from '@va/db'
 
 ## Tests
 
-| File                       | Checks                                                                                                                                                |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `00_rls_enabled`           | every table in `public` has RLS on                                                                                                                    |
-| `users_self_access`        | profile created on sign-up; a user sees only their row, changes `language` and `display_name`, cannot change `role` or `email`; anon nothing; helpers |
-| `ai_sessions_owner_scoped` | own sessions and messages only; no writes as authenticated; service role writes; message insert bumps the session; delete cascades; check constraints |
-| `ai_session_history`       | the 7-row chain with a sibling branch: whole branch, sibling branch, `p_max_rows`, summary boundary, unknown leaf; EXECUTE only for service_role      |
-| `voice_calls_service_only` | nothing for authenticated or anon; the service role runs the call lifecycle; one call per session; cascade; the sweep job where pg_cron exists        |
-| `demo_tables`              | a member reads the catalogue and writes only their own notes, never an item; anon nothing; the service role seeds; deleting an item deletes its notes |
+| File                       | Checks                                                                                                                                                                                                                                                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `00_rls_enabled`           | every table in `public` has RLS on                                                                                                                                                                                                                                                                                |
+| `users_self_access`        | profile created on sign-up, and kept as it is when the trigger function fires again (`ON CONFLICT`); a user sees only their row, changes `language` and `display_name`, cannot change `role` or `email`; a valid JWT without a profile gets null helpers and no rows; anon nothing, and no EXECUTE on the helpers |
+| `ai_sessions_owner_scoped` | own sessions and messages only; no insert, update or delete as authenticated; service role writes; message insert bumps the session; delete cascades; check constraints                                                                                                                                           |
+| `ai_session_history`       | the 7-row chain with a sibling branch: whole branch, sibling branch, `p_max_rows`, summary boundary, unknown leaf; no ownership check (another user's claims still get the branch); EXECUTE only for service_role                                                                                                 |
+| `voice_calls_service_only` | nothing for authenticated or anon; the service role runs the call lifecycle; `expires_at` never past 15 minutes from `created_at`, on insert or refresh; one call per session; cascade; the sweep job where pg_cron exists                                                                                        |
+| `demo_tables`              | a member reads the catalogue and writes only their own notes, never an item; anon nothing; the service role seeds; deleting an item deletes its notes                                                                                                                                                             |
 
 Each file is one transaction that rolls back. See `docs/TESTING.md` → Database tests for how to
 act as a role. One local-image quirk to know: calling a function without EXECUTE as `anon` or

@@ -1,9 +1,10 @@
 -- voice_calls (20261028100200_voice_calls.sql): the table holds a live JWT, so no signed-in user
--- or anon may read or write it; the service role does everything; the sweep job exists wherever
--- pg_cron is installed.
+-- or anon may read or write it; the service role does everything; expires_at can never pass 15
+-- minutes from the call's start (20261102100000_voice_calls_expiry_cap.sql, DB-2); the sweep job
+-- exists wherever pg_cron is installed.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(17);
 
 -- Fixtures, as the database owner.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000030a1', 'v@test.local');
@@ -43,6 +44,16 @@ select lives_ok(
   $$ update public.voice_calls set access_token = 'jwt-1b', last_seen_at = now() where call_token_hash = 'hash-1' $$,
   'the service role refreshes a call'
 );
+-- DB-2: the 15-minute cap is a constraint, not only the API's arithmetic (CALL_CAP_MS).
+select throws_ok(
+  $$ update public.voice_calls set expires_at = created_at + interval '15 minutes 1 second' where call_token_hash = 'hash-1' $$,
+  '23514', null,
+  'DB-2: a refresh cannot move expires_at past 15 minutes from the call''s start'
+);
+select lives_ok(
+  $$ update public.voice_calls set expires_at = created_at + interval '15 minutes' where call_token_hash = 'hash-1' $$,
+  'DB-2: a refresh may move expires_at up to the cap'
+);
 select throws_ok(
   $$ insert into public.voice_calls (session_id, user_id, call_token_hash, access_token, expires_at)
      select session_id, user_id, 'hash-2', 'jwt-2', now() from public.voice_calls where call_token_hash = 'hash-1' $$,
@@ -63,6 +74,13 @@ select lives_ok(
   'the service role deletes a call on hang-up'
 );
 select is((select count(*)::int from public.voice_calls), 0, 'and the row is gone');
+select throws_ok(
+  $$ insert into public.voice_calls (session_id, user_id, call_token_hash, platform_call_id, access_token, expires_at)
+     select '00000000-0000-0000-0000-0000000030b1', u.id, 'hash-4', 'room-4', 'jwt-4', now() + interval '15 minutes 1 second'
+     from public.users u where u.auth_user_id = '00000000-0000-0000-0000-0000000030a1' $$,
+  '23514', null,
+  'DB-2: a call cannot be created usable past 15 minutes from its start, whatever the JWT says'
+);
 select lives_ok(
   $$ insert into public.voice_calls (session_id, user_id, call_token_hash, platform_call_id, access_token, expires_at)
      select '00000000-0000-0000-0000-0000000030b1', u.id, 'hash-3', 'room-3', 'jwt-3', now() + interval '15 minutes'

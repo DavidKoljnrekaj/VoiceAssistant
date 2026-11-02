@@ -5,15 +5,13 @@
 // changed role. The token itself is never logged, only ids.
 import { createHash } from 'node:crypto'
 
-import type { DbClient } from '@va/db'
+import { type DbClient, VOICE_CALL_IDLE_MS } from '@va/db'
 
 import { authenticateToken, type AuthContext, log } from '@va/core'
 
 import { IDENTITY_CACHE_MAX_MS } from './env.js'
 
 const TAG = '[voice]'
-/** A row idle for this long counts as absent (the sweep deletes it; the lookup refuses it first). */
-export const IDLE_MS = 3 * 60_000
 
 export function sha256Hex(text: string): string {
   return createHash('sha256').update(text).digest('hex')
@@ -137,7 +135,8 @@ async function liveRow(
   for (const [column, value] of Object.entries(filter)) query = query.eq(column, value)
   const { data, error } = await query
     .gt('expires_at', new Date(nowMs).toISOString())
-    .gt('last_seen_at', new Date(nowMs - IDLE_MS).toISOString())
+    // The idle window the sweep deletes by (`@va/db`); the lookup refuses the row first.
+    .gt('last_seen_at', new Date(nowMs - VOICE_CALL_IDLE_MS).toISOString())
     .maybeSingle()
   if (error) throw new Error(`voice_calls lookup failed: ${error.code}`)
   return data

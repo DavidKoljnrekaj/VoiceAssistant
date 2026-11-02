@@ -3,8 +3,8 @@
 import { describe, expect } from 'vitest'
 
 import { uuid } from '@va/core/test'
+import { VOICE_CALL_IDLE_MS } from '@va/db'
 
-import { CALL_IDLE_MS } from '../src/rate-limit.js'
 import { CALL_CAP_MS, sha256Hex } from '../src/voice/calls.js'
 import {
   buildApp,
@@ -138,7 +138,7 @@ describe('voice call lifecycle', () => {
   scenario(
     'V17 (API-8) unexpired rows idle for over three minutes do not count against the concurrent cap',
     async () => {
-      const idle = { last_seen_at: new Date(Date.now() - CALL_IDLE_MS - 1000).toISOString() }
+      const idle = { last_seen_at: new Date(Date.now() - VOICE_CALL_IDLE_MS - 1000).toISOString() }
       db.seed('voice_calls', [
         { ...liveRow(USERS.admin.id), ...idle },
         { ...liveRow(USERS.admin.id), ...idle },
@@ -302,6 +302,23 @@ describe('voice call lifecycle', () => {
     expect(calls()).toHaveLength(0)
     expect(voiceSessions()).toHaveLength(0)
   })
+
+  scenario(
+    'V19 (V-1) the voice_calls insert carries created_at from the same clock as expires_at, so the database cap never sees two clocks',
+    async () => {
+      const fixed = new Date('2026-11-02T10:00:00.000Z')
+      const app = buildApp({ clock: () => fixed })
+      const res = await call('/voice/sessions', undefined, { app })
+      expect(res.status).toBe(200)
+      const insert = db.requestsTo('voice_calls', 'POST')
+      expect(insert).toHaveLength(1)
+      expect(insert[0]!.body).toMatchObject({
+        created_at: fixed.toISOString(),
+        expires_at: new Date(fixed.getTime() + CALL_CAP_MS).toISOString(),
+      })
+      expect(calls()[0]).toMatchObject({ created_at: fixed.toISOString() })
+    },
+  )
 
   scenario(
     'V10 sessions: PATCH renames and DELETE removes with the user filter; zero rows affected is 404',

@@ -4,7 +4,7 @@
 -- check constraints hold the row shape.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(21);
 
 -- Fixtures, as the database owner: users A and B, one session each with one message each.
 insert into auth.users (id, email) values
@@ -82,6 +82,11 @@ select throws_ok(
      values ('00000000-0000-0000-0000-0000000020b1', 'user', 'user', '[]') $$,
   '42501', null,
   'a signed-in user cannot write messages'
+);
+select throws_ok(
+  $$ update public.ai_messages set content = '[]' $$,
+  '42501', null,
+  'DB-3: a signed-in user cannot update messages'
 );
 select throws_ok(
   $$ update public.ai_sessions set title = 'renamed' $$,
