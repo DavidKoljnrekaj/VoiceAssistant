@@ -186,7 +186,15 @@ attaches the agent's audio tracks to hidden `<audio>` elements (detached again w
 is unsubscribed or the call ends), derives `agentSpeaking` from `ActiveSpeakersChanged`, and
 tears everything down on disconnect, unmount or `pagehide`; the `pagehide` hang-up sends `/end`
 with `keepalive: true` so a closed tab releases the credential instead of waiting for the
-15-minute cap and the sweep. `VoiceCallButton`
+15-minute cap and the sweep. That hang-up is best-effort (V-8): `apiFetch` takes the bearer
+token from `supabase.auth.getSession()`, which supabase-js 2.117.3 exposes only as a promise
+(there is no synchronous accessor to prefer; the session lives in the client's storage behind
+`_useSession`). With a valid token the lockless client answers from memory in a microtask and
+the keepalive request leaves before the page is gone; inside the refresh margin before the
+token expires the client refreshes over the network first, and an unloading page may not get
+to send `/end`. The credential then expires at the cap and the sweep removes it
+(`docs/API.md` → Voice call lifecycle); the room itself ends when the participant leaves.
+`VoiceCallButton`
 is props-driven (idle / connecting / live with mute and hang-up); microphone denial and a failed
 start are toasts. The button renders only with `VOICE_CALLS_ENABLED` (on in this repository; a
 per-user gate before a trial is `WEB-1`). During a call the panel shows a "Poziv u tijeku"

@@ -56,7 +56,9 @@ export function useVoiceCall(): VoiceCall {
     current.tracks.clear()
     void current.room.disconnect()
     // Best effort: the credential also expires and is swept server-side. On pagehide the request
-    // must outlive the page, so it is sent with keepalive.
+    // must outlive the page, so it is sent with keepalive; apiFetch still awaits getSession() for
+    // the token (supabase-js has no synchronous accessor), a microtask with a valid token but a
+    // network refresh near expiry, which an unloading page may not finish (docs/WEB.md).
     endVoiceCall(current.sessionId, { keepalive: reason === 'pagehide' }).catch(() => {})
     setState('idle')
     setMuted(false)
