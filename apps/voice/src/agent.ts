@@ -30,7 +30,7 @@ import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
 import { acceptDispatchedJob, callTokenOf } from './job.js'
-import { HangUp, participantLeft, sessionErrorAction } from './lifecycle.js'
+import { HangUp, NO_SPEECH, participantLeft, sessionErrorAction } from './lifecycle.js'
 import { createMetrics, createTurnMetrics } from './metrics.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
@@ -135,16 +135,24 @@ export default defineAgent<UserData>({
     }
     // The credential goes when the caller leaves, when the room closes, on the call's cap and on
     // shutdown; the API's `/end` and the sweep are the other paths. All idempotent. A hang-up
-    // that follows a spoken line (the goodbye) waits for the agent to finish it.
+    // that follows a spoken line (the goodbye, the error fallback) waits for that line's playout.
     const hangUp = new HangUp((reason) => {
       void endCall(reason).then(() => ctx.shutdown(reason))
     })
-    const call = new CallSession(deps, identity, { onEnded: (reason) => hangUp.afterSpeech(reason) })
+    // The goodbye travels through the reply's own stream (`llmNode`), so the speech to wait for
+    // is the reply LiveKit created for the turn that is running when `onEnded` fires.
+    const call = new CallSession(deps, identity, {
+      onEnded: (reason) => hangUp.afterSpeech(reason, reply?.waitForPlayout() ?? NO_SPEECH),
+    })
     const session = new voice.AgentSession({
       vad: vadFor(env, ctx.proc.userData.vad),
       stt: createStt(env, loadHints()),
       tts: createTts(env),
       turnHandling: turnHandlingOptions(env),
+    })
+    let reply: voice.SpeechHandle | null = null
+    session.on(voice.AgentSessionEventTypes.SpeechCreated, (ev) => {
+      if (ev.source === 'generate_reply') reply = ev.speechHandle
     })
 
     // The framework's own figures per turn: the Soniox delays off the user item, then the
@@ -176,7 +184,6 @@ export default defineAgent<UserData>({
       }
       if (ev.oldState === 'speaking' && ev.newState !== 'speaking') {
         agentSpeaking = false
-        hangUp.spoke()
         if (userStartedAt !== null) {
           void metrics.write('bargein.jsonl', {
             room,
@@ -191,8 +198,9 @@ export default defineAgent<UserData>({
       }
     })
     // A Soniox or ElevenLabs failure LiveKit cannot recover from would leave the caller silent:
-    // say the fallback where speech still works, then hang up. The session's own close (after
-    // LiveKit's unrecoverable-error limit, or its drain on shutdown) hangs up too.
+    // say the fallback where speech still works and hang up after that line (after the grace
+    // when nothing can be said). The session's own close (after LiveKit's unrecoverable-error
+    // limit, or its drain on shutdown) hangs up too.
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const action = sessionErrorAction(ev.error)
       log('error', LOG_TAG, 'session error', {
@@ -203,8 +211,8 @@ export default defineAgent<UserData>({
         action,
       })
       if (action === 'log') return
-      if (action === 'speak_and_hang_up') session.say(MESSAGES_HR.internal_error)
-      hangUp.afterSpeech('session_error')
+      const fallback = action === 'speak_and_hang_up' ? session.say(MESSAGES_HR.internal_error) : null
+      hangUp.afterSpeech('session_error', fallback?.waitForPlayout() ?? NO_SPEECH)
     })
     session.on(voice.AgentSessionEventTypes.Close, (ev) => {
       hangUp.now(`session_closed:${ev.reason}`)

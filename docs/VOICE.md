@@ -128,8 +128,10 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    unwinding (a barge-in) waits for it, so its history carries the cut-short turn's rows and
    its save chains off them (`VOICE-9`); the saves themselves are chained too. A gone row (the
    15-minute cap, or the API's `/end`) is `call_ended`: the caller hears `CALL_ENDED_HR` once,
-   the session reports it (`onEnded`) and the worker hangs up after the agent has spoken it
-   (`HangUp`, or after a 10 s grace); a question that still arrives hears nothing (`VOICE-11`).
+   the session reports it (`onEnded`) and the worker hangs up once that reply's speech has
+   played out (`HangUp` waits for the `SpeechHandle` LiveKit created for the turn, or 10 s of
+   grace; an earlier answer still draining does not pre-empt it, `V-2`); a question that still
+   arrives hears nothing (`VOICE-11`).
    After a barge-in the rows keep the whole answer the model wrote, not what was played
    (decision 0011, `VOICE-10`).
 7. While the participant is connected the worker bumps `last_seen_at` every minute, so a quiet
@@ -141,8 +143,9 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
    failed delete is retried by the next path), then shuts the job down. The API's `/end` and
    the sweep are the other two paths; Landmark's four rules (`docs/API.md`) all hold. A Soniox
    or ElevenLabs error LiveKit reports as unrecoverable is spoken as `internal_error` where
-   speech still works (not after a TTS failure), then the call hangs up after that line or the
-   10 s grace (`sessionErrorAction`); a recoverable one is only logged, LiveKit retries it. The
+   speech still works (not after a TTS failure), then the call hangs up after that line's
+   playout or the 10 s grace (`sessionErrorAction`); a recoverable one is only logged, LiveKit
+   retries it. The
    session's own `close` event (LiveKit's unrecoverable-error limit, or the drain on shutdown)
    hangs up as well (`VOICE-12`).
 

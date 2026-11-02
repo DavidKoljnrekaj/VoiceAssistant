@@ -29,6 +29,9 @@ export function sessionErrorAction(error: {
  * (text-to-speech may be the thing that failed). */
 export const HANGUP_GRACE_MS = 10_000
 
+/** A speech that never ends: a hang-up given no speech to wait for waits out the grace. */
+export const NO_SPEECH: Promise<void> = new Promise(() => {})
+
 export class HangUp {
   private pending: { reason: string; timer: NodeJS.Timeout } | null = null
   private done = false
@@ -39,15 +42,17 @@ export class HangUp {
     private readonly graceMs = HANGUP_GRACE_MS,
   ) {}
 
-  /** Hangs up once the agent has stopped speaking (`spoke()`), or after the grace period. */
-  afterSpeech(reason: string): void {
+  /**
+   * Hangs up once `speech` (the playout of the line just requested: the goodbye, the error
+   * fallback) has settled, or after the grace period. That specific speech, not the next change
+   * of the agent's state: an answer still draining when the line was requested ends first, and
+   * must not pre-empt it (V-2).
+   */
+  afterSpeech(reason: string, speech: Promise<unknown>): void {
     if (this.done || this.pending) return
     this.pending = { reason, timer: setTimeout(() => this.now(reason), this.graceMs) }
-  }
-
-  /** The agent stopped speaking: a pending hang-up goes ahead. */
-  spoke(): void {
-    if (this.pending) this.now(this.pending.reason)
+    const spoken = (): void => this.now(reason)
+    void speech.then(spoken, spoken)
   }
 
   /** Hangs up at once (the room is gone, the session closed). */

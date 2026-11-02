@@ -2,7 +2,7 @@
 // decisions `agent.ts` wires to the room and session events.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { HANGUP_GRACE_MS, HangUp, participantLeft, sessionErrorAction } from '../src/lifecycle.js'
+import { HANGUP_GRACE_MS, HangUp, NO_SPEECH, participantLeft, sessionErrorAction } from '../src/lifecycle.js'
 
 describe('sessionErrorAction', () => {
   it('VOICE-12b a recoverable provider error is only logged; an unrecoverable one is spoken and ends the call, unless speech itself failed', () => {
@@ -30,41 +30,79 @@ describe('HangUp', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('VOICE-11b after a spoken line the hang-up waits for the agent to finish, once', () => {
+  /** A speech whose playout the test ends. */
+  function speech(): { playout: Promise<void>; ended: () => void } {
+    let ended!: () => void
+    const playout = new Promise<void>((resolve) => {
+      ended = resolve
+    })
+    return { playout, ended }
+  }
+  const settle = async (): Promise<void> => {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  it('VOICE-11b after a spoken line the hang-up waits for that line to play out, once', async () => {
     const finished: string[] = []
     const h = new HangUp((r) => finished.push(r))
-    h.afterSpeech('call_ended')
+    const goodbye = speech()
+    h.afterSpeech('call_ended', goodbye.playout)
     expect(finished).toEqual([])
-    h.afterSpeech('session_error') // a second request changes nothing
-    h.spoke()
+    h.afterSpeech('session_error', speech().playout) // a second request changes nothing
+    goodbye.ended()
+    await settle()
     expect(finished).toEqual(['call_ended'])
-    h.spoke()
     h.now('participant_disconnected')
     expect(finished).toEqual(['call_ended'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('V-2 a line requested while an earlier answer still drains waits for its own playout, not for that answer to end', async () => {
+    const finished: string[] = []
+    const h = new HangUp((r) => finished.push(r))
+    const answer = speech()
+    const goodbye = speech()
+    h.afterSpeech('call_ended', goodbye.playout)
+    answer.ended() // the answer that was already playing when the goodbye was requested
+    await settle()
+    expect(finished).toEqual([])
+    vi.advanceTimersByTime(HANGUP_GRACE_MS - 1)
+    expect(finished).toEqual([])
+    goodbye.ended()
+    await settle()
+    expect(finished).toEqual(['call_ended'])
+    expect(vi.getTimerCount()).toBe(0)
+
+    // A playout that fails (the speech was dropped) still ends the wait.
+    const failed: string[] = []
+    const f = new HangUp((r) => failed.push(r))
+    f.afterSpeech('session_error', Promise.reject(new Error('dropped')))
+    await settle()
+    expect(failed).toEqual(['session_error'])
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('VOICE-11c when the agent never speaks (text-to-speech is what failed) the grace period hangs up', () => {
     const finished: string[] = []
     const h = new HangUp((r) => finished.push(r))
-    h.afterSpeech('session_error')
+    h.afterSpeech('session_error', NO_SPEECH)
     vi.advanceTimersByTime(HANGUP_GRACE_MS - 1)
     expect(finished).toEqual([])
     vi.advanceTimersByTime(1)
     expect(finished).toEqual(['session_error'])
   })
 
-  it('VOICE-11d an immediate hang-up (the caller left) runs once and clears a pending one', () => {
+  it('VOICE-11d an immediate hang-up (the caller left) runs once and clears a pending one', async () => {
     const finished: string[] = []
     const h = new HangUp((r) => finished.push(r))
-    h.afterSpeech('call_ended')
+    const goodbye = speech()
+    h.afterSpeech('call_ended', goodbye.playout)
     h.now('participant_disconnected')
     h.now('shutdown')
-    h.spoke()
+    goodbye.ended() // the line finishing afterwards changes nothing
+    await settle()
     expect(finished).toEqual(['participant_disconnected'])
     expect(vi.getTimerCount()).toBe(0)
-    const fresh = new HangUp((r) => finished.push(r))
-    fresh.spoke() // nothing pending: nothing happens
-    expect(finished).toEqual(['participant_disconnected'])
   })
 })
