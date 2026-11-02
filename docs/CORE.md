@@ -112,11 +112,12 @@ timer is cleared on every exit, the loop's abort included (a handler that ignore
 leaves no timer behind, `E36`); a timeout is `{ error: 'tool execution failed: tool_timeout' }`
 and the handler is told to stop through its signal. A handler's `{ error }` return is an error
 result too; a throw becomes `{ error: 'tool execution failed: <message>' }`. The outcome always
-serialises: a handler that resolves `undefined` (a `Promise<void>` handler type-checks) is
+serialises: a handler that resolves `undefined` (a `Promise<void>` handler type-checks), a
+function or a Symbol (`JSON.stringify` returns `undefined` for those without throwing) is
 persisted as `null`, and an output `JSON.stringify` rejects (a BigInt, a cycle) becomes
 `{ error: 'tool output not serialisable: …' }` with a `tool output not serialisable` log line,
-so the `tool_result` row can always be written (`E31`, `E32`). The sink receives the outcome
-itself, the same value the row's `content` holds.
+so the `tool_result` row can always be written (`E31`, `E32`, `E38`). The sink receives the
+outcome itself, the same value the row's `content` holds.
 
 ### History assembly
 
