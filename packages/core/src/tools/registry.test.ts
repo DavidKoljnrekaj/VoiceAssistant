@@ -62,7 +62,7 @@ describe('ToolRegistry', () => {
   it('T02: a voice allowlist naming an unknown or a write tool throws at construction', () => {
     expect(() => new ToolRegistry([pack], { chat: 'all', voice: ['nope'] })).toThrow(/unknown tool: nope/)
     expect(() => new ToolRegistry([pack], { chat: 'all', voice: ['create_thing'] })).toThrow(
-      /writes: create_thing/,
+      /writes without confirmation: create_thing/,
     )
   })
 

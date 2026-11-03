@@ -10,12 +10,23 @@ export { MESSAGES_HR, mapAnthropicError } from './errors.js'
 export type { ErrorCode, MappedError } from './errors.js'
 export { errorReason, log, REASON_MAX_CHARS } from './log.js'
 export type { LogLevel } from './log.js'
+export {
+  CONFIRMATION_TTL_MS,
+  inputHash,
+  MemoryConfirmationStore,
+  pendingResult,
+  stableStringify,
+} from './loop/confirmations.js'
 export { dispatchTool, dispatchToolWithTimeout } from './loop/dispatch.js'
-export type { ToolOutcome } from './loop/dispatch.js'
+export type { DispatchContext, DispatchResult, ToolOutcome } from './loop/dispatch.js'
 export { applyMessageCacheBreakpoint, assembleHistory, withoutToolBlocks } from './loop/history.js'
 export type { AssembleOptions, HistoryRow } from './loop/history.js'
 export { runOrchestrationLoop, TRUNCATED_HR } from './loop/orchestrator.js'
 export type {
+  ConfirmEvent,
+  ConfirmationStore,
+  ConsumeMatch,
+  ConsumeResult,
   ContentBlock,
   EventSink,
   InMemoryMessage,
@@ -25,6 +36,7 @@ export type {
   LoopMark,
   MessageRow,
   MessageStore,
+  PendingConfirmation,
   TextBlock,
   ToolResultBlock,
   ToolUseBlock,

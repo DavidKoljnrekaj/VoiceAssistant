@@ -71,6 +71,12 @@ created a session deletes that session again. `client_context.route` is sanitise
 without query or hash, ≤ 200 characters) and prepended in memory to the typed text as
 `[Kontekst: korisnik je trenutno na /path]`; the row keeps the text as typed.
 
+The write protocol (Part 12, decision 0015): `confirm` or `decline` (a uuid, never both, never
+with `session_id: null`) answers a pending `confirm` event with the user's words in `message`.
+`confirm` must name a pending, unexpired confirmation of this session and user
+(`confirmation_invalid`, 400, otherwise) and travels into the loop as `extras.confirmation`;
+`decline` settles the row as declined before the stream and the turn runs as a plain one.
+
 ## The SSE contract
 
 ```
@@ -80,6 +86,7 @@ event: delta        {"type":"delta","text":"…"}                               
 event: turn         {"type":"turn","role":"assistant","text":"…","message_id":"…"}            canonical: replaces the deltas of this block
 event: tool_call    {"type":"tool_call","tool":"…","input":{…},"tool_use_id":"…"}
 event: tool_result  {"type":"tool_result","tool":"…","output":{…},"tool_use_id":"…","is_error":false}
+event: confirm      {"type":"confirm","confirmation_id":"…","tool":"…","tool_use_id":"…","summary":"…","expires_at":"…"}   after the tool_result it belongs to
 event: done         {"type":"done","stop_reason":"end_turn","usage":{"input_tokens":n,"output_tokens":n}}
 event: error        {"type":"error","code":"…","message":"…"}
 : keepalive         every 15 s idle
@@ -94,6 +101,9 @@ written before any work; `session` is always the first event. A row is written b
 provisional exception, and an `error` with `persistence_error` means the client drops the
 provisional text of that block. `done.stop_reason` is the model's raw value (`end_turn`,
 `max_tokens`, `refusal`, `tool_limit_reached`). After `done` or `error` the stream closes.
+A `confirm` event means a write is waiting for the user: the client shows the summary and
+sends the next turn with `confirm` or `decline` (Part 12b builds the card; until then the PWA
+ignores the event).
 Changing an event changes the web client in the same change.
 
 ## Errors
@@ -101,17 +111,18 @@ Changing an event changes the web client in the same change.
 Pre-stream failures are `{ error: { code, message } }` with a real status; the message is the
 Croatian text from `@va/core`'s catalogue.
 
-| status | code                              | when                                                                                                |
-| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 400    | `bad_request`, `message_too_long` | malformed JSON, missing or empty message, over 4000 chars                                           |
-| 401    | `unauthorized`                    | no bearer, or GoTrue rejects it                                                                     |
-| 403    | `no_profile`                      | auth user without a `public.users` row                                                              |
-| 404    | `session_not_found`, `not_found`  | not the caller's session; parent outside it; no live call                                           |
-| 405    | `method_not_allowed`              | known path, wrong method                                                                            |
-| 413    | `payload_too_large`               | body over 64 KB                                                                                     |
-| 429    | `rate_limited`                    | a limit below                                                                                       |
-| 500    | `internal_error`                  | a failed write or read; the pre-stream deadline; LiveKit not configured or its token signing failed |
-| 502    | `voice_dispatch_failed`           | LiveKit refused the agent dispatch (both rows removed)                                              |
+| status | code                              | when                                                                                                    |
+| ------ | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 400    | `bad_request`, `message_too_long` | malformed JSON, missing or empty message, over 4000 chars; `confirm` with `decline` or on a new session |
+| 400    | `confirmation_invalid`            | `confirm` or `decline` names no pending, unexpired confirmation of this session and user                |
+| 401    | `unauthorized`                    | no bearer, or GoTrue rejects it                                                                         |
+| 403    | `no_profile`                      | auth user without a `public.users` row                                                                  |
+| 404    | `session_not_found`, `not_found`  | not the caller's session; parent outside it; no live call                                               |
+| 405    | `method_not_allowed`              | known path, wrong method                                                                                |
+| 413    | `payload_too_large`               | body over 64 KB                                                                                         |
+| 429    | `rate_limited`                    | a limit below                                                                                           |
+| 500    | `internal_error`                  | a failed write or read; the pre-stream deadline; LiveKit not configured or its token signing failed     |
+| 502    | `voice_dispatch_failed`           | LiveKit refused the agent dispatch (both rows removed)                                                  |
 
 Mid-stream failures are `error` events on the open 200 stream: the model codes
 (`model_rate_limited`, `model_timeout`, `model_unreachable`, `model_bad_request`,

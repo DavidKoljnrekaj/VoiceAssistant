@@ -104,7 +104,9 @@ not an omission.
 
 ### Dispatch
 
-`dispatchToolWithTimeout(registry, name, input, ctx, extras, timeoutMs, channel, signal, logTag)`
+`dispatchToolWithTimeout(dc, name, input, timeoutMs, signal)`, with a `DispatchContext` (the
+registry, the identity, the extras, the channel, the session id, the confirmation store, the
+log tag) that is the same for every tool of a round,
 resolves the name through `registry.find` (an unknown or forbidden name throws with its
 `RefusalReason`, logged as `tool refused at dispatch`, and becomes
 `{ error: 'tool execution failed: tool refused: <reason>' }`), re-validates the input with the
@@ -120,6 +122,38 @@ persisted as `null`, and an output `JSON.stringify` rejects (a BigInt, a cycle) 
 `{ error: 'tool output not serialisable: …' }` with a `tool output not serialisable` log line,
 so the `tool_result` row can always be written (`E31`, `E32`, `E38`). The sink receives the
 outcome itself, the same value the row's `content` holds.
+
+### The write protocol (Part 12, decision 0015)
+
+A tool that changes something declares `confirmation: 'required'` and a `preview`
+(`defineTool` refuses one without the other, or with `readOnly: true`). Dispatch never runs its
+handler on the model's say-so:
+
+1. Without a confirmation on the request, `preview(input)` gives one sentence; the store
+   (`LoopConfig.confirmations`) issues a pending confirmation for the session, user, tool, the
+   SHA-256 of the validated input (`inputHash`, keys sorted) and a five-minute expiry
+   (`CONFIRMATION_TTL_MS`); the `tool_result` row holds `{ pending_confirmation: true, summary,
+instruction }` and **no id**; after the row the sink gets `confirm({ id, tool, toolUseId,
+summary, expiresAt })`. The model tells the user and asks (the chat prompt says so).
+2. The channel re-enters the loop with `extras.confirmation = { id }` once the user said yes
+   (chat: `POST /chat` with `confirm`; voice: Part 12b). The model calls the tool again; dispatch
+   `consume`s the id (single use from the consume itself: the row's `confirmed_at` is set by
+   the first consume and required empty by every later one, so a doubled `tool_use` in the same
+   turn or a second request runs the handler once; the same session, user, tool and hash;
+   unexpired), runs the handler, `settle`s `executed` or `failed` (a throw, or an error
+   envelope; `error_code` holds the bounded reason) and returns the handler's output. Anything else (`mismatch`, `used`, `expired`, `not_found`) is logged as
+   `confirmation not consumed` and previews again.
+3. A decline is the channel's: the row is settled `declined`, the turn runs as a plain one.
+
+The id lives in the sink event and the store only: not in a row the model reads, not in a
+request to it, not in a log line (E40, E41 assert this across every request body and log
+line). Stores: `MemoryConfirmationStore` in core (the voice worker's per-call store, the tests'),
+`dbConfirmationStore` in the API over `tool_confirmations`; both run the same contract
+(`confirmationStoreContract` in `@va/core/test`: K01, K02). The preview takes the handler's
+signal and issues nothing once the loop gave up on it. The registry's spoken-channel
+assertion is amended: a tool named for `voice` or `phone` is read-only or confirmed (E45).
+Scenarios E40–E45 (`confirm.test.ts`); the demo pack's `create_note` is the first tool under it
+(D13, D14).
 
 ### History assembly
 
@@ -278,6 +312,8 @@ defineTool({
   name: 'search_items',                 // snake_case, unique across packs
   description: '…',                     // model-facing English: what, when, when not, constraints
   input: z.object({ … }),               // zod 4; every property has .describe()
+  confirmation: 'required',             // optional: a write runs only after the user confirmed (with preview)
+  async preview(input, ctx, extras) {}, // one Croatian sentence saying what the handler would do
   requiredRoles: ['admin', 'member'],
   readOnly: true,                       // truthful; asserted for every voice tool
   async handler(input, ctx, extras, signal) { … }, // reads through ctx.userClient, honours signal
@@ -322,11 +358,11 @@ when the registry is built (`T02`, `W20`).
 
 ### Catalogue
 
-| Tool           | Pack | Roles         | readOnly | Channels    | What                                                                                                                |
-| -------------- | ---- | ------------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `search_items` | demo | admin, member | yes      | chat, voice | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids |
-| `get_item`     | demo | admin, member | yes      | chat, voice | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                              |
-| `create_note`  | demo | admin, member | no       | chat        | attaches a user-written note to an item (`demo_notes`)                                                              |
+| Tool           | Pack | Roles         | readOnly      | Channels    | What                                                                                                                |
+| -------------- | ---- | ------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `search_items` | demo | admin, member | yes           | chat, voice | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids |
+| `get_item`     | demo | admin, member | yes           | chat, voice | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                              |
+| `create_note`  | demo | admin, member | no, confirmed | chat        | attaches a user-written note to an item (`demo_notes`) after the user confirmed the preview (Part 12)               |
 
 `demo_items` and `demo_notes` have a migration (`20261029100000_demo_tables.sql`, `docs/DB.md`)
 and the local seed carries the nine items the fakes do; the demo pack still narrows the user

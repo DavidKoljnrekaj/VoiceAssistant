@@ -11,6 +11,9 @@ export interface ToolHandlerExtras {
   requestId: string
   channel: Channel
   clientContext?: { route?: string }
+  /** The confirmation the channel attached to this request: the user answered yes to a pending
+   * one. Never from the model (docs/plan/12-write-protocol.md). */
+  confirmation?: { id: string }
 }
 
 export interface ToolDefinition<I> {
@@ -21,9 +24,16 @@ export interface ToolDefinition<I> {
   /** zod 4 object schema; every property has a `.describe()`. Re-validated at dispatch. */
   input: z.ZodType<I>
   requiredRoles: readonly Role[]
-  /** True only when the handler never inserts, updates, deletes or calls a writing RPC. Every
-   * tool an app names for voice must be read-only; the registry asserts it at construction. */
+  /** True only when the handler never inserts, updates, deletes or calls a writing RPC. A tool
+   * an app names for a spoken channel is read-only or carries `confirmation`; the registry
+   * asserts it at construction. */
   readOnly: boolean
+  /** Set on a tool that changes something: the handler runs only on a request the channel
+   * marked as confirmed by the user; otherwise dispatch calls `preview` and the user is asked. */
+  confirmation?: 'required'
+  /** One Croatian sentence saying what `handler(input)` would do. Reads only; its throw is an
+   * error result. Required with `confirmation`. <!-- needs native review --> per pack. */
+  preview?(input: I, ctx: AuthContext, extras: ToolHandlerExtras, signal: AbortSignal): Promise<string>
   /** The result the model reads, as JSON. `undefined` is persisted as `null`; a value JSON
    * cannot hold (a BigInt, a cycle) becomes an `is_error` result at dispatch. */
   handler(input: I, ctx: AuthContext, extras: ToolHandlerExtras, signal: AbortSignal): Promise<unknown>
@@ -44,5 +54,9 @@ const NAME = /^[a-z][a-z0-9_]*$/
  * from the schema and a typed handler. */
 export function defineTool<I>(def: ToolDefinition<I>): ToolDefinition<I> {
   if (!NAME.test(def.name)) throw new Error(`tool name must be snake_case: ${def.name}`)
+  if (def.confirmation) {
+    if (def.readOnly) throw new Error(`${def.name}: a read-only tool needs no confirmation`)
+    if (!def.preview) throw new Error(`${def.name}: a confirmed tool needs a preview`)
+  }
   return def
 }

@@ -41,7 +41,8 @@ each part is sized to finish well inside one context window.
 | 9 | [09-appendix.md](./09-appendix.md) | — | reference | — |
 | 10 | [10-integration-roadmap.md](./10-integration-roadmap.md) | 1–7 | map | — |
 | 11 | [11-phone-channel.md](./11-phone-channel.md) | hosting (`OPS-3`) | 3 (11a, 11b, 11c) | 12, 14 |
-| 12–16 | written when their turn comes (Part 10 sketches them) | see Part 10 | | |
+| 12 | [12-write-protocol.md](./12-write-protocol.md) | — | 2 (12a, 12b) | 11, 14 |
+| 13–16 | written when their turn comes (Part 10 sketches them) | see Part 10 | | |
 
 Roughly 10–12 sessions for the skeleton. Parallel work goes in git worktrees, one session each.
 
@@ -70,3 +71,8 @@ The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did n
       phone branch of `agent.ts`, call limits in core, W28–W32); 11c (the trunk, the dispatch
       rule and the live checklist through a car) open. Hosts decided 2026-11-03 (decision 0013);
       11c waits for the deploy (`REL-9`, roadmap step 0) and the Twilio number.
+- [ ] Part 12 — the write protocol. 12a done 2026-11-03 (`confirmation: 'required'` + `preview`
+      in the contract, the store port, dispatch, the `confirm` event, `tool_confirmations`,
+      `POST /chat` confirm / decline, `create_note` under it, E40–E45, C30–C32, D13–D14, decision
+      0015; `REL-11` applies the migration); 12b (the chat confirm card, the voice yes/no turn)
+      open.

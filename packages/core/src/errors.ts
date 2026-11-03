@@ -26,6 +26,7 @@ export type ErrorCode =
   | 'tool_limit_reached'
   | 'cancelled'
   | 'voice_dispatch_failed'
+  | 'confirmation_invalid'
 
 /** User-facing messages. Ported from Landmark where it had one. <!-- needs native review --> */
 export const MESSAGES_HR: Record<ErrorCode, string> = {
@@ -51,6 +52,7 @@ export const MESSAGES_HR: Record<ErrorCode, string> = {
   tool_limit_reached: 'Dostignut je limit poziva alata. Pokušajte preformulirati pitanje.',
   cancelled: 'Zahtjev je prekinut.',
   voice_dispatch_failed: 'Glasovni poziv nije uspio. Pokušajte ponovno.',
+  confirmation_invalid: 'Potvrda više ne vrijedi. Zatražite radnju ponovno.',
 }
 
 export interface MappedError {

@@ -84,6 +84,15 @@ stored only in `voice_calls` under the 15-minute cap and revoked at hang-up; the
 signing secret. Logs carry a hash of the number, never the number. Open for 11b: a per-number
 attempt counter for unknown numbers so a scan of the number is visible.
 
+**Writes (Part 12, decision 0015).** A tool that changes something runs only after the user
+confirmed, and the confirmation is unforgeable: the id that unlocks the write goes to the
+channel in a `confirm` event, never into a tool result, a model request or a log line; the
+channel sends it back in the request's extras, never in text; dispatch consumes it once, only
+for the same session, user, tool and input hash, within five minutes. Text injected into a tool
+result or an email body saying "the user already agreed" cannot confirm anything, because the
+model has nothing to confirm with. Every executed, failed, declined or expired write is a row in
+`tool_confirmations`.
+
 **The service role.** The API and the worker hold the service-role key for persistence and
 identity lookups only. Nothing about those calls is protected by RLS, so the explicit
 `user_id` / `session_id` filter on every one of them is the authorisation. A new service-role

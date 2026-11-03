@@ -10,8 +10,10 @@ import {
   buildUserContext,
   type Channel,
   type ChannelSettings,
+  type ConfirmationStore,
   dateLine,
   type LoopConfig,
+  MemoryConfirmationStore,
   type ToolRegistry,
 } from '@va/core'
 
@@ -29,7 +31,12 @@ export interface VoiceDeps {
   clock: () => Date
 }
 
-export function voiceLoopConfig(deps: VoiceDeps, ctx: AuthContext): LoopConfig {
+/** `confirmations` is the call's own store (`CallSession` keeps one); the warm-up needs none. */
+export function voiceLoopConfig(
+  deps: VoiceDeps,
+  ctx: AuthContext,
+  confirmations: ConfirmationStore = new MemoryConfirmationStore(),
+): LoopConfig {
   return {
     anthropic: deps.anthropic,
     channel: deps.channel,
@@ -41,6 +48,7 @@ export function voiceLoopConfig(deps: VoiceDeps, ctx: AuthContext): LoopConfig {
     ],
     tools: deps.registry.anthropicTools(ctx, deps.channel),
     registry: deps.registry,
+    confirmations,
     logTag: LOG_TAG,
   }
 }

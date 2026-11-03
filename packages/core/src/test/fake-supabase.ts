@@ -24,6 +24,7 @@ const FKS: Record<string, Record<string, string>> = {
   },
   voice_calls: { session_id: 'ai_sessions', user_id: 'users' },
   voice_caller_identities: { user_id: 'users', created_by: 'users' },
+  tool_confirmations: { session_id: 'ai_sessions', user_id: 'users' },
   demo_notes: { user_id: 'users' },
 }
 
@@ -38,6 +39,7 @@ const DEFAULTS: Record<string, Row> = {
     summary_through_message_id: null,
     caller_identity_id: null,
   },
+  tool_confirmations: { outcome: 'pending', error_code: null, confirmed_at: null, settled_at: null },
   voice_caller_identities: {
     label: null,
     pin_hash: null,

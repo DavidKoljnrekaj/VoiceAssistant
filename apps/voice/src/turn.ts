@@ -8,6 +8,7 @@ import type { DbClient, Json } from '@va/db'
 
 import {
   type AuthContext,
+  type ConfirmationStore,
   errorReason,
   type InMemoryMessage,
   log,
@@ -88,6 +89,8 @@ export interface VoiceTurnInput {
   end: (reason: SpokenEnd) => Promise<void>
   /** Fires on a barge-in: LiveKit cancels the stream and the loop stops at its next check. */
   signal: AbortSignal
+  /** The call's pending confirmations (`CallSession` keeps one store for the call). */
+  confirmations?: ConfirmationStore
   /** The previous save of this call: this turn's rows are written after it, so they chain off
    * the right leaf. */
   persistAfter?: Promise<unknown>
@@ -119,7 +122,7 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   const { deps, ctx, sessionId, userText, requestId, signal } = input
   const t0 = performance.now()
   const ids = { request_id: requestId, user_id: ctx.userId, session_id: sessionId }
-  const config = voiceLoopConfig(deps, ctx)
+  const config = voiceLoopConfig(deps, ctx, input.confirmations)
   const settings = deps.settings
 
   const sink = new SpokenTextSink(input.say, input.end, input.pickFiller, settings.holdMs)

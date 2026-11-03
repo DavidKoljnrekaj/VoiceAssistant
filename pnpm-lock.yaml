@@ -57,6 +57,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.5
         version: 2.1.5(hono@4.13.13)
+      '@supabase/supabase-js':
+        specifier: 2.117.3
+        version: 2.117.3(@opentelemetry/api@1.10.0)
       '@va/core':
         specifier: workspace:*
         version: link:../../packages/core

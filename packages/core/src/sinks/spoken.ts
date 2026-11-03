@@ -22,7 +22,7 @@
 import { CHANNEL_DEFAULTS } from '../channel.js'
 import { MESSAGES_HR, type ErrorCode } from '../errors.js'
 import { errorReason, log } from '../log.js'
-import type { EventSink, Usage } from '../loop/ports.js'
+import type { EventSink, Usage, ConfirmEvent } from '../loop/ports.js'
 import { speakable } from './speakable.js'
 
 /** Spoken once per request when the first tool call starts. Written without an ellipsis: some
@@ -162,6 +162,8 @@ export class SpokenTextSink implements EventSink {
 
   async toolCall(_tool: string, _input: unknown, _id: string): Promise<void> {}
   async toolResult(_tool: string, _output: unknown, _id: string, _isError: boolean): Promise<void> {}
+  /** The model's own question is the prompt; the worker's call state keeps the id (Part 12b). */
+  async confirm(_c: ConfirmEvent): Promise<void> {}
 
   async done(stopReason: string, _usage: Usage): Promise<void> {
     this.clearHold()

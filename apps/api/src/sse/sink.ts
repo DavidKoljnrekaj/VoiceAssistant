@@ -1,6 +1,6 @@
 // Chat's sink: the loop's events as SSE frames. Deltas are provisional; `turn` carries the
 // canonical text and the row id (docs/decisions/0008).
-import type { ErrorCode, EventSink, Usage } from '@va/core'
+import type { ConfirmEvent, ErrorCode, EventSink, Usage } from '@va/core'
 
 import type { SSEWriter } from './writer.js'
 
@@ -27,6 +27,16 @@ export class SseEventSink implements EventSink {
   }
   async toolResult(tool: string, output: unknown, id: string, isError: boolean): Promise<void> {
     await this.sse.writeEvent({ type: 'tool_result', tool, output, tool_use_id: id, is_error: isError })
+  }
+  async confirm(c: ConfirmEvent): Promise<void> {
+    await this.sse.writeEvent({
+      type: 'confirm',
+      confirmation_id: c.id,
+      tool: c.tool,
+      tool_use_id: c.toolUseId,
+      summary: c.summary,
+      expires_at: c.expiresAt,
+    })
   }
   async done(stopReason: string, usage: Usage): Promise<void> {
     await this.sse.writeEvent({ type: 'done', stop_reason: stopReason, usage })

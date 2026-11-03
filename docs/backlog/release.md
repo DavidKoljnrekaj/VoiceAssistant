@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-11 (next free)
+Ids: REL-12 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -39,6 +39,13 @@ three sets of checks) and says how to paste the results back.
       query is refused with `42501`. Then `/db-types`, commit `packages/db/src/database.ts`, and
       drop the hand-written types in `apps/voice/src/phone/db.ts` for the generated ones. Then
       enrol the pilot caller (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller).
+
+- [ ] REL-11 · Part 12a: apply `20261103150000_tool_confirmations.sql` to the dev project (by the
+      operator, `supabase db push`). Check after applying: as a signed-in user
+      `select count(*) from tool_confirmations` is 0 and an insert is refused with `42501`; as the
+      service role an insert with `outcome = 'maybe'` is refused with `23514`. Then `/db-types`,
+      commit `packages/db/src/database.ts`, and drop the hand-written types in
+      `apps/api/src/chat/confirmations.ts` for the generated ones.
 
 - [x] REL-1 · Part 2: apply `20261028100000_users.sql`, `20261028100100_ai_sessions_and_messages.sql` and
       `20261028100200_voice_calls.sql` to the dev project `kdplqbldohrzsewhckgl` (`supabase link` then
