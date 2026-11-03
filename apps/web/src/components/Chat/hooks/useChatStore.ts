@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '../../../contexts/AuthContext'
+import i18n from '../../../i18n'
 import { ApiHttpError } from '../../../types/api'
 import { errorLabel } from '../lib/labels'
 import { SseStallError } from '../lib/sse'
@@ -12,17 +13,20 @@ import {
   applyEvent,
   type ChatView,
   computeLeaf,
+  type ConfirmStatus,
   EMPTY_VIEW,
   finishStream,
   normalizeFromPersistedRows,
   pushErrorMessage,
   type RenderMessage,
+  settleConfirmation,
   type StreamOutcome,
   type ViewIds,
 } from '../lib/normalizeMessages'
 import {
   deleteSession as deleteSessionService,
   findSession,
+  listPendingConfirmations,
   listSessions,
   loadSession,
   renameSession as renameSessionService,
@@ -47,6 +51,9 @@ export interface ChatStore {
   newConversation: () => void
   selectSession: (id: string) => Promise<void>
   sendMessage: (text: string) => Promise<void>
+  /** The user's answer to a pending write (Part 12): the card settles and the next turn carries
+   * the id with a fixed text ("Da." / "Ne."). */
+  answerConfirmation: (confirmationId: string, answer: 'confirm' | 'decline') => Promise<void>
   /** Aborts the fetch; the server reads the closed connection as the cancel. */
   stop: () => void
   renameSession: (id: string, title: string) => Promise<void>
@@ -164,7 +171,12 @@ export function useChatStore(): ChatStore {
     ) => {
       if (mode === 'select') setMessagesStatus('loading')
       try {
-        const rows = await loadSession(sessionId)
+        // The rows and the writes still waiting for an answer, read together; a card is shown
+        // after the rows so an unanswered write survives a reload.
+        const [rows, pending] = await Promise.all([
+          loadSession(sessionId),
+          listPendingConfirmations(sessionId),
+        ])
         if (currentSessionIdRef.current !== sessionId) return
         // No rows under RLS is not a conversation: check the session row itself (an owned session
         // can be empty after a failed first persist, so the row count alone does not decide).
@@ -177,7 +189,7 @@ export function useChatStore(): ChatStore {
         if (currentSessionIdRef.current !== sessionId) return
         leafIdRef.current = computeLeaf(rows)
         setView((prev) => ({
-          messages: [...normalizeFromPersistedRows(rows), ...(keep ? keep(prev.messages) : [])],
+          messages: [...normalizeFromPersistedRows(rows, pending), ...(keep ? keep(prev.messages) : [])],
           pendingText: null,
         }))
         setMessagesStatus('ready')
@@ -215,7 +227,7 @@ export function useChatStore(): ChatStore {
   )
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, answer?: { confirm: string } | { decline: string }) => {
       const trimmed = text.trim()
       if (!userId || !trimmed || isStreamingRef.current) return
 
@@ -250,6 +262,7 @@ export function useChatStore(): ChatStore {
           message: trimmed,
           parentMessageId,
           route: window.location.pathname,
+          ...(answer ?? {}),
           signal: controller.signal,
           onEvent: (event) => {
             if (controller.signal.aborted) return
@@ -320,6 +333,20 @@ export function useChatStore(): ChatStore {
     [userId, loadRows, fetchSessions, pushError],
   )
 
+  const answerConfirmation = useCallback(
+    async (confirmationId: string, answer: 'confirm' | 'decline') => {
+      if (isStreamingRef.current) return
+      const status: ConfirmStatus = answer === 'confirm' ? 'confirmed' : 'declined'
+      setView((prev) => settleConfirmation(prev, confirmationId, status))
+      const text = i18n.t(answer === 'confirm' ? 'chat.confirm_yes_text' : 'chat.confirm_no_text')
+      await sendMessage(
+        text,
+        answer === 'confirm' ? { confirm: confirmationId } : { decline: confirmationId },
+      )
+    },
+    [sendMessage],
+  )
+
   const stop = useCallback(() => {
     const controller = abortRef.current
     if (!controller) return
@@ -366,7 +393,8 @@ export function useChatStore(): ChatStore {
       fetchSessions,
       newConversation,
       selectSession,
-      sendMessage,
+      sendMessage: (text: string) => sendMessage(text),
+      answerConfirmation,
       stop,
       renameSession,
       deleteSession,
@@ -382,6 +410,7 @@ export function useChatStore(): ChatStore {
       newConversation,
       selectSession,
       sendMessage,
+      answerConfirmation,
       stop,
       renameSession,
       deleteSession,

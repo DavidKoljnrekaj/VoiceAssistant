@@ -4,6 +4,7 @@
 // the labels run for real.
 import { vi } from 'vitest'
 
+import type { PendingConfirmationRow } from '../components/Chat/lib/normalizeMessages'
 import type { SessionSummary, StreamMessageArgs } from '../components/Chat/services/chatService'
 import type { ChatEvent } from '../types/api'
 import type { MessageRow } from '../types/database'
@@ -55,6 +56,7 @@ class FakeChatService {
   readonly listSessions = vi.fn<() => Promise<SessionSummary[]>>()
   readonly loadSession = vi.fn<(sessionId: string) => Promise<MessageRow[]>>()
   readonly findSession = vi.fn<(sessionId: string) => Promise<SessionSummary | null>>()
+  readonly listPendingConfirmations = vi.fn<(sessionId: string) => Promise<PendingConfirmationRow[]>>()
   readonly renameSession = vi.fn<(sessionId: string, title: string) => Promise<void>>()
   readonly deleteSession = vi.fn<(sessionId: string) => Promise<void>>()
 
@@ -73,6 +75,7 @@ class FakeChatService {
     this.listSessions.mockReset().mockResolvedValue([])
     this.loadSession.mockReset().mockResolvedValue([])
     this.findSession.mockReset().mockResolvedValue(sessionSummary('unspecified'))
+    this.listPendingConfirmations.mockReset().mockResolvedValue([])
     this.renameSession.mockReset().mockResolvedValue(undefined)
     this.deleteSession.mockReset().mockResolvedValue(undefined)
   }

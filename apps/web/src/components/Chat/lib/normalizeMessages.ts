@@ -31,6 +31,28 @@ export type RenderMessage =
   | { kind: 'error'; id: string; code: string; message: string; createdAt: string }
   /** The user stopped the stream. Client-side only. */
   | { kind: 'interrupted'; id: string; createdAt: string }
+  /** A write waiting for the user's answer (Part 12): the card with the summary and two buttons. */
+  | {
+      kind: 'confirm'
+      id: string
+      confirmationId: string
+      tool: string
+      summary: string
+      expiresAt: string
+      status: ConfirmStatus
+      createdAt: string
+    }
+
+export type ConfirmStatus = 'pending' | 'confirmed' | 'declined' | 'expired'
+
+/** A pending `tool_confirmations` row as the PWA reads it on a reload (owner SELECT). */
+export interface PendingConfirmationRow {
+  id: string
+  tool: string
+  summary: string
+  expires_at: string
+  created_at: string
+}
 
 export interface ChatView {
   messages: RenderMessage[]
@@ -102,7 +124,29 @@ export function walkActivePath(rows: MessageRow[], leafId: string | null): Messa
   return path
 }
 
-export function normalizeFromPersistedRows(rows: MessageRow[]): RenderMessage[] {
+/** The rows of the active branch, then the session's pending confirmations as cards at the end
+ * (their place in the branch is not stored; what matters is that an unanswered write is shown). */
+export function normalizeFromPersistedRows(
+  rows: MessageRow[],
+  pending: PendingConfirmationRow[] = [],
+): RenderMessage[] {
+  const out: RenderMessage[] = normalizeBranch(rows)
+  for (const row of pending) {
+    out.push({
+      kind: 'confirm',
+      id: `confirm:${row.id}`,
+      confirmationId: row.id,
+      tool: row.tool,
+      summary: row.summary,
+      expiresAt: row.expires_at,
+      status: 'pending',
+      createdAt: row.created_at,
+    })
+  }
+  return out
+}
+
+function normalizeBranch(rows: MessageRow[]): RenderMessage[] {
   const out: RenderMessage[] = []
   for (const row of walkActivePath(rows, computeLeaf(rows))) {
     const blocks = blocksOf(row)
@@ -197,6 +241,23 @@ export function applyEvent(view: ChatView, event: ChatEvent, ids: ViewIds): Chat
       messages[index] = { ...chip, status: event.is_error ? 'error' : 'done' }
       return { ...view, messages }
     }
+    case 'confirm':
+      return {
+        ...view,
+        messages: [
+          ...view.messages,
+          {
+            kind: 'confirm',
+            id: `confirm:${event.confirmation_id}`,
+            confirmationId: event.confirmation_id,
+            tool: event.tool,
+            summary: event.summary,
+            expiresAt: event.expires_at,
+            status: 'pending',
+            createdAt: ids.now(),
+          },
+        ],
+      }
     case 'done':
       return { ...view, pendingText: null }
     case 'error':
@@ -234,6 +295,16 @@ export function finishStream(view: ChatView, outcome: StreamOutcome, ids: ViewId
     messages.push({ kind: 'interrupted', id: ids.genId(), createdAt: ids.now() })
   }
   return { messages, pendingText: null }
+}
+
+/** The user answered a card (or it expired): the card stays, with its outcome, and its buttons go. */
+export function settleConfirmation(view: ChatView, confirmationId: string, status: ConfirmStatus): ChatView {
+  return {
+    ...view,
+    messages: view.messages.map((m) =>
+      m.kind === 'confirm' && m.confirmationId === confirmationId ? { ...m, status } : m,
+    ),
+  }
 }
 
 export function pushErrorMessage(view: ChatView, code: string, message: string, ids: ViewIds): ChatView {

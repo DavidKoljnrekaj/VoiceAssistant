@@ -52,7 +52,13 @@
     "rename_title": "Conversation title",
     "delete_title": "Delete this conversation?",
     "delete_message": "The conversation and all of its messages will be deleted permanently.",
-    "session_actions": "Conversation actions"
+    "session_actions": "Conversation actions",
+    "confirm_title": "Your confirmation is needed",
+    "confirm_expired": "The confirmation has expired. Ask for the action again.",
+    "confirmed": "Confirmed",
+    "declined": "Declined",
+    "confirm_yes_text": "Yes.",
+    "confirm_no_text": "No."
   },
   "call": {
     "start": "Voice call",

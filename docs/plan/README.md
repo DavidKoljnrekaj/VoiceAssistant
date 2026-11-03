@@ -71,8 +71,8 @@ The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did n
       phone branch of `agent.ts`, call limits in core, W28–W32); 11c (the trunk, the dispatch
       rule and the live checklist through a car) open. Hosts decided 2026-11-03 (decision 0013);
       11c waits for the deploy (`REL-9`, roadmap step 0) and the Twilio number.
-- [ ] Part 12 — the write protocol. 12a done 2026-11-03 (`confirmation: 'required'` + `preview`
+- [x] Part 12 — the write protocol. 12a done 2026-11-03 (`confirmation: 'required'` + `preview`
       in the contract, the store port, dispatch, the `confirm` event, `tool_confirmations`,
       `POST /chat` confirm / decline, `create_note` under it, E40–E45, C30–C32, D13–D14, decision
-      0015; `REL-11` applies the migration); 12b (the chat confirm card, the voice yes/no turn)
-      open.
+      0015; `REL-11` applied). 12b done 2026-11-03 (the confirm card in the PWA, the worker's
+      yes/no turn, W35–W39, N08–N09, H08, K10–K11). Part 12 complete.

@@ -5,6 +5,7 @@ import { apiFetch, apiJson } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
 import { type ChatEvent, isChatEvent } from '../../../types/api'
 import type { MessageRow, SessionRow } from '../../../types/database'
+import type { PendingConfirmationRow } from '../lib/normalizeMessages'
 import { readSseBody } from '../lib/sse'
 
 export type SessionSummary = Pick<SessionRow, 'id' | 'title' | 'channel' | 'created_at' | 'updated_at'>
@@ -66,6 +67,22 @@ export async function loadSession(sessionId: string): Promise<MessageRow[]> {
 }
 
 /**
+ * The session's writes still waiting for the user's answer (Part 12): pending and unexpired,
+ * oldest first. Read under RLS (the owner's rows); the answer goes through `POST /chat`.
+ */
+export async function listPendingConfirmations(sessionId: string): Promise<PendingConfirmationRow[]> {
+  const { data, error } = await supabase
+    .from('tool_confirmations')
+    .select('id, tool, summary, expires_at, created_at')
+    .eq('session_id', sessionId)
+    .eq('outcome', 'pending')
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+/**
  * One session by id, or null when there is none the caller may see. RLS turns another user's or
  * a deleted conversation into an empty read, which is "not found", never an empty conversation
  * (WEB-7).
@@ -97,6 +114,9 @@ export interface StreamMessageArgs {
   parentMessageId: string | null
   /** `location.pathname` at send time; the API prepends it in memory, never in the row. */
   route: string | null
+  /** The user's answer to a pending confirmation (Part 12): one of the two, never both. */
+  confirm?: string
+  decline?: string
   signal: AbortSignal
   onEvent: (event: ChatEvent) => void
 }
@@ -118,6 +138,8 @@ export async function streamMessage(args: StreamMessageArgs): Promise<void> {
       message: args.message,
       ...(args.parentMessageId ? { parent_message_id: args.parentMessageId } : {}),
       ...(args.route ? { client_context: { route: args.route } } : {}),
+      ...(args.confirm ? { confirm: args.confirm } : {}),
+      ...(args.decline ? { decline: args.decline } : {}),
     }),
     signal: args.signal,
   })

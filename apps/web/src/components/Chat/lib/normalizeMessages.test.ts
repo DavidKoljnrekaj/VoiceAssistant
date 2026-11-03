@@ -9,6 +9,7 @@ import {
   EMPTY_VIEW,
   finishStream,
   normalizeFromPersistedRows,
+  settleConfirmation,
   type ViewIds,
 } from './normalizeMessages'
 
@@ -188,5 +189,53 @@ describe('applyEvent', () => {
     ])
     expect(finishStream(base, 'failed', ids)).toEqual({ messages: [], pendingText: null })
     expect(finishStream(base, 'completed', ids)).toEqual({ messages: [], pendingText: null })
+  })
+
+  it('N08: a confirm event becomes a pending card; settling it keeps the card with its outcome', () => {
+    const event: ChatEvent = {
+      type: 'confirm',
+      confirmation_id: 'c1',
+      tool: 'create_note',
+      tool_use_id: 'tu1',
+      summary: 'Zabilježit ću uz artikl "Radni stol": "Naručiti dva."',
+      expires_at: '2026-10-29T10:05:00.000Z',
+    }
+    const view = applyEvent(EMPTY_VIEW, event, ids)
+    expect(view.messages).toEqual([
+      {
+        kind: 'confirm',
+        id: 'confirm:c1',
+        confirmationId: 'c1',
+        tool: 'create_note',
+        summary: 'Zabilježit ću uz artikl "Radni stol": "Naručiti dva."',
+        expiresAt: '2026-10-29T10:05:00.000Z',
+        status: 'pending',
+        createdAt: '2026-10-29T10:00:00.000Z',
+      },
+    ])
+    const settled = settleConfirmation(view, 'c1', 'confirmed')
+    expect(settled.messages[0]).toMatchObject({ kind: 'confirm', status: 'confirmed' })
+    expect(settleConfirmation(view, 'other', 'declined').messages[0]).toMatchObject({ status: 'pending' })
+  })
+
+  it('N09: on a reload the session’s pending confirmations follow the rows as cards', () => {
+    const pending = [
+      {
+        id: 'c1',
+        tool: 'create_note',
+        summary: 'Zabilježit ću…',
+        expires_at: '2026-10-29T10:05:00.000Z',
+        created_at: '2026-10-29T10:01:00.000Z',
+      },
+    ]
+    const out = normalizeFromPersistedRows(rows, pending)
+    expect(out.at(-1)).toMatchObject({
+      kind: 'confirm',
+      confirmationId: 'c1',
+      status: 'pending',
+      summary: 'Zabilježit ću…',
+    })
+    expect(out.filter((m) => m.kind === 'confirm')).toHaveLength(1)
+    expect(normalizeFromPersistedRows(rows).some((m) => m.kind === 'confirm')).toBe(false)
   })
 })

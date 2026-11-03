@@ -12,6 +12,7 @@ import {
   sessionSummary,
   userText,
 } from '../../../test/fake-chat-service'
+import i18n from '../../../i18n'
 import { ApiHttpError } from '../../../types/api'
 import { ERROR_LABELS_HR } from '../lib/labels'
 import { SseStallError } from '../lib/sse'
@@ -24,6 +25,7 @@ vi.mock('../services/chatService', async () => {
     listSessions: fakeChat.listSessions,
     loadSession: fakeChat.loadSession,
     findSession: fakeChat.findSession,
+    listPendingConfirmations: fakeChat.listPendingConfirmations,
     renameSession: fakeChat.renameSession,
     deleteSession: fakeChat.deleteSession,
   }
@@ -392,5 +394,94 @@ describe('useChatStore', () => {
     expect(result.current.currentSessionId).toBeNull()
     expect(result.current.messages).toEqual([])
     expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('H08: a confirm event shows the card; answering it settles the card and sends the next turn with the id and the fixed text', async () => {
+    fakeChat.loadSession.mockResolvedValue(persistedTurn())
+    const { result } = renderHook(() => useChatStore())
+    await waitFor(() => expect(result.current.sessionsStatus).toBe('ready'))
+    act(() => {
+      void result.current.sendMessage('Zabilježi: naručiti dva')
+    })
+    const first = await fakeChat.nextStream()
+    act(() => {
+      first.emit({ type: 'session', session_id: S1 })
+      first.emit({ type: 'tool_call', tool: 'create_note', input: {}, tool_use_id: 'tu1' })
+      first.emit({
+        type: 'tool_result',
+        tool: 'create_note',
+        output: { pending_confirmation: true },
+        tool_use_id: 'tu1',
+        is_error: false,
+      })
+      first.emit({
+        type: 'confirm',
+        confirmation_id: 'c1',
+        tool: 'create_note',
+        tool_use_id: 'tu1',
+        summary: 'Zabilježit ću uz artikl "Radni stol": "Naručiti dva."',
+        expires_at: '2099-01-01T00:00:00.000Z',
+      })
+      first.emit({ type: 'turn', role: 'assistant', text: 'Želite li?', message_id: 'a2' })
+      first.emit({ type: 'done', stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } })
+    })
+    expect(kinds(result.current)).toEqual(['user', 'tool', 'confirm', 'assistant'])
+    // The reload keeps the pending card from the table's rows.
+    fakeChat.listPendingConfirmations.mockResolvedValue([
+      {
+        id: 'c1',
+        tool: 'create_note',
+        summary: 'Zabilježit ću uz artikl "Radni stol": "Naručiti dva."',
+        expires_at: '2099-01-01T00:00:00.000Z',
+        created_at: '2026-10-30T10:00:00Z',
+      },
+    ])
+    act(() => first.finish())
+    await waitFor(() => expect(result.current.isStreaming).toBe(false))
+    await waitFor(() => expect(kinds(result.current)).toEqual(['user', 'assistant', 'confirm']))
+    expect(fakeChat.listPendingConfirmations).toHaveBeenCalledWith(S1)
+
+    act(() => {
+      void result.current.answerConfirmation('c1', 'confirm')
+    })
+    const second = await fakeChat.nextStream()
+    expect(second.args).toMatchObject({
+      sessionId: S1,
+      message: i18n.t('chat.confirm_yes_text'),
+      confirm: 'c1',
+    })
+    expect(second.args).not.toHaveProperty('decline')
+    expect(result.current.messages.find((m) => m.kind === 'confirm')).toMatchObject({ status: 'confirmed' })
+    expect(kinds(result.current).at(-1)).toBe('user')
+    fakeChat.listPendingConfirmations.mockResolvedValue([])
+    act(() => {
+      second.emit({ type: 'session', session_id: S1 })
+      second.emit({ type: 'turn', role: 'assistant', text: 'Zabilježeno.', message_id: 'a3' })
+      second.emit({ type: 'done', stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } })
+      second.finish()
+    })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false))
+    await waitFor(() => expect(kinds(result.current)).toEqual(['user', 'assistant']))
+  })
+
+  it('H08b: declining sends the next turn with decline and "Ne."', async () => {
+    const { result } = renderHook(() => useChatStore())
+    await waitFor(() => expect(result.current.sessionsStatus).toBe('ready'))
+    await act(async () => {
+      await result.current.selectSession(S1)
+    })
+    act(() => {
+      void result.current.answerConfirmation('c9', 'decline')
+    })
+    const stream = await fakeChat.nextStream()
+    expect(stream.args).toMatchObject({
+      sessionId: S1,
+      message: i18n.t('chat.confirm_no_text'),
+      decline: 'c9',
+    })
+    expect(stream.args).not.toHaveProperty('confirm')
+    act(() => stream.fail(new ApiHttpError(400, 'confirmation_invalid', 'Potvrda više ne vrijedi.')))
+    await waitFor(() => expect(result.current.isStreaming).toBe(false))
+    expect(result.current.messages.at(-1)).toMatchObject({ kind: 'error', code: 'confirmation_invalid' })
   })
 })

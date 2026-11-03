@@ -9,6 +9,7 @@ import type { DbClient, Json } from '@va/db'
 import {
   type AuthContext,
   type ConfirmationStore,
+  type ConfirmEvent,
   errorReason,
   type InMemoryMessage,
   log,
@@ -91,6 +92,10 @@ export interface VoiceTurnInput {
   signal: AbortSignal
   /** The call's pending confirmations (`CallSession` keeps one store for the call). */
   confirmations?: ConfirmationStore
+  /** The caller said yes to this pending write: dispatch consumes it (Part 12). */
+  confirmation?: { id: string }
+  /** A write previewed in this turn and waits for the caller's answer. */
+  onConfirm?: (c: ConfirmEvent) => void
   /** The previous save of this call: this turn's rows are written after it, so they chain off
    * the right leaf. */
   persistAfter?: Promise<unknown>
@@ -125,7 +130,7 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
   const config = voiceLoopConfig(deps, ctx, input.confirmations)
   const settings = deps.settings
 
-  const sink = new SpokenTextSink(input.say, input.end, input.pickFiller, settings.holdMs)
+  const sink = new SpokenTextSink(input.say, input.end, input.pickFiller, settings.holdMs, input.onConfirm)
   const controller = new AbortController()
   const state: { outcome: TurnOutcome } = { outcome: 'completed' }
   const cancel = (why: TurnOutcome): void => {
@@ -171,7 +176,16 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
     await runOrchestrationLoop(
       ctx,
       config,
-      { sessionId, messages, lastInsertedId: userRowId, extras: { requestId, channel: deps.channel } },
+      {
+        sessionId,
+        messages,
+        lastInsertedId: userRowId,
+        extras: {
+          requestId,
+          channel: deps.channel,
+          ...(input.confirmation ? { confirmation: input.confirmation } : {}),
+        },
+      },
       sink,
       store,
       hooks,

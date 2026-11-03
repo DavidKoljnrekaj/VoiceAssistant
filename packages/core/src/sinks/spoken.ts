@@ -61,6 +61,8 @@ export class SpokenTextSink implements EventSink {
     private readonly end: (reason: SpokenEnd) => Promise<void>,
     private readonly pickFiller: () => string = randomFiller,
     private readonly holdMs: number = HOLD_MS,
+    /** A write waits for the caller's answer: the owner keeps the id for the next turn. */
+    private readonly onConfirm?: (c: ConfirmEvent) => void,
   ) {}
 
   private async say(text: string): Promise<void> {
@@ -162,8 +164,10 @@ export class SpokenTextSink implements EventSink {
 
   async toolCall(_tool: string, _input: unknown, _id: string): Promise<void> {}
   async toolResult(_tool: string, _output: unknown, _id: string, _isError: boolean): Promise<void> {}
-  /** The model's own question is the prompt; the worker's call state keeps the id (Part 12b). */
-  async confirm(_c: ConfirmEvent): Promise<void> {}
+  /** The model's own question is the prompt; the owner keeps the id (`CallSession`, Part 12b). */
+  async confirm(c: ConfirmEvent): Promise<void> {
+    this.onConfirm?.(c)
+  }
 
   async done(stopReason: string, _usage: Usage): Promise<void> {
     this.clearHold()

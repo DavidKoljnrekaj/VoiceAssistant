@@ -2,14 +2,32 @@ import { AlertCircle, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import MarkdownView from '../ui/MarkdownView'
+import ConfirmCard from './ConfirmCard'
 import { errorLabel } from './lib/labels'
 import type { RenderMessage } from './lib/normalizeMessages'
 import ToolChip from './ToolChip'
 
+interface MessageProps {
+  message: RenderMessage
+  /** Answers a confirm card; the buttons are disabled while a stream is open. */
+  onConfirmAnswer?: ((confirmationId: string, answer: 'confirm' | 'decline') => void) | undefined
+  answersDisabled?: boolean
+}
+
 /** One rendered row of the conversation, by kind. */
-export default function Message({ message }: { message: RenderMessage }) {
+export default function Message({ message, onConfirmAnswer, answersDisabled = false }: MessageProps) {
   const { t } = useTranslation()
   switch (message.kind) {
+    case 'confirm':
+      return (
+        <ConfirmCard
+          summary={message.summary}
+          status={message.status}
+          expiresAt={message.expiresAt}
+          disabled={answersDisabled || !onConfirmAnswer}
+          onAnswer={(answer) => onConfirmAnswer?.(message.confirmationId, answer)}
+        />
+      )
     case 'user':
       return (
         <div className="flex justify-end" data-kind="user">

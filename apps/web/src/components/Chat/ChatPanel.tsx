@@ -197,6 +197,7 @@ export default function ChatPanel() {
           pendingText={chat.pendingText}
           status={chat.messagesStatus}
           isStreaming={chat.isStreaming}
+          onConfirmAnswer={(id, answer) => void chat.answerConfirmation(id, answer)}
           onRetry={() => {
             if (chat.currentSessionId) {
               const id = chat.currentSessionId
