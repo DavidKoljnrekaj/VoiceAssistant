@@ -1,11 +1,11 @@
 // W35–W39: the write protocol on a call. The model previews, the worker keeps the pending id,
 // and the caller's "da" or "ne" is decided in code before the model sees the turn.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { answer, callTools, CONFIRM_PACK, executions, toolUse } from '@va/core/test'
 
 import { classifyAnswer, normalizeAnswer } from '../src/answers.js'
-import { anthropic, ask, logs, NOW, openCall, scenario } from './harness.js'
+import { anthropic, ask, logs, openCall, scenario } from './harness.js'
 
 const PACK = { packs: [CONFIRM_PACK], allowlist: { voice: ['echo', 'confirmed_write'] } as const }
 const WRITE = { text: 'Naručiti dva.' }
@@ -59,7 +59,7 @@ describe('the caller’s answer', () => {
       expect(out.text).toContain('Zapisano')
       expect(executions).toEqual(['Naručiti dva.'])
       expect(call.session.confirmations.rows[0]).toMatchObject({ id, outcome: 'executed' })
-      expect(logs.find((l) => l.line.includes('confirmation answered'))?.line).toContain('"answer":"yes"')
+      expect(logs.find((l) => l.line.includes('confirmation answered'))?.line).toContain('"verdict":"yes"')
       // The id never reached the model.
       expect(anthropic.calls.every((c) => !JSON.stringify(c.body).includes(id))).toBe(true)
       // Answered: a second "da" is a plain turn.
@@ -79,7 +79,7 @@ describe('the caller’s answer', () => {
     expect(out.text).toContain('neću')
     expect(executions).toEqual([])
     expect(call.session.confirmations.rows[0]!.outcome).toBe('declined')
-    expect(logs.find((l) => l.line.includes('confirmation answered'))?.line).toContain('"answer":"no"')
+    expect(logs.find((l) => l.line.includes('confirmation answered'))?.line).toContain('"verdict":"no"')
     // Declined: the model calling again without a new yes previews again.
     anthropic.script(callTools(toolUse('confirmed_write', WRITE)), answer('Želite li?'))
     await (
@@ -112,11 +112,16 @@ describe('the caller’s answer', () => {
   scenario('W39 an expired pending write is forgotten: "da" is a plain turn and nothing runs', async () => {
     const call = await openCall(PACK)
     await previewed(call)
-    call.clock.ms = NOW + 6 * 60_000
-    anthropic.script(answer('Molim, recite ponovno što da zapišem.'))
-    await (
-      await ask(call, 'Da.')
-    ).done
+    // The wall clock, which dispatch stamped the expiry with, moved past it.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6 * 60_000)
+    try {
+      anthropic.script(answer('Molim, recite ponovno što da zapišem.'))
+      await (
+        await ask(call, 'Da.')
+      ).done
+    } finally {
+      clock.mockRestore()
+    }
     expect(executions).toEqual([])
     expect(logs.some((l) => l.line.includes('confirmation expired'))).toBe(true)
     expect(call.session.confirmations.rows[0]!.outcome).toBe('pending')

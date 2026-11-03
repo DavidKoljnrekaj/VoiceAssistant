@@ -196,11 +196,11 @@ export class CallSession {
       log('info', LOG_TAG, 'confirmation expired', { ...ids, tool: pending.tool })
       return null
     }
-    const answer = classifyAnswer(userText)
-    if (answer === 'other') return null
+    const verdict = classifyAnswer(userText)
+    if (verdict === 'other') return null
     this.pendingConfirmation = null
-    log('info', LOG_TAG, 'confirmation answered', { ...ids, tool: pending.tool, answer })
-    if (answer === 'yes') return { id: pending.id }
+    log('info', LOG_TAG, 'confirmation answered', { ...ids, tool: pending.tool, verdict })
+    if (verdict === 'yes') return { id: pending.id }
     await this.confirmations.decline(pending.id, {
       sessionId: this.identity.sessionId,
       userId: this.identity.userId,
