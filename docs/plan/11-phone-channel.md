@@ -18,8 +18,9 @@ Can be split: **11a** schema, caller identity, JWT minting, the `phone` channel 
 worker's SIP path (dispatch, PIN by DTMF, refusals, hang-up) with tests; **11c** the trunk, the live
 checklist through a real car, the bench, the runbook steps.
 
-Depends on step 0 of the roadmap (a hosted worker). 11a and 11b can be built and tested before
-the worker is hosted; 11c cannot.
+Depends on step 0 of the roadmap (a hosted worker, `REL-9`). 11a and 11b can be built and tested
+before the worker is hosted; 11c cannot. Decision 0013 fixed the provider (Twilio, `+385`), the PIN
+policy (every caller) and the token path (§4).
 
 ## Goal
 
@@ -46,14 +47,14 @@ apps/voice/src/
 ├── phone/
 │   ├── caller.ts         resolveCaller(service, phoneE164) → identity | 'unknown' | 'withheld' | 'locked'
 │   ├── e164.ts           normalise('0911234567' | '00385…' | '+385…') → '+385…' or null
-│   ├── mint.ts           mintCallJwt(authUserId, ttlMs) (HS256 with the project secret) or the magic-link fallback (§4)
+│   ├── session.ts        createCallSession(service, authUserId): magic link + verifyOtp → the caller's JWT; revoke at hang-up (§4)
 │   ├── pin.ts            PinGate: collects DTMF digits with a timeout, verifies the hash, counts failures, locks
 │   ├── start.ts          startPhoneCall(service, identity, room, sipCallId) → ai_sessions(channel 'phone') + voice_calls row + call token
 │   └── lines.ts          PHONE_LINES_HR: greeting, PIN prompt, wrong PIN, refused, locked, goodbye  <!-- needs native review -->
 ├── job.ts                acceptDispatchedJob also accepts a SIP job (room name prefix + the SIP participant attributes), still refuses anything else
 ├── agent.ts              entry branches: in-app (call token from metadata) | phone (resolve, PIN, start, then the shared path)
 ├── tools.ts              VOICE_ALLOWLIST gains phone: the same list as voice (one source, two keys)
-└── env.ts                SUPABASE_JWT_SECRET (optional; without it the fallback path), PHONE_PIN_* settings (§7)
+└── env.ts                PHONE_PIN_* settings (§7)
 apps/voice/scripts/phone-test.md               the manual checklist (no script can dial the PSTN from CI)
 docs/VOICE.md                                   → The phone channel; the LiveKit trunk and dispatch rule; the measurements table gains a transport column
 docs/DB.md                                      → voice_caller_identities
@@ -70,9 +71,9 @@ docs/decisions/0014-caller-identity-and-minted-jwt.md
   that puts every call into its own room (`phone-<call id>`), with `agentName` = the worker's
   `AGENT_NAME` and static metadata `{ "channel": "phone" }`. Krisp noise cancellation on the
   trunk if the provider's leg allows it; recording off at the project (unchanged).
-- The provider and the number are the user's (open question 11). A Croatian `+385` number needs
-  the provider's regulatory bundle (company registration, address); an EU number elsewhere works
-  the same for the trunk. Caller ID must be passed through unchanged; withheld numbers arrive as
+- Twilio and a Croatian `+385` number (decision 0013), on the user's account. The number needs
+  Twilio's regulatory bundle (company registration, address), which takes days: it is started
+  before 11a. Twilio's elastic SIP trunk with its region set to Dublin or Frankfurt. Caller ID must be passed through unchanged; withheld numbers arrive as
   `anonymous` or empty.
 - The worker learns the caller from the SIP participant's attributes (`sip.phoneNumber`,
   `sip.trunkPhoneNumber`, `sip.callID`; confirm the names against the installed types) and the
@@ -120,27 +121,30 @@ ALTER TABLE public.ai_sessions ADD COLUMN caller_identity_id uuid REFERENCES pub
 
 ### 4. The RLS client without a browser (`mint.ts`)
 
-Tools must run as the caller (invariant 6). Two ways to get a JWT `auth.uid()` accepts, in order
-of preference; **open question 16 decides which the dev project allows**, and the session confirms
-it against the project's JWT settings before writing code:
+Tools must run as the caller (invariant 6). **Decided 2026-11-03 (decision 0013, open question
+16):** the dev project signs with an ECC P-256 key and keeps the HS256 secret only as a previous
+key that still verifies unexpired tokens; Supabase never exposes a signing key's private half, and
+the legacy secret stops working the day it is revoked. So the worker never signs a token itself:
 
-- **Mint** `{ sub: auth_user_id, aud: 'authenticated', role: 'authenticated', iat, exp: now + 15 min }`
-  signed HS256 with the project's legacy JWT secret (`SUPABASE_JWT_SECRET`, worker only, never in
-  the API). One mint per call; `authenticateToken` verifies it the same way it verifies a browser
-  JWT, so nothing downstream knows the difference.
-- **Fallback** when the project uses asymmetric signing keys and exposes no secret:
-  `auth.admin.generateLink({ type: 'magiclink' })` then `verifyOtp({ token_hash })` with the
-  service client, which yields a real session JWT. Two extra round trips at call start (budget
-  them in the greeting), and the link must never be logged or sent anywhere.
-- **Rejected:** running tool handlers on `serviceClient` for phone callers. That removes the RLS
-  backstop on the one channel whose identity is spoofable.
+- **Magic link:** `auth.admin.generateLink({ type: 'magiclink', email })` then
+  `auth.verifyOtp({ token_hash, type: 'magiclink' })` on a throwaway client, which yields a real
+  session signed by the current key. Keep the access token only (it goes into `voice_calls` under
+  the 15-minute cap, as the in-app call's JWT does); discard the refresh token; at hang-up revoke
+  the session with `auth.admin.signOut(accessToken, 'local')` so nothing outlives the call. Two
+  round trips at call start, inside the greeting. The link and the token hash are never logged.
+  `mint.ts` becomes `session.ts`: `createCallSession(service, authUserId)`.
+- **Not taken:** signing HS256 with the previous secret (works until the key is revoked, then
+  every phone call fails at once); running tool handlers on `serviceClient` for phone callers
+  (removes the RLS backstop on the one channel whose identity is spoofable).
+- Users must have an email on `auth.users` for the link; the enrolment step checks it.
 
-Decision 0014 records the choice and the reason.
+Decision 0014 records caller identity as a whole; this path is already fixed.
 
 ### 5. PIN by keypad (`pin.ts`)
 
-- Required when the identity has a `pin_hash`; enrolment refuses a null hash for roles the
-  settings name (`PHONE_PIN_ROLES`, default `admin`; open question 12 may make it every role).
+- Required for every caller during the pilot (decision 0013): enrolment refuses a null
+  `pin_hash` for any role. `PHONE_PIN_ROLES` (default: all roles) exists so the rule can be
+  relaxed per role later without a code change.
 - 4–6 digits collected as **DTMF, never speech**: Croatian digit recognition on a phone line is
   unreliable and DTMF keeps the PIN out of the transcript. The worker listens for the room's DTMF
   event (confirm the event name on `@livekit/rtc-node`), ends on `#` or after six digits, times out
@@ -183,7 +187,7 @@ same work itself, then joins the path the in-app call already takes:
 - `VOICE_ALLOWLIST` names `phone` with the same array as `voice` (one constant, two keys); the
   readOnly assert covers both. Rate limits above. Logging: the existing `timing` line gains
   `channel`; no number, no digits, no transcript (invariant 9).
-- New env: `SUPABASE_JWT_SECRET` (optional), `PHONE_PIN_ROLES` (default `admin`),
+- New env: `PHONE_PIN_ROLES` (default: all roles),
   `PHONE_PIN_TIMEOUT_MS` (10000), `PHONE_PIN_MAX_FAILURES` (3), `PHONE_PIN_LOCK_MS` (900000).
 
 ### 8. Spoken lines (`lines.ts`) <!-- needs native review -->
@@ -196,8 +200,9 @@ and the goodbye. The in-app greeting stays as it is.
 
 - Caller ID is not authentication: PIN for the named roles, refusal of unknown and withheld
   numbers before any model call, lockout, alerting on repeated failures.
-- The minted JWT: 15-minute TTL, one per call, stored only in `voice_calls` (service role only),
-  deleted on hang-up, swept; the secret lives in the worker's env only.
+- The call's JWT: obtained through the magic-link flow, one per call, stored only in
+  `voice_calls` (service role only) under the 15-minute cap, revoked and deleted on hang-up,
+  swept; no signing secret exists in the worker.
 - No phone number in logs, transcripts or session rows; a hash in the refusal log only.
 - Rate limits per user hold; add a per-number attempt counter for unknown numbers (`refused`
   more than N times an hour → the alert hook) so a scan of the number is visible.
@@ -208,7 +213,8 @@ and the goodbye. The in-app greeting stays as it is.
 
 - Unit: `e164` cases; `PinGate` state machine (correct, wrong, timeout, lock, `#` and six-digit
   end); `resolveCaller` against `fake-supabase` (known, unknown, withheld, inactive, locked);
-  `mintCallJwt` verified by the same code path `authenticateToken` uses in the fakes.
+  `createCallSession` against the GoTrue fake (link generated, OTP verified, the session revoked
+  at hang-up; the fake's request log shows no token hash in any log line).
 - Worker scenarios (`W` ids, through the harness): a phone job with a known number reaches the
   greeting and a first turn whose tool runs under the minted JWT (RLS asserted through the fake's
   request log); an unknown number never calls the model; a wrong PIN three times locks and never
@@ -229,7 +235,7 @@ and the goodbye. The in-app greeting stays as it is.
 - [ ] A phone job with a known number: greeting, PIN where required, first turn, tool under RLS,
       rows with `channel 'phone'`; with an unknown or withheld number: one line, hang-up, no model.
 - [ ] Three wrong PINs lock the identity for 15 minutes and log without digits.
-- [ ] `voice_calls` row for a phone call has the minted JWT, the 15-minute cap, is deleted on hang-up.
+- [ ] `voice_calls` row for a phone call has the call's JWT, the 15-minute cap, is revoked and deleted on hang-up.
 - [ ] No phone number or digit in any log line (the log-fields test extended).
 - [ ] 11c: the live checklist ran through a real car and `docs/VOICE.md` holds the figures.
 - [ ] `docs/VOICE.md`, `docs/DB.md`, `docs/SECURITY.md`, `docs/RELEASE-RUNBOOK.md` updated; decision
@@ -237,6 +243,6 @@ and the goodbye. The in-app greeting stays as it is.
 
 ## Open in this part (ask once, record the answer)
 
-- Open questions 11, 12, 13 and 16 of the roadmap.
+- Open question 13 of the roadmap (11, 12 and 16 were answered on 2026-11-03, decision 0013).
 - Whether `checkVoiceRateLimits` moves to `@va/core` or to a small shared module under `packages/`
   (the dependency rule allows either; core is simpler).

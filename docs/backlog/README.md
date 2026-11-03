@@ -50,7 +50,7 @@ ranking. Never reuse or renumber an id: tests and commits quote them.
 Rank by what goes wrong if the item is left, then by how small the job is.
 
 1. `CORE-1` native review of every Croatian string before a user hears or reads one
-2. `OPS-3` / `VOICE-1` decide where the API, the worker and the PWA run before the first user trial
+2. `REL-9` the first deploy on the hosts of decision 0013 (`OPS-3` / `VOICE-1` are decided), before the phone channel's live checklist
 3. `OPS-4` / `OPS-5` retention for voice rows and the DPA list, both needed before a trial under GDPR
 4. `VOICE-8` the first-sound lever
 5. `DB-1` local Postgres crash on a denied function call (upstream; tests work around it)

@@ -166,19 +166,20 @@ host-side URLs. The recipe is at the top of the file. It is a convenience for tr
 `supabase/config.toml` but not brought up in the session that wrote it (Docker calls are a
 harness prompt); `REL-6` holds the first run.
 
-## Deploy sketch (a proposal; the hosting choice is the user's)
+## Deploy (decided 2026-11-03, decision 0013; the first deploy is `REL-9`)
 
-| Component    | Proposal                                                                                                                        | Alternatives                                                                  | Why                                                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Supabase     | Supabase Cloud, Frankfurt (`eu-central-1`), pg_cron enabled for the sweep; the dev project `kdplqbldohrzsewhckgl` is already EU | Zürich (`eu-central-2`)                                                       | Postgres, Auth, Storage in one EU project; the same CLI flow as local                                                            |
-| `apps/api`   | one Hetzner Cloud VM (Falkenstein or Nuremberg) running Docker, the api container behind Caddy for HTTPS                        | Fly.io in `fra` (no VM to patch, `fly secrets`); Render Frankfurt             | SSE needs a long-lived process, so no serverless; one small instance carries v1; Caddy gives HTTPS and SSE without buffering     |
-| `apps/voice` | a second container on the same VM (CPU for Silero, outbound only, no port)                                                      | LiveKit Cloud agent hosting, EU (no server; logs and secrets live at LiveKit) | the data path, logs and keys stay with us; the bench runs next to it; nothing in the worker depends on where it runs (`VOICE-1`) |
-| `apps/web`   | Cloudflare Pages (static, HTTPS, EU edge) built with the three `VITE_` values                                                   | the same VM behind Caddy (one bill); Vercel                                   | the PWA needs HTTPS; a static host needs no container                                                                            |
-| LiveKit      | LiveKit Cloud, EU (Frankfurt is what the live checklist ran against, `docs/VOICE.md`)                                           | self-hosted LiveKit on the VM (later, if egress cost matters)                 | measured; recording off at the project                                                                                           |
+| Component    | Decision                                                                                                                                      | Alternatives                                                                  | Why                                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Supabase     | Supabase Cloud, Frankfurt (`eu-central-1`), pg_cron enabled for the sweep; the dev project `kdplqbldohrzsewhckgl` is already EU               | Zürich (`eu-central-2`)                                                       | Postgres, Auth, Storage in one EU project; the same CLI flow as local                                                            |
+| `apps/api`   | one Hetzner Cloud VM (Falkenstein or Nuremberg) running Docker, the api container behind Caddy for HTTPS                                      | Fly.io in `fra` (no VM to patch, `fly secrets`); Render Frankfurt             | SSE needs a long-lived process, so no serverless; one small instance carries v1; Caddy gives HTTPS and SSE without buffering     |
+| `apps/voice` | a second container on the same VM (CPU for Silero, outbound only, no port)                                                                    | LiveKit Cloud agent hosting, EU (no server; logs and secrets live at LiveKit) | the data path, logs and keys stay with us; the bench runs next to it; nothing in the worker depends on where it runs (`VOICE-1`) |
+| `apps/web`   | Vercel (static, HTTPS) built with the three `VITE_` values: framework preset Vite, root `apps/web`, install and build from the workspace root | Cloudflare Pages (the proposal); the same VM behind Caddy (one bill)          | the PWA needs HTTPS; a static host needs no container                                                                            |
+| Telephony    | Twilio, a Croatian `+385` number (regulatory bundle), trunk region Dublin or Frankfurt → LiveKit's EU SIP endpoint (Part 11)                  | any EU number first; Telnyx                                                   | LiveKit's EU trunk guide is written against Twilio; a local number is what drivers save in contacts                              |
+| LiveKit      | LiveKit Cloud, EU (Frankfurt is what the live checklist ran against, `docs/VOICE.md`)                                                         | self-hosted LiveKit on the VM (later, if egress cost matters)                 | measured; recording off at the project                                                                                           |
 
-The first deploy, in order, once the choice is made (`OPS-3`): create the project and apply the
-migrations (`REL-1`, `REL-3`), enable pg_cron and confirm `voice-calls-sweep` is scheduled; set the
-Auth site URL and redirect URLs to the PWA origin; create the LiveKit project (EU) and its API
+The first deploy, in order (`REL-9`; the migrations, pg_cron and the sweep were applied to the
+dev project on 2026-11-03, `REL-1`, `REL-3`, `REL-7`): set the
+Auth site URL and redirect URLs to the PWA origin (`REL-8`); create the LiveKit project (EU) and its API
 key; put the secrets from the matrix into the host's store; build the two images from the
 tagged commit and start them with `CORS_ORIGINS` set to the PWA origin and `VOICE_AGENT_NAME` =
 `AGENT_NAME`; build the PWA with the production `VITE_` values; point DNS at Caddy and the static
@@ -188,14 +189,16 @@ forward-only, so a schema rollback is a new migration.
 
 **Sub-processors** to record for GDPR (Croatia / EU), with the transfer basis:
 
-| Processor                     | Role                             | Region                   | Transfer                                                         |
-| ----------------------------- | -------------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| Supabase                      | database, auth, storage          | EU (Frankfurt)           | none                                                             |
-| Anthropic                     | the model (chat and voice turns) | US processing            | DPA with SCCs; no training on API data under its terms           |
-| LiveKit                       | WebRTC media, agent dispatch     | EU region; recording off | DPA; media stays in region, metadata may not                     |
-| Soniox                        | speech-to-text                   | EU host (`stt-rt-v5`)    | DPA                                                              |
-| ElevenLabs                    | text-to-speech                   | US                       | DPA with SCCs (a transfer: the spoken answer text leaves the EU) |
-| Hetzner / Fly.io / Cloudflare | hosting, as chosen               | EU                       | DPA                                                              |
+| Processor  | Role                                     | Region                   | Transfer                                                         |
+| ---------- | ---------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| Supabase   | database, auth, storage                  | EU (Frankfurt)           | none                                                             |
+| Anthropic  | the model (chat and voice turns)         | US processing            | DPA with SCCs; no training on API data under its terms           |
+| LiveKit    | WebRTC media, agent dispatch             | EU region; recording off | DPA; media stays in region, metadata may not                     |
+| Soniox     | speech-to-text                           | EU host (`stt-rt-v5`)    | DPA                                                              |
+| ElevenLabs | text-to-speech                           | US                       | DPA with SCCs (a transfer: the spoken answer text leaves the EU) |
+| Hetzner    | the API and the worker (VM)              | EU (Falkenstein)         | DPA                                                              |
+| Vercel     | the PWA (static files only)              | EU edge, US company      | DPA with SCCs; no user data is stored there                      |
+| Twilio     | the phone number and SIP trunk (Part 11) | EU trunk region          | DPA with SCCs; call metadata and audio transit the trunk         |
 
 Audio recording stays off at LiveKit and in the worker (`record: false`); only the transcripts
 the engine persists as `ai_messages` rows exist. Retention for `channel = 'voice'` rows is an

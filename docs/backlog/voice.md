@@ -6,17 +6,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
 ## Open
 
-### VOICE-1 · Medium · OQ: where the worker runs is not decided
-
-- **Check:** Confirmed (by design; `docs/VOICE.md` → Hosting)
-- **Where:** `apps/voice/Dockerfile` builds a container that nothing deploys
-- **What happens:** the worker runs on a developer machine; no call can be taken when it is off.
-  Since 2026-11-03 this blocks the phone channel (roadmap step 0, `docs/plan/10-integration-roadmap.md`):
-  a phone number that rings a laptop is not a product
-- **Fix direction:** choose LiveKit Cloud agent hosting (EU) or an own container next to the
-  Supabase project, write `docs/decisions/0011`, and add the deploy to `docs/OPS.md` (Part 7).
-  Either way the secrets in `apps/voice/env.example` must be set where it runs
-
 ### VOICE-2 · Low · Croatian voice text in the worker has not had a native review
 
 - **Check:** Confirmed (the two user-facing files are marked)
@@ -106,6 +95,19 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   it
 
 ## Resolved
+
+### VOICE-1 · Medium · Where the worker runs (decided 2026-11-03)
+
+- **Check:** Confirmed (by design; `docs/VOICE.md` → Hosting)
+- **Where:** `apps/voice/Dockerfile` builds a container that nothing deploys
+- **What happens:** the worker runs on a developer machine; no call can be taken when it is off.
+  Since 2026-11-03 this blocks the phone channel (roadmap step 0, `docs/plan/10-integration-roadmap.md`):
+  a phone number that rings a laptop is not a product
+- **Resolved:** decision 0013: a container on the Hetzner VM next to the API (`OPS-3`); the
+  deploy is `REL-9`.
+- **Was the fix direction:** choose LiveKit Cloud agent hosting (EU) or an own container next to the
+  Supabase project, write `docs/decisions/0011`, and add the deploy to `docs/OPS.md` (Part 7).
+  Either way the secrets in `apps/voice/env.example` must be set where it runs
 
 ### VOICE-5 · Medium · The call's context carries no tool rounds, so the model disowns its own earlier answer
 

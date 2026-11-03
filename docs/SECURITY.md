@@ -160,7 +160,7 @@ a pg_cron job beside `voice-calls-sweep`.
 
 ## Open decisions
 
-- `OPS-3` where the API, the worker and the PWA run (proposal in `docs/OPS.md`).
+- `REL-9` the first deploy on the hosts of decision 0013 (`OPS-3` is decided: Hetzner, Vercel).
 - `OPS-4` retention for `channel = 'voice'` (and chat) rows, and the sweep that enforces it.
 - `OPS-5` the DPA list and the records of processing before the first user trial.
 - `CORE-1`, `VOICE-2` the native review of every Croatian string.

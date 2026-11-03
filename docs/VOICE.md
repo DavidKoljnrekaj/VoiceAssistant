@@ -336,7 +336,7 @@ LABEL=vad pnpm --filter @va/voice call-test bargein ~/takes/q01.wav        # int
 Barge-in acceptance: 20 tries each with `INTERRUPT_ON=vad` and `stt`, the agent stops within
 0.5 s in at least 18 of 20.
 
-## Hosting (open decision)
+## Hosting
 
 The worker needs a home. Two options, both EU:
 
@@ -348,11 +348,11 @@ The worker needs a home. Two options, both EU:
   one more thing to operate, but the data path, logs and the keys stay with us, and the bench
   can run next to it.
 
-Recorded as `VOICE-1` (the API and the PWA are `OPS-3`); the proposal with regions and the
-first-deploy order is `docs/OPS.md` → Deploy sketch. Decide before the first user trial; since
-2026-11-03 it is step 0 of `docs/plan/10-integration-roadmap.md`, ahead of the phone channel
-(Part 11), which reuses this worker, its providers and its call lifecycle. Either way `AGENT_NAME` keeps the
-worker to dispatched jobs, and nothing in the worker depends on where it runs.
+Decided 2026-11-03 (decision 0013, closing `VOICE-1` and `OPS-3`): the own container on a Hetzner
+VM in Falkenstein next to the API. The deploy is `REL-9`, step 0 of
+`docs/plan/10-integration-roadmap.md`, ahead of the phone channel (Part 11), which reuses this
+worker, its providers and its call lifecycle. `AGENT_NAME` keeps the worker to dispatched jobs,
+and nothing in the worker depends on where it runs.
 
 ## Testing
 
