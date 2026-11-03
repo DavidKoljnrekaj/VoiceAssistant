@@ -159,7 +159,7 @@ now()` and `last_seen_at` within 3 minutes; null is a refused job. The token is 
 Required: `AGENT_NAME`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SONIOX_API_KEY`,
 `ELEVENLABS_API_KEY`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`. Optional: `ANTHROPIC_BASE_URL` (tests, fakes), `AI_VOICE_MODEL`,
-`AI_VOICE_EFFORT` (`docs/CORE.md` → Channels), `VOICE_LOGS_DIR`. The tuning values are
+`AI_VOICE_EFFORT`, `AI_PHONE_MODEL`, `AI_PHONE_EFFORT` (`docs/CORE.md` → Channels), `VOICE_LOGS_DIR`. The tuning values are
 Landmark's measured defaults; change one only with a measurement (`/bench-voice`).
 
 | Variable                 | Default                | Meaning, and what Landmark measured                                                                                                              |
@@ -174,6 +174,10 @@ Landmark's measured defaults; change one only with a measurement (`/bench-voice`
 | `VAD_THRESHOLD`          | 0.3                    | Silero activation threshold (its own is 0.5). Also fires on breath: 2 of 40 tries stopped the agent 0.22 s before the first word                 |
 | `VAD_MIN_SPEECH_MS`      | 30                     | Silero minimum speech (its own is 50)                                                                                                            |
 | `IDENTITY_CACHE_MS`      | 60000                  | Per-call identity re-read interval; the schema caps it at a minute (invariant 7)                                                                 |
+| `PHONE_PIN_ROLES`        | `admin,member`         | Roles that must enter a keypad PIN on the phone channel: every role during the pilot (decision 0013)                                             |
+| `PHONE_PIN_TIMEOUT_MS`   | 10000                  | The keypad wait before the one re-prompt, then the refusal (Part 11b)                                                                            |
+| `PHONE_PIN_MAX_FAILURES` | 3                      | Wrong PINs in a row that lock the number                                                                                                         |
+| `PHONE_PIN_LOCK_MS`      | 900000                 | How long a locked number is refused (15 minutes)                                                                                                 |
 
 Fixed in code, not settings: `turnDetection: 'stt'` (LiveKit's turn detector has no Croatian),
 `interruption.mode: 'vad'` (never LiveKit's hosted "adaptive" model), the Soniox EU host and
@@ -335,6 +339,33 @@ LABEL=vad pnpm --filter @va/voice call-test bargein ~/takes/q01.wav        # int
 
 Barge-in acceptance: 20 tries each with `INTERRUPT_ON=vad` and `stt`, the agent stops within
 0.5 s in at least 18 of 20.
+
+## The phone channel (Part 11; 11a built 2026-11-03)
+
+The same worker, dispatched by a LiveKit SIP trunk instead of the API (`docs/plan/11-phone-channel.md`,
+decisions 0012 and 0014). 11a built the pieces under `src/phone/`, LiveKit-free and tested against the
+fakes; 11b wires them into the job path (the SIP branch of `agent.ts`, the DTMF listener, the session
+and `voice_calls` rows, the hang-up); 11c is the trunk and the live checklist through a car.
+
+| Module                | What it does                                                                                                                                                                                                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phone/e164.ts`       | `normalizeE164`: the trunk's caller ID (`+385…`, `00385…`, `0…` as Croatian, `tel:`/`sip:` forms) to E.164, or null for a withheld or malformed value                                                                                                                                  |
+| `phone/caller.ts`     | `resolveCaller`: the number against `voice_caller_identities` (active, with the user embedded): `known` (with `pinRequired` from `PHONE_PIN_ROLES`), `locked`, or `refused` (`withheld`, `unknown`, `no_pin`), each refusal one log line with a hash of the number, never the number   |
+| `phone/session.ts`    | `createCallerSession`: the caller's JWT through GoTrue's magic-link flow (`admin.generateLink` with the service role, `verifyOtp` on `createAnonClient()`); `revokeCallerSession` at hang-up (`admin.signOut(token, 'local')`). Tokens and the link hash are never logged              |
+| `phone/pin.ts`        | `hashPin` / `verifyPin` (scrypt, `node:crypto`); `PinCollector` (4–6 digits, `#` submits, the sixth digit submits, noise ignored); `checkPin`: a wrong PIN bumps the counter, the one reaching `PHONE_PIN_MAX_FAILURES` locks the number for `PHONE_PIN_LOCK_MS`, a correct one resets |
+| `phone/lines.ts`      | The fixed Croatian lines a caller hears before the model: greeting with the PIN prompt, wrong, again, locked, refused, goodbye <!-- needs native review -->                                                                                                                            |
+| `phone/db.ts`         | The identities table typed by hand until `/db-types` runs on the dev project (`REL-10`)                                                                                                                                                                                                |
+| `scripts/pin-hash.ts` | `pnpm --filter @va/voice pin-hash`: a hash for the enrolment SQL (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller); the PIN is read from the terminal, never from argv                                                                                                                  |
+
+The engine side: `Channel` has `phone`, whose settings are voice's own copy (`AI_PHONE_MODEL`,
+`AI_PHONE_EFFORT` override them), whose static prompt is voice's bytes (one cache entry), and
+whose allowlist is the same list as voice's (`tools.ts`, one constant under two keys; the
+read-only assertion covers both). Nothing in the loop, the sink or the registry changed.
+
+Order of a phone call once 11b lands: resolve the caller → refuse or greet → collect and check the
+PIN (no model, no session row before it passes) → `createCallerSession` → insert `ai_sessions`
+(`channel 'phone'`, `caller_identity_id`) and `voice_calls` (the session's JWT under the 15-minute
+cap) → the existing path from `CallIdentity.resolve` on. Rate limits as the API applies them.
 
 ## Hosting
 

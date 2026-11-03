@@ -6,10 +6,15 @@
 import { type ChannelAllowlist, ToolRegistry } from '@va/core'
 import { demoPack } from '@va/tools-demo'
 
+// search_items: at most five names with category and price, no ids; get_item: one item's
+// name, category, price and a clipped description, no id (both shape their output for voice).
+const SPOKEN_TOOLS = ['search_items', 'get_item'] as const
+
+/** One list for the two spoken channels: the phone (Part 11) hears exactly what the in-app
+ * call hears. The readOnly assertion at load covers both keys. */
 export const VOICE_ALLOWLIST: ChannelAllowlist = {
-  // search_items: at most five names with category and price, no ids; get_item: one item's
-  // name, category, price and a clipped description, no id (both shape their output for voice).
-  voice: ['search_items', 'get_item'],
+  voice: SPOKEN_TOOLS,
+  phone: SPOKEN_TOOLS,
 }
 
 export function createRegistry(): ToolRegistry {

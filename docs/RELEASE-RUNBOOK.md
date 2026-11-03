@@ -395,6 +395,38 @@ redirect truncated the file before it ran. Restore it with
 to see the error, and paste that. No diff at all means the link points elsewhere or step 6 did
 not apply: `cat supabase/.temp/project-ref`.
 
+## Enrolling a caller (Part 11, after `REL-10`)
+
+The phone channel refuses every number it does not know. Enrolment is this SQL as the service
+role, never over the phone, once `20261103120000_phone_channel.sql` is on the project.
+
+1. The caller must be a user with an email (the magic link that gives the call its session is
+   minted for it): sign them up in the PWA first, or confirm the `public.users` row exists.
+2. Make the PIN hash on your machine (the PIN is typed into the prompt, nothing but the hash
+   is printed; choose 4 to 6 digits and tell the caller in person):
+
+```sh
+pnpm --filter @va/voice pin-hash
+```
+
+3. In psql through the pooler (as in step 10 above), with the caller's email, their number in
+   E.164 (`+385…`, no spaces) and the hash from step 2:
+
+```sql
+\set email 'caller@example.hr'
+\set phone '+385911234567'
+\set hash 'scrypt$16384$8$1$…$…'
+insert into public.voice_caller_identities (user_id, phone_e164, label, pin_hash)
+select u.id, :'phone', 'mobitel', :'hash' from public.users u where u.email = :'email'
+returning id, phone_e164, label, active;
+```
+
+Expect one row back. A second active row for the same number is refused (`23505`); to move a
+number to another user set `active = false` on the old row first. To reset a locked number:
+`update public.voice_caller_identities set pin_failed_attempts = 0, pin_locked_until = null where phone_e164 = :'phone';`.
+To change a PIN, update `pin_hash` with a new hash. To revoke a caller, set `active = false`
+(their sessions keep pointing at the row) or delete the row.
+
 ## Pasting the results back
 
 Paste one message into the next session, in this shape, one section per step, the terminal

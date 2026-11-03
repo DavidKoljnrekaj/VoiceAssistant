@@ -74,6 +74,16 @@ Role and language live in `public.users` and can change after the token was issu
 read on every request, and a revoked profile (no row) is `no_profile` on the next request even
 with a valid token. The voice worker's 60 s cache bounds how long a call keeps a stale role.
 
+**The phone channel (Part 11, decision 0014).** Caller ID is not authentication: it is
+spoofable on the PSTN. The worker resolves the number against `voice_caller_identities`, refuses
+a withheld, unknown, inactive, locked or PIN-less number before any model call with one line that
+does not say whether the number is known, and requires a keypad PIN (DTMF, never speech) from
+every pilot caller; three wrong PINs lock the number for 15 minutes and are logged (identity id,
+never digits). The call's JWT is a real GoTrue session obtained through the magic-link flow,
+stored only in `voice_calls` under the 15-minute cap and revoked at hang-up; the worker holds no
+signing secret. Logs carry a hash of the number, never the number. Open for 11b: a per-number
+attempt counter for unknown numbers so a scan of the number is visible.
+
 **The service role.** The API and the worker hold the service-role key for persistence and
 identity lookups only. Nothing about those calls is protected by RLS, so the explicit
 `user_id` / `session_id` filter on every one of them is the authorisation. A new service-role
@@ -141,14 +151,15 @@ user hears or reads is reviewed by a native speaker before release; until then i
 
 What is stored, where, and for how long:
 
-| Data                                                                                                 | Where                                   | Lawful basis / note                                                                   | Retention                                                                                |
-| ---------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| account: email, role, language                                                                       | Supabase Auth, `public.users`           | contract (the company's staff)                                                        | the account's life                                                                       |
-| chat turns: typed text, answers, tool I/O                                                            | `ai_messages`, `ai_sessions`            | contract; may contain what the user pasted                                            | open: proposal 12 months, then delete (`OPS-4`)                                          |
-| voice turns: transcripts, spoken answers                                                             | `ai_messages` with `channel = 'voice'`  | contract; no audio is recorded (LiveKit recording off, worker `record: false`)        | open decision `OPS-4` (proposal 30 days: a transcript is more sensitive than typed text) |
-| the caller's JWT for a live call                                                                     | `voice_calls`, service role only        | needed for the worker to act as the caller                                            | ≤ 15 min, deleted on hang-up, swept                                                      |
-| sent to LiveKit: participant identity (`users.id`), room name, job metadata (call token, session id) | LiveKit Cloud (EU), sub-processor       | contract; the identity is pseudonymous: no name, so no email, reaches LiveKit (`V13`) | the call's life, plus LiveKit's own log retention under its DPA (`OPS-5`)                |
-| logs and metrics: ids, timings, counts                                                               | the host's log store, `apps/voice/logs` | legitimate interest (operations)                                                      | proposal 30 days                                                                         |
+| Data                                                                                                 | Where                                        | Lawful basis / note                                                                                         | Retention                                                                                |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| account: email, role, language                                                                       | Supabase Auth, `public.users`                | contract (the company's staff)                                                                              | the account's life                                                                       |
+| chat turns: typed text, answers, tool I/O                                                            | `ai_messages`, `ai_sessions`                 | contract; may contain what the user pasted                                                                  | open: proposal 12 months, then delete (`OPS-4`)                                          |
+| voice turns: transcripts, spoken answers                                                             | `ai_messages` with `channel = 'voice'`       | contract; no audio is recorded (LiveKit recording off, worker `record: false`)                              | open decision `OPS-4` (proposal 30 days: a transcript is more sensitive than typed text) |
+| the caller's JWT for a live call                                                                     | `voice_calls`, service role only             | needed for the worker to act as the caller                                                                  | ≤ 15 min, deleted on hang-up, swept                                                      |
+| enrolled phone numbers and PIN hashes (Part 11)                                                      | `voice_caller_identities`, service role only | contract; the number is the caller's identity on the phone channel; a hash of it, never the number, in logs | the enrolment's life, with the user's row; subject access by `user_id`                   |
+| sent to LiveKit: participant identity (`users.id`), room name, job metadata (call token, session id) | LiveKit Cloud (EU), sub-processor            | contract; the identity is pseudonymous: no name, so no email, reaches LiveKit (`V13`)                       | the call's life, plus LiveKit's own log retention under its DPA (`OPS-5`)                |
+| logs and metrics: ids, timings, counts                                                               | the host's log store, `apps/voice/logs`      | legitimate interest (operations)                                                                            | proposal 30 days                                                                         |
 
 Sub-processors (Anthropic, LiveKit, Soniox, ElevenLabs, Supabase, the hosting provider) are
 listed with regions and transfer basis in `docs/OPS.md` → Deploy sketch; the DPAs, the entries in

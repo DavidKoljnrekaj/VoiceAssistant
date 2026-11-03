@@ -64,6 +64,7 @@ Tick when a part is merged to `main`.
 The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did not fix is in
 `docs/backlog/`.
 
-- [ ] Part 11 — the phone channel (11a schema, identity, the call's JWT; 11b worker SIP path; 11c
-      the trunk and the live checklist through a car). Hosts decided 2026-11-03 (decision 0013);
-      11c waits for the deploy (`REL-9`, roadmap step 0).
+- [ ] Part 11 — the phone channel. 11a done 2026-11-03 (migration and pgTAP, `phone` in core,
+      `src/phone/` in the worker with W20–W27, decision 0014; `REL-10` applies the migration);
+      11b (worker SIP path) and 11c (the trunk and the live checklist through a car) open. Hosts
+      decided 2026-11-03 (decision 0013); 11c waits for the deploy (`REL-9`, roadmap step 0).

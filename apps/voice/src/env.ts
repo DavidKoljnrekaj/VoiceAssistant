@@ -30,6 +30,9 @@ export const voiceEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   AI_VOICE_MODEL: optional,
   AI_VOICE_EFFORT: optional,
+  /** The phone channel's overrides (`docs/CORE.md` → Channels); the SIP path reads them in Part 11b. */
+  AI_PHONE_MODEL: optional,
+  AI_PHONE_EFFORT: optional,
   /** ElevenLabs voice: Karlo, chosen by Landmark on 2026-10-26. */
   VOICE_ID: z.string().trim().min(1).default('pTD8166KADi6ZFJ5FEXi'),
   /** Soniox v5 endpoint latency adjustment, 0 (slowest) to 3 (fastest). */
@@ -50,6 +53,25 @@ export const voiceEnvSchema = z.object({
   IDENTITY_CACHE_MS: int(IDENTITY_CACHE_MAX_MS, 0, IDENTITY_CACHE_MAX_MS),
   /** Where the JSONL metrics go; defaults to `apps/voice/logs` (gitignored). */
   VOICE_LOGS_DIR: optional,
+  /** The phone channel (Part 11). Roles that must enter a keypad PIN, comma-separated; every
+   * role during the pilot (decision 0013). */
+  PHONE_PIN_ROLES: z
+    .string()
+    .trim()
+    .default('admin,member')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.enum(['admin', 'member'])).min(1)),
+  /** How long the worker waits for the keypad before it re-prompts once, then refuses. */
+  PHONE_PIN_TIMEOUT_MS: int(10_000, 1_000, 60_000),
+  /** Wrong PINs in a row that lock the number. */
+  PHONE_PIN_MAX_FAILURES: int(3, 1, 10),
+  /** How long a locked number is refused. */
+  PHONE_PIN_LOCK_MS: int(15 * 60_000, 60_000, 24 * 60 * 60_000),
 })
 
 export type VoiceEnv = z.infer<typeof voiceEnvSchema>
