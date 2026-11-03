@@ -123,6 +123,20 @@ identity it came from and goes null when the identity is deleted; the number its
 next to a transcript. The worker types the table by hand (`apps/voice/src/phone/db.ts`) until
 the migration is on the dev project and `/db-types` runs (`REL-10`).
 
+### `tool_confirmations` (`20261103150000_tool_confirmations.sql`, Part 12)
+
+The write protocol's pending confirmations and the audit of every write (decision 0015): `id`
+(what the channel holds and the engine consumes), `session_id` (cascade), `user_id` (cascade),
+`tool`, `input_hash` (SHA-256 of the validated input the summary describes), `summary` (what
+the user saw or heard), `outcome` (`pending` → `executed` | `failed` | `declined` | `expired`),
+`error_code`, `created_at`, `expires_at` (five minutes), `confirmed_at` (the consume),
+`settled_at`. The owner reads their own rows (the companion app's audit view); every write is
+the service role, by `session_id` and `user_id`; the consume is one conditional UPDATE
+(`outcome = 'pending' AND expires_at > now()` plus the four match columns), so it wins once.
+The voice worker keeps its confirmations in memory for a call and writes nothing here. The API
+types the table by hand (`apps/api/src/chat/confirmations.ts`) until `/db-types` runs
+(`REL-11`).
+
 ### `demo_items`, `demo_notes` (the example tool pack, `20261029100000_demo_tables.sql`)
 
 `demo_items` is the catalogue `search_items` and `get_item` read: `id`, `name`, `category`,
@@ -180,6 +194,7 @@ pgTAP case.
 | `ai_messages`             | nothing | SELECT rows of own sessions                           | everything   |
 | `voice_calls`             | nothing | nothing                                               | everything   |
 | `voice_caller_identities` | nothing | nothing                                               | everything   |
+| `tool_confirmations`      | nothing | SELECT own                                            | everything   |
 | `demo_items`              | nothing | SELECT every row                                      | everything   |
 | `demo_notes`              | nothing | SELECT own; INSERT as oneself                         | everything   |
 
@@ -228,6 +243,7 @@ import type { Database, Tables } from '@va/db'
 | `ai_session_history`       | the 7-row chain with a sibling branch: whole branch, sibling branch, `p_max_rows`, summary boundary, unknown leaf; no ownership check (another user's claims still get the branch); EXECUTE only for service_role                                                                                                                                            |
 | `voice_calls_service_only` | nothing for authenticated or anon; the service role runs the call lifecycle; `expires_at` never past 15 minutes from `created_at`, on insert or refresh; one call per session; cascade; the sweep job where pg_cron exists                                                                                                                                   |
 | `voice_caller_identities`  | nothing for authenticated or anon, the owner still reads `caller_identity_id` on their own session; the service role resolves a number and records failures and the lock; E.164 and a non-negative counter enforced; one active row per number, an inactive duplicate allowed; deleting the identity nulls the session's pointer, deleting the user cascades |
+| `tool_confirmations`       | the owner reads their own rows and cannot write; another user sees none; anon nothing; the service role's conditional consume wins once, a changed input does not match, outcomes are constrained, an expired row is not consumable; cascade with the session                                                                                                |
 | `demo_tables`              | a member reads the catalogue and writes only their own notes, never an item; anon nothing; the service role seeds; deleting an item deletes its notes                                                                                                                                                                                                        |
 
 Each file is one transaction that rolls back. See `docs/TESTING.md` → Database tests for how to
