@@ -86,6 +86,19 @@ export function engineStream(
 /** Unused by the engine (the system prompt lives in @va/core); LiveKit requires a value. */
 const INSTRUCTIONS = 'The system prompt is built by @va/core; see docs/VOICE.md.'
 
+/** On the line before a phone caller is admitted (`phone/gate.ts`): the pipeline runs so the
+ * fixed lines can be spoken and the keypad heard, but whatever the caller says is answered by
+ * nothing. `updateAgent(new AssistantAgent(...))` replaces it once the gate opens. */
+export class GateAgent extends voice.Agent {
+  constructor(modelId: string) {
+    super({ instructions: INSTRUCTIONS, llm: new EngineLLM(modelId) })
+  }
+
+  override async llmNode(): Promise<ReadableStream<ChatChunk | string | FlushSentinel> | null> {
+    return null
+  }
+}
+
 export class AssistantAgent extends voice.Agent {
   constructor(
     private readonly call: CallSession,

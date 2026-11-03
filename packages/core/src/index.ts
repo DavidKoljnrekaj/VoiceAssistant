@@ -2,6 +2,8 @@
 // `@va/core/test`.
 export { authenticateToken, isAuthError } from './auth.js'
 export type { AuthContext, AuthError, AuthResult, Language, Role } from './auth.js'
+export { CALLS_PER_DAY, checkCallLimits, CONCURRENT_CALLS, SPOKEN_CHANNELS } from './call-limits.js'
+export type { CallLimitVerdict } from './call-limits.js'
 export { CHANNEL_DEFAULTS, channelSettings } from './channel.js'
 export type { Channel, ChannelSettings, Effort } from './channel.js'
 export { MESSAGES_HR, mapAnthropicError } from './errors.js'

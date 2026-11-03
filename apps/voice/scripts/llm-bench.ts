@@ -150,6 +150,7 @@ async function main(): Promise<void> {
   const deps: VoiceDeps = {
     anthropic: new Anthropic({ apiKey: env('ANTHROPIC_API_KEY') }),
     registry: createRegistry(),
+    channel: 'voice',
     settings: channelSettings('voice', process.env),
     clock: () => new Date(),
   }

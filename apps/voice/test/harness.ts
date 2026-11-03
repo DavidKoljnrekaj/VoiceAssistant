@@ -57,6 +57,7 @@ export const SESSION_VOICE = uuid(601)
 export const FILLER = 'Samo trenutak.'
 
 export interface DepsOptions {
+  channel?: 'voice' | 'phone'
   packs?: ToolPack[]
   allowlist?: ChannelAllowlist
   settings?: Partial<ChannelSettings>
@@ -66,7 +67,8 @@ export function deps(opts: DepsOptions = {}): VoiceDeps {
   return {
     anthropic: anthropicClient(),
     registry: new ToolRegistry(opts.packs ?? [demoPack], opts.allowlist ?? VOICE_ALLOWLIST),
-    settings: { ...channelSettings('voice', {}), ...opts.settings },
+    channel: opts.channel ?? 'voice',
+    settings: { ...channelSettings(opts.channel ?? 'voice', {}), ...opts.settings },
     clock: () => new Date(NOW),
   }
 }

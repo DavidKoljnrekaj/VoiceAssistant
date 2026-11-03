@@ -7,11 +7,12 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import { type AuthContext, type ErrorCode, log } from '@va/core'
+import { VOICE_CALL_CAP_MS } from '@va/db'
 
 import type { AppDeps } from '../deps.js'
 import { checkVoiceRateLimits } from '../rate-limit.js'
 
-export const CALL_CAP_MS = 15 * 60_000
+export const CALL_CAP_MS = VOICE_CALL_CAP_MS
 
 /** <!-- needs native review --> */
 export const VOICE_SESSION_TITLE = 'Glasovni poziv'

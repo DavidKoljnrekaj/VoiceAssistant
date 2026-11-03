@@ -3,4 +3,4 @@
 export { createAnonClient, createServiceClient, createUserClient, type DbClient } from './clients.js'
 export type { Database, Json, Tables, TablesInsert, TablesUpdate, Enums } from './database.js'
 export { dbEnvSchema, getDbEnv, parseDbEnv, resetDbEnvCache, type DbEnv } from './env.js'
-export { VOICE_CALL_IDLE_MS } from './voice-calls.js'
+export { VOICE_CALL_CAP_MS, VOICE_CALL_IDLE_MS } from './voice-calls.js'

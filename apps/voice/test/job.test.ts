@@ -1,7 +1,7 @@
 // W01: which jobs the worker takes.
 import { describe, expect, it } from 'vitest'
 
-import { acceptDispatchedJob, callTokenOf, type JobRequestLike } from '../src/job.js'
+import { acceptDispatchedJob, callTokenOf, type JobRequestLike, phoneJobOf } from '../src/job.js'
 import { logs, scenario } from './harness.js'
 
 function request(metadata: string | undefined): JobRequestLike & { accepted: number; rejected: number } {
@@ -34,6 +34,21 @@ describe('job acceptance', () => {
     expect(dispatched).toMatchObject({ accepted: 1, rejected: 0 })
     expect(logs.filter((l) => l.line.includes('abc'))).toHaveLength(0)
   })
+
+  scenario(
+    'W01c a SIP dispatch marked as the phone channel is accepted; any other channel is not',
+    async () => {
+      const phone = request(JSON.stringify({ channel: 'phone' }))
+      await acceptDispatchedJob(phone)
+      expect(phone).toMatchObject({ accepted: 1, rejected: 0 })
+      const other = request(JSON.stringify({ channel: 'voice' }))
+      await acceptDispatchedJob(other)
+      expect(other).toMatchObject({ accepted: 0, rejected: 1 })
+      expect(phoneJobOf('{"channel":"phone"}')).toBe(true)
+      expect(phoneJobOf('{"channel":"Phone"}')).toBe(false)
+      expect(phoneJobOf(undefined)).toBe(false)
+    },
+  )
 
   it('W01b callTokenOf reads only a non-empty string token', () => {
     expect(callTokenOf(undefined)).toBeNull()

@@ -289,6 +289,10 @@ container (`apps/voice/Dockerfile`) does the same, with no port (the worker is a
 WebSocket client of LiveKit). The worker's `prewarm` loads Silero once per process.
 
 Logs are one JSON line per event with `tag: '[voice]'`: `job refused`, `call accepted`, `warm`,
+The phone channel adds `phone refused` (`reason`, a `number_hash` or the identity id), `phone gate`
+(`outcome`, `reason`, `pin_used`, `ms`), `pin wrong` / `pin locked` (`failures`, `lock_ms`),
+`phone rate limited`, `phone call started`, `call refused`, `session revoke failed`, `room delete
+failed`: never a number, a digit, a token or a link hash. Then the shared lines:
 `timing` per turn (`auth_ms`, `first_text_ms`, `total_ms`, the engine's marks as `name@ms`,
 `spoken_len`, token and cache counts, `outcome`), `turn dropped`, `turn limit reached`, `identity timeout`
 (with `timeout_ms`), `identity refused`, `call ended` (the cap), `call ending` (with its
@@ -340,32 +344,54 @@ LABEL=vad pnpm --filter @va/voice call-test bargein ~/takes/q01.wav        # int
 Barge-in acceptance: 20 tries each with `INTERRUPT_ON=vad` and `stt`, the agent stops within
 0.5 s in at least 18 of 20.
 
-## The phone channel (Part 11; 11a built 2026-11-03)
+## The phone channel (Part 11; 11a and 11b built 2026-11-03)
 
 The same worker, dispatched by a LiveKit SIP trunk instead of the API (`docs/plan/11-phone-channel.md`,
-decisions 0012 and 0014). 11a built the pieces under `src/phone/`, LiveKit-free and tested against the
-fakes; 11b wires them into the job path (the SIP branch of `agent.ts`, the DTMF listener, the session
-and `voice_calls` rows, the hang-up); 11c is the trunk and the live checklist through a car.
+decisions 0012 and 0014). What is left is 11c: the trunk, the dispatch rule and the live checklist
+through a car.
 
-| Module                | What it does                                                                                                                                                                                                                                                                           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `phone/e164.ts`       | `normalizeE164`: the trunk's caller ID (`+385…`, `00385…`, `0…` as Croatian, `tel:`/`sip:` forms) to E.164, or null for a withheld or malformed value                                                                                                                                  |
-| `phone/caller.ts`     | `resolveCaller`: the number against `voice_caller_identities` (active, with the user embedded): `known` (with `pinRequired` from `PHONE_PIN_ROLES`), `locked`, or `refused` (`withheld`, `unknown`, `no_pin`), each refusal one log line with a hash of the number, never the number   |
-| `phone/session.ts`    | `createCallerSession`: the caller's JWT through GoTrue's magic-link flow (`admin.generateLink` with the service role, `verifyOtp` on `createAnonClient()`); `revokeCallerSession` at hang-up (`admin.signOut(token, 'local')`). Tokens and the link hash are never logged              |
-| `phone/pin.ts`        | `hashPin` / `verifyPin` (scrypt, `node:crypto`); `PinCollector` (4–6 digits, `#` submits, the sixth digit submits, noise ignored); `checkPin`: a wrong PIN bumps the counter, the one reaching `PHONE_PIN_MAX_FAILURES` locks the number for `PHONE_PIN_LOCK_MS`, a correct one resets |
-| `phone/lines.ts`      | The fixed Croatian lines a caller hears before the model: greeting with the PIN prompt, wrong, again, locked, refused, goodbye <!-- needs native review -->                                                                                                                            |
-| `phone/db.ts`         | The identities table typed by hand until `/db-types` runs on the dev project (`REL-10`)                                                                                                                                                                                                |
-| `scripts/pin-hash.ts` | `pnpm --filter @va/voice pin-hash`: a hash for the enrolment SQL (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller); the PIN is read from the terminal, never from argv                                                                                                                  |
+```
+caller ──PSTN──▶ Twilio trunk ──SIP──▶ LiveKit SIP (EU) ──dispatch rule { "channel": "phone" }──▶ room ──▶ this worker
+   job accepted (phoneJobOf) ─▶ session.start(GateAgent) ─▶ connect ─▶ waitForParticipant (the SIP participant)
+   ─▶ phone/admit: sip.phoneNumber → phoneGate (resolveCaller; the PIN over DtmfReceived) → startPhoneCall
+   ─▶ CallIdentity.resolve(the worker's own token) ─▶ the in-app path from here: warm, CallSession,
+      session.updateAgent(AssistantAgent), turns, deferred rows, endCall (+ the session revoked), deleteRoom
+```
+
+| Module                | What it does                                                                                                                                                                                                                                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job.ts`              | `phoneJobOf`: a job whose metadata is `{ "channel": "phone" }` (the dispatch rule's static metadata) is accepted next to the API's token-bearing jobs                                                                                                                                                           |
+| `phone/sip.ts`        | The SIP participant's attributes: `sip.phoneNumber` (the caller ID), `sip.callID` (the session's `external_id`; the room name when absent)                                                                                                                                                                      |
+| `phone/e164.ts`       | `normalizeE164`: `+385…`, `00385…`, `0…` as Croatian, `tel:`/`sip:` forms, to E.164; null for a withheld or malformed value                                                                                                                                                                                     |
+| `phone/caller.ts`     | `resolveCaller`: the number against `voice_caller_identities` (active, user embedded): `known` (with `pinRequired` from `PHONE_PIN_ROLES`), `locked`, or `refused` (`withheld`, `unknown`, `no_pin`); each refusal one log line with a hash of the number, never the number                                     |
+| `phone/keys.ts`       | `KeyQueue`: DTMF digits as a queue with a timeout per key; keys pressed early are kept; `close()` on hang-up                                                                                                                                                                                                    |
+| `phone/gate.ts`       | `phoneGate`: refuse with one line, or greet; with a PIN: the prompt, the digits (`PinCollector`), `checkPin`; a silent keypad is re-prompted once then refused; three wrong PINs lock the number. LiveKit-free: lines out through `io.say`, digits in through `io.nextKey`                                      |
+| `phone/pin.ts`        | `hashPin` / `verifyPin` (scrypt); `PinCollector` (4–6 digits, `#` submits, the sixth digit submits); `checkPin` with the counter and the lock, every update filtered by identity and user                                                                                                                       |
+| `phone/session.ts`    | `createCallerSession`: the caller's JWT through GoTrue's magic-link flow (`admin.generateLink`, `verifyOtp` on `createAnonClient()`); `revokeCallerSession` at hang-up. Tokens and the link hash are never logged                                                                                               |
+| `phone/start.ts`      | `startPhoneCall`: the shared call limits (`@va/core` → `checkCallLimits`), the session, the previous credential replaced, `ai_sessions` (`channel 'phone'`, `external_id` the SIP call id, `caller_identity_id`) and `voice_calls` (the session's JWT under the 15-minute cap); rollback plus revoke on failure |
+| `phone/admit.ts`      | The LiveKit side: the SIP participant, the DTMF events, the gate's `say` through the session, then the rows and the `CallIdentity`; a caller who hangs up mid-PIN closes the keypad and ends the gate                                                                                                           |
+| `phone/lines.ts`      | The fixed Croatian lines before the model: greeting with the PIN prompt, plain greeting, admitted, wrong, again, locked, refused, goodbye <!-- needs native review -->                                                                                                                                          |
+| `phone/db.ts`         | The identities table and the session row typed by hand until `/db-types` runs (`REL-10`)                                                                                                                                                                                                                        |
+| `scripts/pin-hash.ts` | `pnpm --filter @va/voice pin-hash`: a hash for the enrolment SQL (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller)                                                                                                                                                                                               |
 
 The engine side: `Channel` has `phone`, whose settings are voice's own copy (`AI_PHONE_MODEL`,
 `AI_PHONE_EFFORT` override them), whose static prompt is voice's bytes (one cache entry), and
 whose allowlist is the same list as voice's (`tools.ts`, one constant under two keys; the
-read-only assertion covers both). Nothing in the loop, the sink or the registry changed.
+read-only assertion covers both). `VoiceDeps.channel` says which of the two a call uses: the
+loop's channel, the prompt, the advertised tools and the rows' `extras.channel`. The call limits
+moved to `@va/core` (`checkCallLimits`): the API's `POST /voice/sessions` and the worker's
+`startPhoneCall` count voice and phone sessions together, 20 per user per day, 3 live globally.
 
-Order of a phone call once 11b lands: resolve the caller → refuse or greet → collect and check the
-PIN (no model, no session row before it passes) → `createCallerSession` → insert `ai_sessions`
-(`channel 'phone'`, `caller_identity_id`) and `voice_calls` (the session's JWT under the 15-minute
-cap) → the existing path from `CallIdentity.resolve` on. Rate limits as the API applies them.
+How a phone call ends: the SIP participant leaving (`participantLeft` against its identity) or
+the room going, the 15-minute cap, the 50-turn cap, a provider failure; the worker's side of a
+hang-up deletes the room (`ctx.deleteRoom()`, which ends the trunk's leg) after `endCall`, which
+also revokes the caller's session once the credential row is gone. A refused caller hears the
+line, then the room is deleted and the job shuts down; no session row exists for a refusal.
+
+What 11c configures at LiveKit and Twilio, none of it in code: an inbound trunk on the EU SIP
+endpoint restricted to the Twilio trunk's IPs and the bought number; a dispatch rule of type
+individual (room `phone-<call id>`), `agentName` = `AGENT_NAME`, metadata `{"channel":"phone"}`;
+Krisp on the trunk if the provider allows it; recording off at the project.
 
 ## Hosting
 

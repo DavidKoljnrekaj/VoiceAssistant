@@ -97,7 +97,10 @@ describe('metrics', () => {
     })
     // Soniox did not report a delay for this turn: the item has no such key.
     turns.add(userItem({ transcriptionDelay: undefined, endOfTurnDelay: undefined }))
-    expect(turns.add(replyItem(false))).toMatchObject({ transcription_delay_ms: null, end_of_turn_delay_ms: null })
+    expect(turns.add(replyItem(false))).toMatchObject({
+      transcription_delay_ms: null,
+      end_of_turn_delay_ms: null,
+    })
     // The next turn's user item replaces the last one; a second reply does not reuse the delays.
     turns.add(userItem({ transcriptionDelay: 0.5 }))
     turns.add(userItem({ transcriptionDelay: 0.25 }))
