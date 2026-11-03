@@ -1,10 +1,23 @@
 # Backlog — web
 
-Ids: WEB-16 (next free)
+Ids: WEB-17 (next free)
 
 The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 
 ## Open
+
+### WEB-16 · Medium · OQ: the in-app call does not survive a locked phone, so it is not a car channel
+
+- **Check:** Confirmed by platform behaviour, not by us (`docs/research/2026-11-03-call-first.md`
+  §2: iOS suspends WebRTC and the microphone when the screen locks or the PWA leaves the
+  foreground; Android Auto admits no third-party assistant; CarPlay's conversational-app
+  entitlement is native-only)
+- **Where:** `apps/web` call button and `useVoiceCall`; the PWA as a whole in a car
+- **What happens:** a driver who starts the in-app call and locks the phone loses the call; the
+  PWA cannot appear on the car's screen at all
+- **Fix direction:** none in the PWA. The car channel is the phone number (decision 0012, Part 11);
+  the call button stays behind `WEB-1` as the desk and test channel. A native wrapper with the
+  `voip` background mode is roadmap step 7, only if the companion needs it (open question 15)
 
 ### WEB-1 · Low · The call button needs a per-user feature flag before a trial
 

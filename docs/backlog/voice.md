@@ -10,7 +10,9 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
 - **Check:** Confirmed (by design; `docs/VOICE.md` → Hosting)
 - **Where:** `apps/voice/Dockerfile` builds a container that nothing deploys
-- **What happens:** the worker runs on a developer machine; no call can be taken when it is off
+- **What happens:** the worker runs on a developer machine; no call can be taken when it is off.
+  Since 2026-11-03 this blocks the phone channel (roadmap step 0, `docs/plan/10-integration-roadmap.md`):
+  a phone number that rings a laptop is not a product
 - **Fix direction:** choose LiveKit Cloud agent hosting (EU) or an own container next to the
   Supabase project, write `docs/decisions/0011`, and add the deploy to `docs/OPS.md` (Part 7).
   Either way the secrets in `apps/voice/env.example` must be set where it runs
