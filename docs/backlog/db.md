@@ -8,7 +8,11 @@ Schema, RLS, functions, triggers, pgTAP, generated types (`supabase/`, `packages
 
 ### DB-1 · Low · Permission denied on a function crashes the local Supabase Postgres for anon / authenticated
 
-- **Check:** Confirmed (local stack, image `public.ecr.aws/supabase/postgres:17.6.1.106`, CLI 2.99.0, 2026-10-28)
+- **Check:** Confirmed (local stack, image `public.ecr.aws/supabase/postgres:17.6.1.106`, CLI 2.99.0, 2026-10-28);
+  reproduced again on the same image on 2026-11-02 (signal 11, recovery, then alive). A newer image
+  (`17.6.1.155`, pulled by a newer CLI) was seen on this machine but not probed; `supabase stop`
+  and `supabase start` after a CLI update, then the probe in `docs/RELEASE-RUNBOOK.md` step 13
+  against the local stack, re-checks it. The dev project's image is step 13 of that runbook.
 - **Where:** any `SELECT public.f()` run as `anon` or `authenticated` when the role lacks EXECUTE
   (`ai_session_history`, or a trivial `returns int language sql` function)
 - **What happens:** the backend dies with signal 11 instead of raising `42501`; the whole stack

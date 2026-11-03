@@ -4,6 +4,8 @@ Ids: REL-9 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
+`docs/RELEASE-RUNBOOK.md` is the command-by-command form of REL-1, REL-3 and REL-7 (one push,
+three sets of checks) and says how to paste the results back.
 
 ## Open
 

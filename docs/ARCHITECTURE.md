@@ -20,7 +20,7 @@ VoiceAssistant/
 │   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile
 │   └── web/                      # @va/web   — React PWA: auth, chat panel, call button; Dockerfile (nginx), e2e/ smoke
 ├── supabase/                     # config.toml, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
-├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, decisions/, backlog/, plan/
+├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/
 └── tools/                        # repo-level scripts only (no app code)
 ```
 
@@ -104,5 +104,6 @@ Every later part extends this table.
 | PWA                                                               | `apps/web`                             | Part 6 |
 | Env matrix, logging fields, CI, containers, deploy, runbook       | `docs/OPS.md`                          | Part 7 |
 | Security checklist, threat notes, personal data                   | `docs/SECURITY.md`                     | Part 7 |
+| Operator steps on the dev project: push, sweep, types             | `docs/RELEASE-RUNBOOK.md`              | Part 7 |
 | The log helper and the call-site lint test                        | `packages/core/src/log.ts`             | Part 7 |
 | Container images, dev compose                                     | `apps/*/Dockerfile`, `compose.dev.yml` | Part 7 |
