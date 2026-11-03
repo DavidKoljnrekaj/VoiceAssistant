@@ -119,7 +119,7 @@ After the gate and the zod validation, for a tool with `confirmation: 'required'
 
 - `inputHash = sha256(stableStringify(parsed.data))` (keys sorted recursively).
 - With `extras.confirmation`: `consume(id, { sessionId, userId, tool, inputHash })`. On `ok`
-  run the handler; `settle(id, 'executed')` or `settle(id, 'failed', code)` on a throw (the
+  run the handler; `settle(id, 'executed')` or `settle(id, 'failed', reason)` on a throw or an error envelope (the
   throw still becomes the usual `is_error` result). On anything else log `confirmation not
   consumed` with the reason and fall through to a preview.
 - Without one, or after a fall-through: `summary = await preview(parsed.data, …)` (its throw is

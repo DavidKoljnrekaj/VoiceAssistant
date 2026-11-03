@@ -131,8 +131,9 @@ The write protocol's pending confirmations and the audit of every write (decisio
 the user saw or heard), `outcome` (`pending` → `executed` | `failed` | `declined` | `expired`),
 `error_code`, `created_at`, `expires_at` (five minutes), `confirmed_at` (the consume),
 `settled_at`. The owner reads their own rows (the companion app's audit view); every write is
-the service role, by `session_id` and `user_id`; the consume is one conditional UPDATE
-(`outcome = 'pending' AND expires_at > now()` plus the four match columns), so it wins once.
+the service role, by `session_id` and `user_id`; the consume is one conditional UPDATE that
+sets `confirmed_at` where it is still null (`outcome = 'pending' AND confirmed_at IS NULL AND
+expires_at > now()` plus the four match columns), so it wins once, before any settle.
 The voice worker keeps its confirmations in memory for a call and writes nothing here. The API
 types the table by hand (`apps/api/src/chat/confirmations.ts`) until `/db-types` runs
 (`REL-11`).

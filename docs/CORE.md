@@ -137,16 +137,20 @@ instruction }` and **no id**; after the row the sink gets `confirm({ id, tool, t
 summary, expiresAt })`. The model tells the user and asks (the chat prompt says so).
 2. The channel re-enters the loop with `extras.confirmation = { id }` once the user said yes
    (chat: `POST /chat` with `confirm`; voice: Part 12b). The model calls the tool again; dispatch
-   `consume`s the id (single use; the same session, user, tool and hash; unexpired), runs the
-   handler, `settle`s `executed` or `failed` (a throw, or an error envelope) and returns the
-   handler's output. Anything else (`mismatch`, `used`, `expired`, `not_found`) is logged as
+   `consume`s the id (single use from the consume itself: the row's `confirmed_at` is set by
+   the first consume and required empty by every later one, so a doubled `tool_use` in the same
+   turn or a second request runs the handler once; the same session, user, tool and hash;
+   unexpired), runs the handler, `settle`s `executed` or `failed` (a throw, or an error
+   envelope; `error_code` holds the bounded reason) and returns the handler's output. Anything else (`mismatch`, `used`, `expired`, `not_found`) is logged as
    `confirmation not consumed` and previews again.
 3. A decline is the channel's: the row is settled `declined`, the turn runs as a plain one.
 
 The id lives in the sink event and the store only: not in a row the model reads, not in a
 request to it, not in a log line (E40, E41 assert this across every request body and log
 line). Stores: `MemoryConfirmationStore` in core (the voice worker's per-call store, the tests'),
-`dbConfirmationStore` in the API over `tool_confirmations`. The registry's spoken-channel
+`dbConfirmationStore` in the API over `tool_confirmations`; both run the same contract
+(`confirmationStoreContract` in `@va/core/test`: K01, K02). The preview takes the handler's
+signal and issues nothing once the loop gave up on it. The registry's spoken-channel
 assertion is amended: a tool named for `voice` or `phone` is read-only or confirmed (E45).
 Scenarios E40–E45 (`confirm.test.ts`); the demo pack's `create_note` is the first tool under it
 (D13, D14).

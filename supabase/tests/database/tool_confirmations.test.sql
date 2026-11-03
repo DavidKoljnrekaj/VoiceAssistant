@@ -4,7 +4,7 @@
 -- session.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(15);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000050a1', 'owner@test.local'),
@@ -39,31 +39,28 @@ select is((select count(*)::int from public.tool_confirmations), 0, 'another use
 set local role anon;
 select throws_ok($$ select 1 from public.tool_confirmations $$, '42501', null, 'anon cannot read confirmations');
 
--- The service role consumes once: the conditional update that marks the row confirmed. Each
--- consume is the statement the API runs; the row's state afterwards says whether it won.
+-- The service role consumes once: the exact conditional update the API runs
+-- (apps/api/src/chat/confirmations.ts), twice. The first sets confirmed_at; the second must
+-- change nothing, whatever the outcome column still says.
 set local role service_role;
-update public.tool_confirmations set confirmed_at = now(), outcome = 'executed'
-  where id = '00000000-0000-0000-0000-0000000050c1' and session_id = '00000000-0000-0000-0000-0000000050b1'
-    and tool = 'create_note' and input_hash = 'hash-1' and outcome = 'pending' and expires_at > now();
+create function pg_temp.consume(p_hash text) returns int language plpgsql as $$
+declare n int;
+begin
+  update public.tool_confirmations set confirmed_at = now()
+    where id = '00000000-0000-0000-0000-0000000050c1' and session_id = '00000000-0000-0000-0000-0000000050b1'
+      and user_id = (select user_id from public.tool_confirmations where id = '00000000-0000-0000-0000-0000000050c1')
+      and tool = 'create_note' and input_hash = p_hash and outcome = 'pending'
+      and confirmed_at is null and expires_at > now();
+  get diagnostics n = row_count;
+  return n;
+end $$;
+select is(pg_temp.consume('other-hash'), 0, 'a changed input does not match');
+select is(pg_temp.consume('hash-1'), 1, 'the first matching consume wins');
+select is(pg_temp.consume('hash-1'), 0, 'the second consume changes nothing: single use before any settle');
 select is(
   (select outcome from public.tool_confirmations where id = '00000000-0000-0000-0000-0000000050c1'),
-  'executed',
-  'the first matching consume wins');
-update public.tool_confirmations set error_code = 'second-consume'
-  where id = '00000000-0000-0000-0000-0000000050c1' and outcome = 'pending';
-select is(
-  (select error_code from public.tool_confirmations where id = '00000000-0000-0000-0000-0000000050c1'),
-  null,
-  'the second consume finds nothing: single use');
-insert into public.tool_confirmations (id, session_id, user_id, tool, input_hash, summary, expires_at)
-select '00000000-0000-0000-0000-0000000050c2', session_id, user_id, 'create_note', 'hash-3', 's', now() + interval '5 minutes'
-from public.tool_confirmations where id = '00000000-0000-0000-0000-0000000050c1';
-update public.tool_confirmations set outcome = 'executed'
-  where id = '00000000-0000-0000-0000-0000000050c2' and input_hash = 'other-hash' and outcome = 'pending';
-select is(
-  (select outcome from public.tool_confirmations where id = '00000000-0000-0000-0000-0000000050c2'),
   'pending',
-  'a changed input does not match: the row stays pending');
+  'the outcome is still pending until the handler settles it');
 select throws_ok(
   $$ update public.tool_confirmations set outcome = 'maybe' where id = '00000000-0000-0000-0000-0000000050c1' $$,
   '23514', null, 'an outcome outside the list is refused');

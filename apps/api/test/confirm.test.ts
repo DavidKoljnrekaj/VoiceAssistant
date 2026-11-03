@@ -85,6 +85,32 @@ describe('POST /chat with the write protocol', () => {
   )
 
   scenario(
+    'C33 two identical tool_uses in one confirmed turn write once: the second consume finds the id used',
+    async () => {
+      const { sessionId, id } = await pendingNote()
+      anthropic.script(
+        callTools(toolUse('create_note', NOTE), toolUse('create_note', NOTE)),
+        answer('Zabilježeno.'),
+      )
+      const sse = await chat({ session_id: sessionId, message: 'Da.', confirm: id })
+      const results = sse.events.filter((e) => e.data.type === 'tool_result')
+      expect(results).toHaveLength(2)
+      expect(db.rows('demo_notes')).toHaveLength(1)
+      // One executed, the other previewed again (a fresh confirmation for the user to answer).
+      const outputs = results.map((r) => r.data.output as Record<string, unknown>)
+      expect(outputs.filter((o) => 'id' in o)).toHaveLength(1)
+      expect(outputs.filter((o) => o.pending_confirmation === true)).toHaveLength(1)
+      expect(sse.events.filter((e) => e.data.type === 'confirm')).toHaveLength(1)
+      expect(
+        db
+          .rows('tool_confirmations')
+          .map((r) => r.outcome)
+          .sort(),
+      ).toEqual(['executed', 'pending'])
+    },
+  )
+
+  scenario(
     'C32 decline settles the row and the turn runs as a plain one; a wrong, foreign or doubled id is refused before the stream',
     async () => {
       const { sessionId, id } = await pendingNote()

@@ -83,7 +83,10 @@ export function dbConfirmationStore(
 
     async consume(id: string, match: ConsumeMatch): Promise<ConsumeResult> {
       const now = clock().toISOString()
-      // The conditional update is the single-use guarantee: one row at most, once.
+      // The conditional update is the single-use guarantee: `confirmed_at` is set by the first
+      // consume and required null by every later one, so a second request, a doubled tool_use
+      // or a replay after a lost settle never runs the handler again (the pgTAP test runs this
+      // exact statement twice).
       const { data, error } = await table(ctx)
         .update({ confirmed_at: now })
         .eq('id', id)
@@ -92,6 +95,7 @@ export function dbConfirmationStore(
         .eq('tool', match.tool)
         .eq('input_hash', match.inputHash)
         .eq('outcome', 'pending')
+        .is('confirmed_at', null)
         .gt('expires_at', now)
         .select('id')
       if (error) {
@@ -101,13 +105,14 @@ export function dbConfirmationStore(
       if (data.length === 1) return 'ok'
       // Zero rows: say why, from the row as it is.
       const { data: row } = await table(ctx)
-        .select('outcome, tool, input_hash, expires_at')
+        .select('outcome, confirmed_at, tool, input_hash, expires_at')
         .eq('id', id)
         .eq('session_id', match.sessionId)
         .eq('user_id', match.userId)
         .maybeSingle()
       if (!row) return 'not_found'
-      if (row.outcome !== 'pending') return 'used'
+      // Consumed by an earlier request (settled or not yet): used, never twice.
+      if (row.confirmed_at !== null || row.outcome !== 'pending') return 'used'
       if (row.expires_at <= now) {
         await table(ctx)
           .update({ outcome: 'expired', settled_at: now })
@@ -143,6 +148,7 @@ export async function findPendingConfirmation(
     .eq('session_id', sessionId)
     .eq('user_id', ctx.userId)
     .eq('outcome', 'pending')
+    .is('confirmed_at', null)
     .gt('expires_at', now.toISOString())
     .abortSignal(signal)
     .maybeSingle()
@@ -171,6 +177,7 @@ export async function declineConfirmation(
     .eq('session_id', sessionId)
     .eq('user_id', ctx.userId)
     .eq('outcome', 'pending')
+    .is('confirmed_at', null)
     .select('id')
     .abortSignal(signal)
   if (error) {

@@ -50,13 +50,17 @@ export function inputHash(input: unknown): string {
 interface MemoryRow extends PendingConfirmation {
   id: string
   outcome: 'pending' | 'executed' | 'failed' | 'declined' | 'expired'
+  /** Set by the consume that won; the row is used from then on, settled or not. */
+  confirmedAt?: string
   errorCode?: string
 }
 
 /**
  * Confirmations kept in memory: the voice worker's store for one call (a call is one process and
- * its ids mean nothing outside it), and the fakes' store in the engine tests. `rows` is readable
- * so a test can assert what was issued and settled.
+ * its ids mean nothing outside it), and the fakes' store in the engine tests. The same contract
+ * as the API's DB-backed store (`confirmationStoreContract` in the test helpers runs both): a
+ * consume wins once, the row is used from then on. `rows` is readable so a test can assert what
+ * was issued and settled.
  */
 export class MemoryConfirmationStore implements ConfirmationStore {
   readonly rows: MemoryRow[] = []
@@ -74,13 +78,13 @@ export class MemoryConfirmationStore implements ConfirmationStore {
     const row = this.rows.find((r) => r.id === id)
     if (!row) return 'not_found'
     if (row.sessionId !== match.sessionId || row.userId !== match.userId) return 'not_found'
-    if (row.outcome !== 'pending') return 'used'
+    if (row.confirmedAt !== undefined || row.outcome !== 'pending') return 'used'
     if (Date.parse(row.expiresAt) <= this.now()) {
       row.outcome = 'expired'
       return 'expired'
     }
     if (row.tool !== match.tool || row.inputHash !== match.inputHash) return 'mismatch'
-    row.outcome = 'executed'
+    row.confirmedAt = new Date(this.now()).toISOString()
     return 'ok'
   }
 
@@ -95,7 +99,7 @@ export class MemoryConfirmationStore implements ConfirmationStore {
     const row = this.rows.find(
       (r) => r.id === id && r.sessionId === match.sessionId && r.userId === match.userId,
     )
-    if (!row || row.outcome !== 'pending') return false
+    if (!row || row.outcome !== 'pending' || row.confirmedAt !== undefined) return false
     row.outcome = 'declined'
     return true
   }
