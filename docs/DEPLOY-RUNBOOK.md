@@ -289,12 +289,134 @@ are forward-only and are never run from the VM. The PWA redeploys itself on ever
 Monthly: `apt-get update && apt-get -y upgrade && reboot` on the VM (the containers restart by
 themselves), and a look at Hetzner's **Graphs** for the server.
 
+## 11. The phone number: the Twilio trunk and the LiveKit dispatch (Part 11c)
+
+After step 1's number is bought and step 6's worker is running. Three pieces: a LiveKit inbound
+trunk that accepts calls for the number, a LiveKit dispatch rule that puts each call in its own
+room and dispatches the worker with the phone metadata, and a Twilio trunk that sends the number's
+calls to LiveKit's EU SIP endpoint. Nothing in the code changes; the worker takes the job
+(`docs/VOICE.md` → The phone channel).
+
+### 11.1 The LiveKit CLI, once
+
+On this machine (WSL):
+
+```sh
+curl -sSL https://get.livekit.io/cli | bash
+lk --version
+lk cloud auth
+```
+
+`lk cloud auth` opens the browser; approve the device for the project (EU). Then
+`lk project list` shows it with a `*`. Record the project's SIP URI: LiveKit Cloud dashboard →
+**Settings** → **Project** → **SIP URI**, of the form `sip:<subdomain>.sip.livekit.cloud`. The EU
+form you give Twilio is the same subdomain with `.eu.` in front of `sip`:
+`<subdomain>.eu.sip.livekit.cloud`.
+
+### 11.2 The inbound trunk
+
+Write `inbound-trunk.json` (not in the repository; a scratch folder), with the number from step 1:
+
+```json
+{
+  "trunk": {
+    "name": "twilio-hr",
+    "numbers": ["+385…"],
+    "krispEnabled": true
+  }
+}
+```
+
+```sh
+lk sip inbound create inbound-trunk.json
+lk sip inbound list
+```
+
+Expect a trunk id (`ST_…`). Record it. Tightening later: `allowedAddresses` with Twilio's
+published signalling IP ranges for the region limits who may send calls for the number; do it
+once the first calls work, from Twilio's current list, never from memory.
+
+### 11.3 The dispatch rule
+
+`dispatch-rule.json`, with the trunk id and the worker's `AGENT_NAME` from `/etc/va/voice.env`
+(`va-voice` unless you changed it):
+
+```json
+{
+  "dispatch_rule": {
+    "name": "phone",
+    "trunkIds": ["ST_…"],
+    "rule": { "dispatchRuleIndividual": { "roomPrefix": "phone-" } },
+    "roomConfig": {
+      "agents": [{ "agentName": "va-voice", "metadata": "{\"channel\":\"phone\"}" }]
+    }
+  }
+}
+```
+
+```sh
+lk sip dispatch create dispatch-rule.json
+lk sip dispatch list
+```
+
+Expect a rule id (`SDR_…`). The metadata is what the worker accepts a phone job by
+(`phoneJobOf`); `roomPrefix` makes every call its own room `phone-<id>`. Do not set
+`hidePhoneNumber`: the worker needs the caller ID attribute to resolve the caller.
+
+### 11.4 The Twilio trunk
+
+Twilio Console → **Elastic SIP Trunking** → **Trunks** → **Create new SIP Trunk**: name
+`livekit-hr`. In the trunk:
+
+1. **Origination** → **Add new Origination URI**: `sip:<subdomain>.eu.sip.livekit.cloud;edge=frankfurt`
+   (the `edge` parameter keeps the call in Twilio's Frankfurt edge; `dublin` is the other EU
+   choice). Priority 10, weight 10, enabled.
+2. **Numbers** → **Add a number** → the `+385` number from step 1. Expect it listed with
+   **Voice** on.
+3. **General**: leave **Secure Trunking** off for the first call (LiveKit accepts both; turn it on
+   afterwards and confirm a call still connects). **Call Recording** off. **Termination** is not
+   needed: nothing calls out.
+
+### 11.5 The first call
+
+With the worker running on the VM (`docker compose -f deploy/compose.prod.yml logs -f voice` in
+one terminal) and the pilot caller enrolled (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller),
+dial the number from the enrolled phone.
+
+Expect, in order: ringing for one to three seconds; the greeting with the PIN prompt; after the
+PIN and `#`, "Hvala. Izvolite."; an answer to a question; a clean hang-up from the phone. In the
+worker's log: `call accepted` with `"channel":"phone"`, `phone gate` with `"outcome":"admitted"`,
+`phone call started`, a `timing` line per turn, `call ending` with `participant_disconnected`.
+
+If the phone rings but nothing is heard: `lk sip dispatch list` shows the rule and
+`lk room list` shows a `phone-…` room while the call is up; no room means Twilio did not reach
+LiveKit (the URI, or the number not attached); a room with no agent means the metadata or the
+agent name does not match the worker's (`job refused` in the log says which).
+
+From a number that is not enrolled, expect "Ovaj broj nije prijavljen…" and the hang-up, and
+`phone refused` with `"reason":"unknown"` in the log, with a hash and no number.
+
+### 11.6 The live checklist through a car
+
+`docs/plan/11-phone-channel.md` §10: ten takes from the enrolled phone over a car's Bluetooth,
+engine running. For each note the stopwatch time from the end of your question to the first
+word of the answer, and whether the name in the question was understood. Then on the VM:
+
+```sh
+docker compose -f deploy/compose.prod.yml logs --since 30m voice | grep -E '"timing"|"phone gate"' | tail -30
+```
+
+Paste the stopwatch figures and those lines (ids and timings only, no transcript) back; they
+become the `transport: sip` rows in `docs/VOICE.md` → Measurements.
+
 ## Pasting the results back
 
 Reply in the chat with one line per step, without any key or token:
 
 ```
 ## 1 Twilio: bundle submitted <date> / approved <date> / number +385…
+## 11 trunk id, rule id, first call: greeting / PIN / answer / hang-up (ok or what happened), the log lines
+## 11.6 the ten takes: stopwatch seconds and the timing lines
 ## 3 VM: VM_IP, server type
 ## 2/6 API_HOST, /health response
 ## 6 compose ps output (three lines)
