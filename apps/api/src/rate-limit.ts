@@ -1,18 +1,17 @@
 // Rate limits, counted from the rows that already exist. Chat: user turns (`turn_kind = 'user'`)
 // in the user's chat sessions, 20 per 5 minutes and 200 per day; tool_result rows do not count.
-// Voice: 20 calls per user per day (voice sessions), 3 live calls globally (`voice_calls` rows
-// neither expired nor idle, the worker's own definition of a live row, the caller's own row
-// left out: a start replaces it). A failing count fails
-// OPEN and logs loudly: a flaky query must not lock users out. Known race: N concurrent requests can all pass (docs/backlog/api.md API-1).
-import { type AuthContext, log } from '@va/core'
-import { VOICE_CALL_IDLE_MS } from '@va/db'
+// Voice: the shared call budget in `@va/core` (`checkCallLimits`): 20 calls per user per day
+// across voice and phone sessions, 3 live calls globally. A failing count fails OPEN and logs
+// loudly: a flaky query must not lock users out. Known race: N concurrent requests can all pass
+// (docs/backlog/api.md API-1).
+import { type AuthContext, CALLS_PER_DAY, checkCallLimits, CONCURRENT_CALLS, log } from '@va/core'
 
 export const CHAT_BURST_WINDOW_MS = 5 * 60_000
 export const CHAT_BURST_LIMIT = 20
 export const CHAT_DAILY_WINDOW_MS = 24 * 60 * 60_000
 export const CHAT_DAILY_LIMIT = 200
-export const VOICE_CALLS_PER_DAY = 20
-export const VOICE_CONCURRENT_CALLS = 3
+export const VOICE_CALLS_PER_DAY = CALLS_PER_DAY
+export const VOICE_CONCURRENT_CALLS = CONCURRENT_CALLS
 
 export type RateLimitVerdict =
   | { ok: true }
@@ -61,42 +60,12 @@ export async function checkChatRateLimit(
   return { ok: true }
 }
 
-export async function checkVoiceRateLimits(
+/** The spoken channels' call budget, shared with the voice worker (`@va/core` → `checkCallLimits`):
+ * voice and phone sessions count together. */
+export function checkVoiceRateLimits(
   ctx: AuthContext,
   now: Date,
   requestId: string,
 ): Promise<RateLimitVerdict> {
-  const dayAgo = new Date(now.getTime() - CHAT_DAILY_WINDOW_MS).toISOString()
-  const [calls, live] = await Promise.all([
-    ctx.serviceClient
-      .from('ai_sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', ctx.userId)
-      .eq('channel', 'voice')
-      .gte('created_at', dayAgo),
-    ctx.serviceClient
-      .from('voice_calls')
-      .select('id', { count: 'exact', head: true })
-      // The caller's own live call is the one this start replaces, so it does not count; left
-      // out here rather than deleted first, so a refused start writes nothing (API-8, V-4).
-      .neq('user_id', ctx.userId)
-      .gt('expires_at', now.toISOString())
-      // The worker's idle window, shared with the sweep (`@va/db`): a quiet row counts as absent.
-      .gt('last_seen_at', new Date(now.getTime() - VOICE_CALL_IDLE_MS).toISOString()),
-  ])
-  if (calls.error || live.error) {
-    log('error', '[api]', 'voice rate limit count failed; allowing request', {
-      request_id: requestId,
-      user_id: ctx.userId,
-      code: calls.error?.code ?? live.error?.code ?? null,
-    })
-    return { ok: true }
-  }
-  if ((calls.count ?? 0) >= VOICE_CALLS_PER_DAY) {
-    return { ok: false, reason: 'calls_per_day', count: calls.count ?? 0, limit: VOICE_CALLS_PER_DAY }
-  }
-  if ((live.count ?? 0) >= VOICE_CONCURRENT_CALLS) {
-    return { ok: false, reason: 'concurrent_calls', count: live.count ?? 0, limit: VOICE_CONCURRENT_CALLS }
-  }
-  return { ok: true }
+  return checkCallLimits(ctx.serviceClient, ctx.userId, now, requestId, '[api]')
 }

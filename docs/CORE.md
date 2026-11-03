@@ -196,6 +196,12 @@ collapse to two. The Croatian strings are marked for native review (`CORE-1`).
 | env overrides             | `AI_CHAT_MODEL`, `AI_CHAT_EFFORT`   | `AI_VOICE_MODEL`, `AI_VOICE_EFFORT` | `AI_PHONE_MODEL`, `AI_PHONE_EFFORT` |
 | static prompt             | `CHAT_*`                            | `VOICE_*`                           | voice's bytes (one cache entry)     |
 
+**Call limits** (`call-limits.ts`, `checkCallLimits`): the spoken channels' budget, counted
+from rows: 20 `ai_sessions` in `voice` or `phone` per user per day, 3 live `voice_calls` rows
+globally (expired and idle rows and the caller's own row left out). The API's `POST
+/voice/sessions` and the voice worker's phone-call start both call it; a failed count allows the
+call and logs an error.
+
 `CHANNEL_DEFAULTS` is the table as data; `channelSettings(channel, env)` applies the overrides
 (an empty variable keeps the default, an invalid one throws naming the variable). Rate limits
 live in the API (Part 4), not here.

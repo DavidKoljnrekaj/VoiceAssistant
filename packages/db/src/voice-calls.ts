@@ -9,3 +9,11 @@
  * `supabase/migrations/20261028100200_voice_calls.sql` (the sweep's DELETE).
  */
 export const VOICE_CALL_IDLE_MS = 3 * 60_000
+
+/**
+ * The hard cap on a `voice_calls` row: `expires_at` never passes `created_at + 15 minutes`,
+ * the constraint `voice_calls_expires_within_cap` in
+ * `supabase/migrations/20261102100000_voice_calls_expiry_cap.sql`. The API and the voice worker
+ * compute `expires_at` with it.
+ */
+export const VOICE_CALL_CAP_MS = 15 * 60_000

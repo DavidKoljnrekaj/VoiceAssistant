@@ -18,7 +18,7 @@ apps/api/src/
 ├── env.ts              zod env (see env.example)
 ├── errors.ts           the flat envelope and the status table
 ├── deadline.ts         PRE_STREAM_TIMEOUT_MS (10 s over auth and the /chat pipeline) and withDeadline()
-├── rate-limit.ts       chat burst/daily, voice calls per day and concurrent calls
+├── rate-limit.ts       chat burst/daily; voice calls per day and concurrent calls through @va/core's checkCallLimits (voice and phone sessions count together)
 ├── middleware/         request-id, cors, body-limit (64 KB), auth (bearer → authenticateToken)
 ├── sse/                SSEWriter (framing, 15 s keepalive, write-failure detection), SseEventSink
 ├── chat/               prepare (pre-stream pipeline), stream (worker and abort sources), store, route-context
