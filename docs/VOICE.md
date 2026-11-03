@@ -388,10 +388,12 @@ hang-up deletes the room (`ctx.deleteRoom()`, which ends the trunk's leg) after 
 also revokes the caller's session once the credential row is gone. A refused caller hears the
 line, then the room is deleted and the job shuts down; no session row exists for a refusal.
 
-What 11c configures at LiveKit and Twilio, none of it in code: an inbound trunk on the EU SIP
-endpoint restricted to the Twilio trunk's IPs and the bought number; a dispatch rule of type
-individual (room `phone-<call id>`), `agentName` = `AGENT_NAME`, metadata `{"channel":"phone"}`;
-Krisp on the trunk if the provider allows it; recording off at the project.
+What 11c configures at LiveKit and Twilio, none of it in code, is written step by step in
+`docs/DEPLOY-RUNBOOK.md` → 11: an inbound trunk for the bought number (Krisp on), a dispatch rule
+of type individual (room `phone-<id>`, `agentName` = `AGENT_NAME`, metadata
+`{"channel":"phone"}`), and Twilio's origination URI at the EU SIP endpoint; then the first call
+and the ten takes through a car, whose figures land in the measurements table below as
+`transport: sip` rows.
 
 ## Hosting
 
