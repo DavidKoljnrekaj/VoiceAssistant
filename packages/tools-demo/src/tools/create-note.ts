@@ -13,7 +13,8 @@ export const createNote = defineTool({
     'Attach a short note, written by the user, to a demo catalogue item. Call it only when the user ' +
     'explicitly asks to note or remember something about an item they have named; never to store your ' +
     'own summaries. Needs the item id from search_items. The user is asked to confirm before the note ' +
-    'is written; the first call returns what would be written. Returns the id of the new note.',
+    'is written: the first call returns what would be written; once the user has confirmed, call it ' +
+    'again with exactly the same item_id and text. Returns the id of the new note.',
   input: z.object({
     item_id: z.uuid().describe('The item the note is about, from search_items.'),
     text: z.string().trim().min(1).max(2000).describe('The note, in the user’s words.'),
@@ -22,11 +23,12 @@ export const createNote = defineTool({
   readOnly: false,
   confirmation: 'required',
   /** <!-- needs native review --> */
-  async preview(input, ctx) {
+  async preview(input, ctx, _extras, signal) {
     const { data, error } = await demoClient(ctx)
       .from('demo_items')
       .select('name')
       .eq('id', input.item_id)
+      .abortSignal(signal)
       .maybeSingle()
     if (error) throw new Error(`create_note preview failed: ${error.code}`)
     if (!data) throw new Error('item not found')

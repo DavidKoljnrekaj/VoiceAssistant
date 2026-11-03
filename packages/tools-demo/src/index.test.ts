@@ -289,16 +289,59 @@ describe('@va/tools-demo', () => {
     },
   )
 
+  scenario(
+    'D15 through the loop: a text changed after the user confirmed previews again instead of writing the changed note',
+    async () => {
+      anthropic.script(
+        callTools(toolUse('create_note', { item_id: ITEMS.desk.id, text: 'Naručiti dva.' })),
+        answer('Želite li?'),
+      )
+      const ctx = await authAs('member')
+      const store = new MemoryConfirmationStore()
+      const first = await runChat(ctx, 'Zabilježi: naručiti dva', {
+        packs: [demoPack],
+        allowlist: ALLOWLIST,
+        confirmations: store,
+      })
+      const id = first.sink.confirms[0]!.id
+      anthropic.script(
+        callTools(toolUse('create_note', { item_id: ITEMS.desk.id, text: 'Naručiti tri.' })),
+        answer('Želite li ovo?'),
+      )
+      const changed = await runChat(ctx, 'Da.', {
+        packs: [demoPack],
+        allowlist: ALLOWLIST,
+        confirmations: store,
+        sessionId: first.sessionId,
+        parentId: first.rows().at(-1)!.id as string,
+        extras: { confirmation: { id } },
+      })
+      expect(db.rows('demo_notes')).toHaveLength(0)
+      expect(changed.sink.toolResults[0]!.output).toMatchObject({
+        pending_confirmation: true,
+        summary: 'Zabilježit ću uz artikl "Radni stol": "Naručiti tri."',
+      })
+      expect(changed.sink.confirms).toHaveLength(1)
+      expect(changed.sink.confirms[0]!.id).not.toBe(id)
+      expect(store.rows.map((r) => r.outcome)).toEqual(['pending', 'pending'])
+    },
+  )
+
   it('D14: create_note is under the write protocol; its preview reads the item as the user and refuses an unknown one', async () => {
     reset()
     const ctx = await authAs('member')
     expect(createNote.confirmation).toBe('required')
-    expect(await createNote.preview!({ item_id: ITEMS.lamp.id, text: 'x' }, ctx, extras)).toBe(
+    expect(await createNote.preview!({ item_id: ITEMS.lamp.id, text: 'x' }, ctx, extras, signal)).toBe(
       'Zabilježit ću uz artikl "Stolna lampa": "x"',
     )
     expect(clientOf(db.requestsTo('demo_items', 'GET').at(-1)!)).toBe('user')
     await expect(
-      createNote.preview!({ item_id: '00000000-0000-4000-8000-000000000999', text: 'x' }, ctx, extras),
+      createNote.preview!(
+        { item_id: '00000000-0000-4000-8000-000000000999', text: 'x' },
+        ctx,
+        extras,
+        signal,
+      ),
     ).rejects.toThrow('item not found')
   })
 

@@ -33,7 +33,7 @@ export interface ToolDefinition<I> {
   confirmation?: 'required'
   /** One Croatian sentence saying what `handler(input)` would do. Reads only; its throw is an
    * error result. Required with `confirmation`. <!-- needs native review --> per pack. */
-  preview?(input: I, ctx: AuthContext, extras: ToolHandlerExtras): Promise<string>
+  preview?(input: I, ctx: AuthContext, extras: ToolHandlerExtras, signal: AbortSignal): Promise<string>
   /** The result the model reads, as JSON. `undefined` is persisted as `null`; a value JSON
    * cannot hold (a BigInt, a cycle) becomes an `is_error` result at dispatch. */
   handler(input: I, ctx: AuthContext, extras: ToolHandlerExtras, signal: AbortSignal): Promise<unknown>

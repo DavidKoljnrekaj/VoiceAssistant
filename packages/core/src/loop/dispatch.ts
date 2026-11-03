@@ -106,7 +106,7 @@ export async function dispatchTool(
       try {
         output = await tool.handler(parsed.data, ctx, extras, signal)
       } catch (err) {
-        await dc.confirmations.settle(confirmed.id, 'failed', err instanceof Error ? err.name : typeof err)
+        await dc.confirmations.settle(confirmed.id, 'failed', errorReason(err))
         throw err
       }
       const failed = isErrorEnvelope(output)
@@ -120,8 +120,10 @@ export async function dispatchTool(
     }
     log('warn', logTag, 'confirmation not consumed', { ...ids, reason: verdict })
   }
-  // `preview` is required with `confirmation` (defineTool asserts it).
-  const summary = await tool.preview!(parsed.data, ctx, extras)
+  // `preview` is required with `confirmation` (defineTool asserts it). A preview the loop gave
+  // up on (abort, timeout) issues nothing: the user was never asked.
+  const summary = await tool.preview!(parsed.data, ctx, extras, signal)
+  if (signal.aborted) return { kind: 'output', output: { error: 'cancelled before the preview completed' } }
   const expiresAt = new Date((dc.now ?? Date.now)() + CONFIRMATION_TTL_MS).toISOString()
   const issued = await dc.confirmations.issue({
     sessionId: dc.sessionId,

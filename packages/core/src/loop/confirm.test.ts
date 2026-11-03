@@ -183,7 +183,7 @@ describe('the write protocol', () => {
       const store = new MemoryConfirmationStore()
       const ctx = await authAs('member')
       for (const [text, code, isError] of [
-        ['boom', 'Error', true],
+        ['boom', 'Error: kaboom', true],
         ['envelope', 'error_envelope', true],
       ] as const) {
         anthropic.script(callTools(toolUse('confirmed_write', { text })), answer('Želite li?'))
