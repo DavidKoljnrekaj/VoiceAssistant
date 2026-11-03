@@ -83,11 +83,13 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 
 ## Data
 
-Six tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
+Seven tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
 picks the presentation), `ai_sessions` (one conversation per row; `channel` already allows
 chat, voice, whatsapp and phone), `ai_messages` (one Anthropic message per row, a tree through
 `parent_id`; `turn_kind` separates real user turns from tool results) and `voice_calls` (the
-caller's JWT handed to the voice worker by an opaque token, service role only), plus the example
+caller's JWT handed to the voice worker by an opaque token, service role only),
+`voice_caller_identities` (the phone channel's enrolled numbers with their keypad PIN hash and
+lockout, service role only, Part 11; `ai_sessions.caller_identity_id` points at it), plus the example
 pack's `demo_items` (a company-wide catalogue, read by every signed-in user) and `demo_notes`
 (owner-scoped). Signed-in users
 read their own sessions and messages; every write goes through the API with the service role.
