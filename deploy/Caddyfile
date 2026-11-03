@@ -1,0 +1,8 @@
+# Caddy in front of the api (deploy/compose.prod.yml). The site address comes from API_HOST in
+# deploy/.env; Caddy obtains and renews its certificate automatically. reverse_proxy turns off
+# response buffering for text/event-stream by itself, so the chat stream's first frame is not
+# held back (docs/OPS.md → Runbook, "the stream opens but nothing arrives").
+{$API_HOST} {
+	encode zstd gzip
+	reverse_proxy api:3000
+}

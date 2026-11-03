@@ -19,7 +19,9 @@ three sets of checks) and says how to paste the results back.
       anything that did not match back into the matching item.
 
 - [ ] REL-9 · Step 0 of `docs/plan/10-integration-roadmap.md`: the first deploy on the hosts of
-      decision 0013. (a) Hetzner VM (Falkenstein, Docker, Caddy): the api and voice images from a
+      decision 0013, step by step in `docs/DEPLOY-RUNBOOK.md` (`deploy/compose.prod.yml`,
+      `deploy/Caddyfile`, `vercel.json` added 2026-11-03; `OPS-1` deferred, the images still run
+      tsx). (a) Hetzner VM (Falkenstein, Docker, Caddy): the api and voice images from a
       tagged commit, secrets from the matrix in the host's env store, `CORS_ORIGINS` = the Vercel
       origin, `VOICE_AGENT_NAME` = `AGENT_NAME`; `OPS-1` (built `dist`, which also removes the
       worker's 6 s import, `VOICE-4`) ships with it. (b) Vercel project for `apps/web` with the
