@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-10 (next free)
+Ids: REL-11 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -31,6 +31,14 @@ three sets of checks) and says how to paste the results back.
       of `docs/VOICE.md` with the figures recorded as the hosted baseline. (f) DPAs with Hetzner
       and Vercel noted in `OPS-5`. Done when a call from the PWA reaches the hosted worker with
       every developer machine off.
+
+- [ ] REL-10 · Part 11a: apply `20261103120000_phone_channel.sql` to the dev project (after
+      `REL-1`, by the operator: `supabase db push` as in `docs/RELEASE-RUNBOOK.md`). Check after
+      applying: as the service role `select count(*) from voice_caller_identities` is 0 and
+      `select caller_identity_id from ai_sessions limit 1` works; as a signed-in user the first
+      query is refused with `42501`. Then `/db-types`, commit `packages/db/src/database.ts`, and
+      drop the hand-written types in `apps/voice/src/phone/db.ts` for the generated ones. Then
+      enrol the pilot caller (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller).
 
 - [x] REL-1 · Part 2: apply `20261028100000_users.sql`, `20261028100100_ai_sessions_and_messages.sql` and
       `20261028100200_voice_calls.sql` to the dev project `kdplqbldohrzsewhckgl` (`supabase link` then

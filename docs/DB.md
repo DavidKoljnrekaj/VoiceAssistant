@@ -108,6 +108,21 @@ enabled (the migration skips the schedule with a notice otherwise; re-run its la
 enabling pg_cron). The guard checks `pg_extension`, not `to_regproc('cron.schedule')`: that name
 is overloaded, so `to_regproc` is NULL even with pg_cron installed.
 
+### `voice_caller_identities` (`20261103120000_phone_channel.sql`, Part 11)
+
+The phone channel's enrolled numbers (decision 0014): `id`, `user_id` (cascade; a user may have
+several numbers), `phone_e164` (E.164 enforced; one active row per number through a partial
+unique index), `label`, `pin_hash` (scrypt, written by `pnpm --filter @va/voice pin-hash`; null
+means no PIN, which the worker refuses for every role `PHONE_PIN_ROLES` names), `pin_failed_attempts`
+(never negative), `pin_locked_until`, `active` (false keeps the row and frees the number),
+`created_at`, `created_by` (null for the runbook's SQL). Service role only, like `voice_calls`:
+a signed-in user must not learn which numbers are enrolled or their lock state; enrolment is an
+admin step in `docs/RELEASE-RUNBOOK.md` → Enrolling a caller until the companion app adds narrow
+policies. `ai_sessions.caller_identity_id` (same migration) points a phone session at the
+identity it came from and goes null when the identity is deleted; the number itself never sits
+next to a transcript. The worker types the table by hand (`apps/voice/src/phone/db.ts`) until
+the migration is on the dev project and `/db-types` runs (`REL-10`).
+
 ### `demo_items`, `demo_notes` (the example tool pack, `20261029100000_demo_tables.sql`)
 
 `demo_items` is the catalogue `search_items` and `get_item` read: `id`, `name`, `category`,
@@ -158,14 +173,15 @@ pgTAP case.
 
 ## RLS posture
 
-| Table         | anon    | authenticated                                         | service_role |
-| ------------- | ------- | ----------------------------------------------------- | ------------ |
-| `users`       | nothing | SELECT own row; UPDATE own `display_name`, `language` | everything   |
-| `ai_sessions` | nothing | SELECT own                                            | everything   |
-| `ai_messages` | nothing | SELECT rows of own sessions                           | everything   |
-| `voice_calls` | nothing | nothing                                               | everything   |
-| `demo_items`  | nothing | SELECT every row                                      | everything   |
-| `demo_notes`  | nothing | SELECT own; INSERT as oneself                         | everything   |
+| Table                     | anon    | authenticated                                         | service_role |
+| ------------------------- | ------- | ----------------------------------------------------- | ------------ |
+| `users`                   | nothing | SELECT own row; UPDATE own `display_name`, `language` | everything   |
+| `ai_sessions`             | nothing | SELECT own                                            | everything   |
+| `ai_messages`             | nothing | SELECT rows of own sessions                           | everything   |
+| `voice_calls`             | nothing | nothing                                               | everything   |
+| `voice_caller_identities` | nothing | nothing                                               | everything   |
+| `demo_items`              | nothing | SELECT every row                                      | everything   |
+| `demo_notes`              | nothing | SELECT own; INSERT as oneself                         | everything   |
 
 The grants say the same as the policies: `REVOKE ALL FROM anon, authenticated` first, then
 exactly the grants above. Role changes are an admin operation through the service role; no column
@@ -188,7 +204,7 @@ import type { Database, Tables } from '@va/db'
 - `getDbEnv()` parses `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` from
   `process.env` once with zod and throws on first use if one is missing; the error names the
   variable, never a value. `parseDbEnv(map)` is the pure form; `resetDbEnvCache()` is for tests.
-- `createUserClient(jwt)` uses the anon key plus `Authorization: Bearer <jwt>`, so RLS applies.
+- `createUserClient(jwt)`, `createAnonClient()` (anon key, no user: the phone channel verifies a magic link through it, Part 11) uses the anon key plus `Authorization: Bearer <jwt>`, so RLS applies.
   Tools read through it (`ctx.userClient`).
 - `createServiceClient()` uses the service role key. Persistence only, always with an explicit
   user or session filter (`ctx.serviceClient`).
@@ -204,14 +220,15 @@ import type { Database, Tables } from '@va/db'
 
 ## Tests
 
-| File                       | Checks                                                                                                                                                                                                                                                                                                            |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `00_rls_enabled`           | every table in `public` has RLS on                                                                                                                                                                                                                                                                                |
-| `users_self_access`        | profile created on sign-up, and kept as it is when the trigger function fires again (`ON CONFLICT`); a user sees only their row, changes `language` and `display_name`, cannot change `role` or `email`; a valid JWT without a profile gets null helpers and no rows; anon nothing, and no EXECUTE on the helpers |
-| `ai_sessions_owner_scoped` | own sessions and messages only; no insert, update or delete as authenticated; service role writes; message insert bumps the session; delete cascades; check constraints                                                                                                                                           |
-| `ai_session_history`       | the 7-row chain with a sibling branch: whole branch, sibling branch, `p_max_rows`, summary boundary, unknown leaf; no ownership check (another user's claims still get the branch); EXECUTE only for service_role                                                                                                 |
-| `voice_calls_service_only` | nothing for authenticated or anon; the service role runs the call lifecycle; `expires_at` never past 15 minutes from `created_at`, on insert or refresh; one call per session; cascade; the sweep job where pg_cron exists                                                                                        |
-| `demo_tables`              | a member reads the catalogue and writes only their own notes, never an item; anon nothing; the service role seeds; deleting an item deletes its notes                                                                                                                                                             |
+| File                       | Checks                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `00_rls_enabled`           | every table in `public` has RLS on                                                                                                                                                                                                                                                                                                                           |
+| `users_self_access`        | profile created on sign-up, and kept as it is when the trigger function fires again (`ON CONFLICT`); a user sees only their row, changes `language` and `display_name`, cannot change `role` or `email`; a valid JWT without a profile gets null helpers and no rows; anon nothing, and no EXECUTE on the helpers                                            |
+| `ai_sessions_owner_scoped` | own sessions and messages only; no insert, update or delete as authenticated; service role writes; message insert bumps the session; delete cascades; check constraints                                                                                                                                                                                      |
+| `ai_session_history`       | the 7-row chain with a sibling branch: whole branch, sibling branch, `p_max_rows`, summary boundary, unknown leaf; no ownership check (another user's claims still get the branch); EXECUTE only for service_role                                                                                                                                            |
+| `voice_calls_service_only` | nothing for authenticated or anon; the service role runs the call lifecycle; `expires_at` never past 15 minutes from `created_at`, on insert or refresh; one call per session; cascade; the sweep job where pg_cron exists                                                                                                                                   |
+| `voice_caller_identities`  | nothing for authenticated or anon, the owner still reads `caller_identity_id` on their own session; the service role resolves a number and records failures and the lock; E.164 and a non-negative counter enforced; one active row per number, an inactive duplicate allowed; deleting the identity nulls the session's pointer, deleting the user cascades |
+| `demo_tables`              | a member reads the catalogue and writes only their own notes, never an item; anon nothing; the service role seeds; deleting an item deletes its notes                                                                                                                                                                                                        |
 
 Each file is one transaction that rolls back. See `docs/TESTING.md` → Database tests for how to
 act as a role. One local-image quirk to know: calling a function without EXECUTE as `anon` or
