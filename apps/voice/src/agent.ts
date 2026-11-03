@@ -1,5 +1,5 @@
-// The worker: takes a dispatched call, resolves the caller from the opaque token in the job
-// metadata, listens with Soniox, answers through the shared engine in-process (the
+// The worker: takes a dispatched call, resolves the caller (the in-app call: from the opaque
+// token in the job metadata; the phone: through the gate in `phone/admit.ts`), listens with Soniox, answers through the shared engine in-process (the
 // `AssistantAgent`'s `llmNode`), speaks with ElevenLabs, handles barge-in, writes the turn's
 // rows after each answer and deletes the call's credential on hang-up. Ported from Landmark's
 // `tools/voice-prototype/src/agent.ts` with its `voice-llm` function folded in; the stub LLM
@@ -24,14 +24,15 @@ import Anthropic from '@anthropic-ai/sdk'
 import { channelSettings, errorReason, log, MESSAGES_HR } from '@va/core'
 import { createServiceClient } from '@va/db'
 
-import { AssistantAgent } from './assistant-llm.js'
+import { AssistantAgent, GateAgent } from './assistant-llm.js'
 import { CallIdentity } from './call.js'
 import { LOG_TAG, type VoiceDeps } from './config.js'
 import { parseVoiceEnv } from './env.js'
 import { GREETING_HR } from './greeting.js'
-import { acceptDispatchedJob, callTokenOf } from './job.js'
+import { acceptDispatchedJob, callTokenOf, phoneJobOf } from './job.js'
 import { HangUp, NO_SPEECH, participantLeft, sessionErrorAction } from './lifecycle.js'
 import { createMetrics, createTurnMetrics } from './metrics.js'
+import { admitPhoneCaller } from './phone/admit.js'
 import { loadHints } from './providers/hints.js'
 import { createStt } from './providers/stt.js'
 import { createTts } from './providers/tts.js'
@@ -54,11 +55,21 @@ const deps: VoiceDeps = {
     ...(env.ANTHROPIC_BASE_URL ? { baseURL: env.ANTHROPIC_BASE_URL } : {}),
   }),
   registry: createRegistry(),
+  channel: 'voice',
   settings: channelSettings('voice', {
     AI_VOICE_MODEL: env.AI_VOICE_MODEL,
     AI_VOICE_EFFORT: env.AI_VOICE_EFFORT,
   }),
   clock: () => new Date(),
+}
+/** The phone channel: voice's prompt, allowlist and settings, with its own overrides. */
+const phoneDeps: VoiceDeps = {
+  ...deps,
+  channel: 'phone',
+  settings: channelSettings('phone', {
+    AI_PHONE_MODEL: env.AI_PHONE_MODEL,
+    AI_PHONE_EFFORT: env.AI_PHONE_EFFORT,
+  }),
 }
 const TUNING = {
   endpoint_delay_ms: env.ENDPOINT_DELAY_MS,
@@ -85,15 +96,56 @@ export default defineAgent<UserData>({
     const room = ctx.job.room?.name ?? ''
     const ids: Record<string, unknown> = { job_id: ctx.job.id, room }
     const callToken = callTokenOf(ctx.job.metadata)
-    if (!callToken) {
-      log('error', LOG_TAG, 'job refused', { ...ids, reason: 'no call token' })
+    const phone = phoneJobOf(ctx.job.metadata)
+    if (!callToken && !phone) {
+      log('error', LOG_TAG, 'job refused', { ...ids, reason: 'no call token, not a phone job' })
       throw new Error('job without a call token')
     }
+    const callDeps = phone ? phoneDeps : deps
+    ids.channel = callDeps.channel
     const service = createServiceClient()
-    const identity = await CallIdentity.resolve(service, callToken, room, { cacheMs: env.IDENTITY_CACHE_MS })
-    if (!identity) {
-      log('error', LOG_TAG, 'job refused', { ...ids, reason: 'no live call for the token' })
-      throw new Error('no live call for the token')
+    const session = new voice.AgentSession({
+      vad: vadFor(env, ctx.proc.userData.vad),
+      stt: createStt(env, loadHints()),
+      tts: createTts(env),
+      turnHandling: turnHandlingOptions(env),
+    })
+
+    // Who is on the line. In-app: the API's row for the token. Phone: the gate (caller ID, PIN),
+    // then the rows the worker writes itself; the pipeline runs meanwhile with an agent that
+    // answers nothing, so the fixed lines can be spoken and the keypad heard.
+    let identity: CallIdentity
+    let callerParticipantIdentity: string
+    let revoke: (() => Promise<void>) | null = null
+    if (phone) {
+      await session.start({
+        agent: new GateAgent(callDeps.settings.model),
+        room: ctx.room,
+        ...startOptions(env),
+      })
+      await ctx.connect()
+      const admitted = await admitPhoneCaller(ctx, session, service, env, ids)
+      if (!admitted) {
+        log('info', LOG_TAG, 'call refused', ids)
+        await ctx.deleteRoom().catch((err: unknown) => {
+          log('warn', LOG_TAG, 'room delete failed', { ...ids, reason: errorReason(err) })
+        })
+        ctx.shutdown('refused')
+        return
+      }
+      identity = admitted.identity
+      callerParticipantIdentity = admitted.callerParticipantIdentity
+      revoke = admitted.revoke
+    } else {
+      const resolved = await CallIdentity.resolve(service, callToken!, room, {
+        cacheMs: env.IDENTITY_CACHE_MS,
+      })
+      if (!resolved) {
+        log('error', LOG_TAG, 'job refused', { ...ids, reason: 'no live call for the token' })
+        throw new Error('no live call for the token')
+      }
+      identity = resolved
+      callerParticipantIdentity = identity.userId
     }
     ids.session_id = identity.sessionId
     ids.user_id = identity.userId
@@ -103,7 +155,7 @@ export default defineAgent<UserData>({
     const t0 = Date.now()
     void identity
       .ctx()
-      .then((auth) => warm(deps, auth))
+      .then((auth) => warm(callDeps, auth))
       .then((r) => metrics.write('warm.jsonl', { room, ...r }))
       .catch((err: unknown) => {
         log('warn', LOG_TAG, 'warm failed', {
@@ -132,23 +184,29 @@ export default defineAgent<UserData>({
           reason: errorReason(err),
         })
       }
+      // The phone call's session dies with the call (decision 0014). Best effort after the row.
+      if (ended && revoke) {
+        const r = revoke
+        revoke = null
+        await r().catch((err: unknown) => {
+          log('error', LOG_TAG, 'session revoke failed', { ...ids, reason: errorReason(err) })
+        })
+      }
     }
     // The credential goes when the caller leaves, when the room closes, on the call's cap and on
     // shutdown; the API's `/end` and the sweep are the other paths. All idempotent. A hang-up
     // that follows a spoken line (the goodbye, the error fallback) waits for that line's playout.
+    // A phone caller is hung up on by deleting the room (the trunk ends the leg); the in-app
+    // caller's browser leaves by itself when the job shuts down.
     const hangUp = new HangUp((reason) => {
-      void endCall(reason).then(() => ctx.shutdown(reason))
+      void endCall(reason)
+        .then(() => (phone ? ctx.deleteRoom().catch(() => {}) : undefined))
+        .then(() => ctx.shutdown(reason))
     })
     // The goodbye travels through the reply's own stream (`llmNode`), so the speech to wait for
     // is the reply LiveKit created for the turn that is running when `onEnded` fires.
-    const call = new CallSession(deps, identity, {
+    const call = new CallSession(callDeps, identity, {
       onEnded: (reason) => hangUp.afterSpeech(reason, reply?.waitForPlayout() ?? NO_SPEECH),
-    })
-    const session = new voice.AgentSession({
-      vad: vadFor(env, ctx.proc.userData.vad),
-      stt: createStt(env, loadHints()),
-      tts: createTts(env),
-      turnHandling: turnHandlingOptions(env),
     })
     let reply: voice.SpeechHandle | null = null
     session.on(voice.AgentSessionEventTypes.SpeechCreated, (ev) => {
@@ -221,7 +279,7 @@ export default defineAgent<UserData>({
     // Only the caller's own disconnect ends the call: the API's join token names the caller by
     // the user id, and anyone else in the room (a recorder, an egress) leaving is logged.
     ctx.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-      if (participantLeft(participant.identity, identity.userId) === 'hang_up') {
+      if (participantLeft(participant.identity, callerParticipantIdentity) === 'hang_up') {
         hangUp.now('participant_disconnected')
       } else {
         log('info', LOG_TAG, 'other participant left', { ...ids, identity_len: participant.identity.length })
@@ -232,11 +290,15 @@ export default defineAgent<UserData>({
     })
     ctx.addShutdownCallback(() => endCall('shutdown'))
 
-    await session.start({
-      agent: new AssistantAgent(call, deps.settings.model),
-      room: ctx.room,
-      ...startOptions(env),
-    })
+    const agent = new AssistantAgent(call, callDeps.settings.model)
+    if (phone) {
+      // The pipeline is up and the gate has said its last line: the engine takes over the
+      // line; the gate's "Izvolite" was the greeting.
+      session.updateAgent(agent)
+      log('info', LOG_TAG, 'connected', ids)
+      return
+    }
+    await session.start({ agent, room: ctx.room, ...startOptions(env) })
     await ctx.connect()
     log('info', LOG_TAG, 'connected', ids)
     session.say(GREETING_HR)

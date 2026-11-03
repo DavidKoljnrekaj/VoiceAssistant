@@ -66,5 +66,7 @@ The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did n
 
 - [ ] Part 11 — the phone channel. 11a done 2026-11-03 (migration and pgTAP, `phone` in core,
       `src/phone/` in the worker with W20–W27, decision 0014; `REL-10` applies the migration);
-      11b (worker SIP path) and 11c (the trunk and the live checklist through a car) open. Hosts
-      decided 2026-11-03 (decision 0013); 11c waits for the deploy (`REL-9`, roadmap step 0).
+      11b done 2026-11-03 (`phone/gate.ts`, `start.ts`, `keys.ts`, `sip.ts`, `admit.ts`, the
+      phone branch of `agent.ts`, call limits in core, W28–W32); 11c (the trunk, the dispatch
+      rule and the live checklist through a car) open. Hosts decided 2026-11-03 (decision 0013);
+      11c waits for the deploy (`REL-9`, roadmap step 0) and the Twilio number.

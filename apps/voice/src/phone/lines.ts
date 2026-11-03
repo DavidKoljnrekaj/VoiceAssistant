@@ -6,6 +6,8 @@ export const PHONE_LINES_HR = {
   greetingPin: 'Dobar dan, ovdje asistent tvrtke. Unesite PIN i pritisnite ljestve.',
   /** The greeting of a call that needs no PIN. */
   greeting: 'Dobar dan, ovdje asistent tvrtke. Izvolite.',
+  /** The PIN was right. */
+  admitted: 'Hvala. Izvolite.',
   /** After a wrong PIN, with tries left. */
   pinWrong: 'PIN nije točan. Pokušajte ponovno.',
   /** The PIN prompt timed out once; one more chance. */

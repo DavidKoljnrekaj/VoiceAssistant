@@ -1,10 +1,30 @@
 # Backlog — voice
 
-Ids: VOICE-16 (next free)
+Ids: VOICE-18 (next free)
 
 The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
 ## Open
+
+### VOICE-16 · Low · Unknown numbers have no attempt counter, so a scan of the phone number is invisible
+
+- **Check:** By design (Part 11 §9 lists it; 11b built the per-identity lock only)
+- **Where:** `apps/voice/src/phone/caller.ts` logs `phone refused` with a `number_hash`; nothing counts them
+- **What happens:** a caller trying many numbers against the line is refused every time and
+  nobody is told; each attempt costs a GoTrue-free lookup and a spoken line
+- **Fix direction:** count `phone refused` per `number_hash` in a window (a small table or an
+  in-memory counter per worker) and alert past N an hour; the alert hook `pin locked` uses
+
+### VOICE-17 · Low · The phone branch of the worker entry is untested (extends VOICE-15)
+
+- **Check:** Confirmed (11b, 2026-11-03)
+- **Where:** `apps/voice/src/agent.ts` (the `phone` branch: `GateAgent` start, `updateAgent`,
+  the room delete on refusal and hang-up) and `apps/voice/src/phone/admit.ts` (the SIP
+  participant, the DTMF events, the gate's `say` through the session)
+- **What happens:** the decisions are tested through `gate.ts`, `start.ts`, `keys.ts` and
+  `sip.ts` (W28–W32); the LiveKit wiring around them is exercised only by the live checklist (11c)
+- **Fix direction:** the same seam `VOICE-15` asks for (handlers as named functions); a fake
+  `JobContext` and `AgentSession` for `admit.ts` would cover the say/DTMF plumbing
 
 ### VOICE-2 · Low · Croatian voice text in the worker has not had a native review
 

@@ -28,6 +28,17 @@ type UserRow = {
   role: string
 }
 
+type SessionRow = {
+  id: string
+  user_id: string
+  channel: string
+  external_id: string | null
+  title: string | null
+  caller_identity_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 type Table<R, Required extends keyof R> = {
   Row: R
   Insert: Pick<R, Required> & Partial<R>
@@ -56,6 +67,8 @@ export type PhoneDatabase = {
         ]
       }
       users: Table<UserRow, 'auth_user_id'> & { Relationships: [] }
+      /** Only for the insert with `caller_identity_id`, which the generated types lack until `REL-10`. */
+      ai_sessions: Table<SessionRow, 'user_id'> & { Relationships: [] }
     }
     Views: { [_ in never]: never }
     Functions: { [_ in never]: never }

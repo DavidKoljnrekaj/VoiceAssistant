@@ -1,5 +1,6 @@
-// Which jobs the worker takes: only those the API dispatched with a call token in the metadata.
-// There is no stub path in the worker; the stub LLM lives in `scripts/` for tuning runs.
+// Which jobs the worker takes: those the API dispatched with a call token in the metadata (the
+// in-app call), and those a SIP dispatch rule marked `{ "channel": "phone" }` (Part 11). There
+// is no stub path in the worker; the stub LLM lives in `scripts/` for tuning runs.
 import { log } from '@va/core'
 
 import { LOG_TAG } from './config.js'
@@ -14,6 +15,15 @@ export function callTokenOf(metadata: string | undefined): string | null {
   }
 }
 
+/** A phone job: the SIP dispatch rule's static metadata names the channel. */
+export function phoneJobOf(metadata: string | undefined): boolean {
+  try {
+    return (JSON.parse(metadata || '{}') as { channel?: unknown }).channel === 'phone'
+  } catch {
+    return false
+  }
+}
+
 /** The part of LiveKit's `JobRequest` the worker uses. */
 export interface JobRequestLike {
   id: string
@@ -25,8 +35,8 @@ export interface JobRequestLike {
 /** `ServerOptions.requestFunc`: accepts a dispatched call, refuses anything else. */
 export async function acceptDispatchedJob(req: JobRequestLike): Promise<void> {
   const room = req.job.room?.name ?? ''
-  if (!callTokenOf(req.job.metadata)) {
-    log('warn', LOG_TAG, 'job refused', { job_id: req.id, room, reason: 'no call token' })
+  if (!callTokenOf(req.job.metadata) && !phoneJobOf(req.job.metadata)) {
+    log('warn', LOG_TAG, 'job refused', { job_id: req.id, room, reason: 'no call token, not a phone job' })
     await req.reject()
     return
   }

@@ -168,7 +168,7 @@ export async function runVoiceTurn(input: VoiceTurnInput): Promise<VoiceTurnResu
     await runOrchestrationLoop(
       ctx,
       config,
-      { sessionId, messages, lastInsertedId: userRowId, extras: { requestId, channel: 'voice' } },
+      { sessionId, messages, lastInsertedId: userRowId, extras: { requestId, channel: deps.channel } },
       sink,
       store,
       hooks,
