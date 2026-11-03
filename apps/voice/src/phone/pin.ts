@@ -10,7 +10,7 @@ import { log } from '@va/core'
 
 import { LOG_TAG } from '../config.js'
 import type { PinPolicy } from './caller.js'
-import { type CallerIdentityRow, phoneDb } from './db.js'
+import type { CallerIdentityRow } from './db.js'
 
 const scryptAsync = promisify(scrypt) as (
   password: string,
@@ -113,7 +113,7 @@ async function update(
   identity: Pick<CallerIdentityRow, 'id' | 'user_id'>,
   patch: { pin_failed_attempts: number; pin_locked_until?: string | null },
 ): Promise<void> {
-  const { error } = await phoneDb(service)
+  const { error } = await service
     .from('voice_caller_identities')
     .update(patch)
     .eq('id', identity.id)
