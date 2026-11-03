@@ -18,6 +18,7 @@ import {
 import type { AppDeps } from '../deps.js'
 import { SseEventSink } from '../sse/sink.js'
 import { SSEWriter } from '../sse/writer.js'
+import { dbConfirmationStore } from './confirmations.js'
 import { backfillTitleIfNew, type ChatPrep } from './prepare.js'
 import { prependRouteContext } from './route-context.js'
 import { dbMessageStore } from './store.js'
@@ -108,6 +109,7 @@ export function streamChatResponse(input: StreamInput): Response {
           ],
           tools: deps.registry.anthropicTools(ctx, 'chat'),
           registry: deps.registry,
+          confirmations: dbConfirmationStore(ctx, prep.sessionId, deps.clock),
           logTag: '[api]',
         },
         {
@@ -118,6 +120,7 @@ export function streamChatResponse(input: StreamInput): Response {
             requestId,
             channel: 'chat',
             ...(prep.route ? { clientContext: { route: prep.route } } : {}),
+            ...(prep.confirmation ? { confirmation: prep.confirmation } : {}),
           },
         },
         sink,

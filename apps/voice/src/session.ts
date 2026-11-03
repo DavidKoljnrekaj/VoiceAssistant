@@ -3,7 +3,14 @@
 // (`assistant-llm.ts`) hands every user turn here; the bench runs turns through it too.
 import { randomUUID } from 'node:crypto'
 
-import { type AuthContext, type ErrorCode, log, MESSAGES_HR, type SpokenEnd } from '@va/core'
+import {
+  type AuthContext,
+  type ErrorCode,
+  log,
+  MemoryConfirmationStore,
+  MESSAGES_HR,
+  type SpokenEnd,
+} from '@va/core'
 
 import type { CallIdentity } from './call.js'
 import { LOG_TAG, type VoiceDeps } from './config.js'
@@ -59,6 +66,9 @@ export class CallSession {
   private saves: Promise<unknown> = Promise.resolve()
   /** The call's own rows so far, the model's history (tool rounds included; VOICE-5). */
   private readonly rows: CallRow[] = []
+  /** The call's pending confirmations (the write protocol); a call is one process, so memory
+   * is the store. Part 12b reads the ids back from the sink's `confirm` for the yes/no turn. */
+  readonly confirmations = new MemoryConfirmationStore()
   private readonly maxTurns: number
   private readonly identityTimeoutMs: number
   /** Set once the goodbye was spoken: later turns (the caller spoke before the hang-up landed)
@@ -137,6 +147,7 @@ export class CallSession {
       say: io.say,
       end: io.end,
       signal: io.signal,
+      confirmations: this.confirmations,
       persistAfter: this.saves,
       ...(this.options.pickFiller ? { pickFiller: this.options.pickFiller } : {}),
     })

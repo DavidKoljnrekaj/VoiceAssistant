@@ -10,6 +10,7 @@ import type { Json } from '@va/db'
 
 import { failResponse } from '../errors.js'
 import { checkChatRateLimit } from '../rate-limit.js'
+import { declineConfirmation, findPendingConfirmation } from './confirmations.js'
 import { sanitizeRoute } from './route-context.js'
 
 export const MAX_MESSAGE_LENGTH = 4000
@@ -21,6 +22,10 @@ export const chatBodySchema = z.object({
   message: z.string(),
   parent_message_id: z.uuid().nullable().optional(),
   client_context: z.object({ route: z.string().optional() }).optional(),
+  /** The user answered a pending confirmation (the write protocol): one of the two, with the
+   * words they said in `message`. */
+  confirm: z.uuid().optional(),
+  decline: z.uuid().optional(),
 })
 
 export interface ChatPrep {
@@ -31,6 +36,8 @@ export interface ChatPrep {
   userMessage: string
   lastInsertedId: string
   route: string | null
+  /** The confirmation this turn carries into the loop (`extras.confirmation`), or null. */
+  confirmation: { id: string } | null
 }
 
 interface PrepareInput {
@@ -55,6 +62,11 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
   if (body.message.length > MAX_MESSAGE_LENGTH) return failResponse('message_too_long')
   const userMessage = body.message.trim()
   if (!userMessage) return failResponse('bad_request')
+  // A confirmation answers something that happened in an existing session: never both, never
+  // on a new one.
+  if ((body.confirm && body.decline) || ((body.confirm || body.decline) && body.session_id == null)) {
+    return failResponse('bad_request')
+  }
   const route = sanitizeRoute(body.client_context?.route)
 
   // 2. rate limit, before anything is written
@@ -119,6 +131,25 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
   }
 
   try {
+    // 3b. the confirmation: pending, unexpired, of this session and user; a decline settles it now
+    let confirmation: { id: string } | null = null
+    if (body.confirm) {
+      const found = await findPendingConfirmation(ctx, sessionId, body.confirm, now, signal)
+      if (found === 'error') return await cleanup('internal_error')
+      if (found === 'invalid') {
+        log('warn', '[api]', 'confirmation invalid', { ...scoped, action: 'confirm' })
+        return failResponse('confirmation_invalid')
+      }
+      confirmation = { id: body.confirm }
+    } else if (body.decline) {
+      const declined = await declineConfirmation(ctx, sessionId, body.decline, now, signal)
+      if (declined === 'error') return await cleanup('internal_error')
+      if (declined === 'invalid') {
+        log('warn', '[api]', 'confirmation invalid', { ...scoped, action: 'decline' })
+        return failResponse('confirmation_invalid')
+      }
+    }
+
     // 4. parent: the given one (must belong to the session) or the session's leaf
     let parentId: string | null = null
     if (body.parent_message_id) {
@@ -186,7 +217,15 @@ export async function prepareChat(input: PrepareInput): Promise<ChatPrep | Respo
     }
     messages.push({ role: 'user', content: [{ type: 'text', text: userMessage }] })
 
-    return { sessionId, newlyCreatedSession, messages, userMessage, lastInsertedId: userRow.id, route }
+    return {
+      sessionId,
+      newlyCreatedSession,
+      messages,
+      userMessage,
+      lastInsertedId: userRow.id,
+      route,
+      confirmation,
+    }
   } catch (err) {
     log('error', '[api]', 'prepare failed', {
       ...scoped,

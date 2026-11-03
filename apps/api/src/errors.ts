@@ -8,6 +8,7 @@ import { type ErrorCode, MESSAGES_HR } from '@va/core'
 export const STATUS: Partial<Record<ErrorCode, ContentfulStatusCode>> = {
   bad_request: 400,
   message_too_long: 400,
+  confirmation_invalid: 400,
   unauthorized: 401,
   no_profile: 403,
   session_not_found: 404,
