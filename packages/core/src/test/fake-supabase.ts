@@ -1,4 +1,5 @@
-// In-memory stand-in for the Supabase services the engine talks to: GoTrue (`/auth/v1/user`)
+// In-memory stand-in for the Supabase services the engine talks to: GoTrue (`/auth/v1/user`,
+// and the magic-link flow the phone channel uses: `admin/generate_link`, `verify`, `logout`)
 // and PostgREST (`/rest/v1/*`, including `rpc/`). Ported from Landmark without its Storage part.
 //
 // It speaks HTTP, not a client API: the real supabase-js / postgrest-js in the code under test
@@ -16,8 +17,13 @@ export type Row = Record<string, unknown>
 // Many-to-one foreign keys: table → fk column → referenced table, from the generated types.
 const FKS: Record<string, Record<string, string>> = {
   ai_messages: { session_id: 'ai_sessions', parent_id: 'ai_messages' },
-  ai_sessions: { user_id: 'users', summary_through_message_id: 'ai_messages' },
+  ai_sessions: {
+    user_id: 'users',
+    summary_through_message_id: 'ai_messages',
+    caller_identity_id: 'voice_caller_identities',
+  },
   voice_calls: { session_id: 'ai_sessions', user_id: 'users' },
+  voice_caller_identities: { user_id: 'users', created_by: 'users' },
   demo_notes: { user_id: 'users' },
 }
 
@@ -30,6 +36,15 @@ const DEFAULTS: Record<string, Row> = {
     title: null,
     context_summary: null,
     summary_through_message_id: null,
+    caller_identity_id: null,
+  },
+  voice_caller_identities: {
+    label: null,
+    pin_hash: null,
+    pin_failed_attempts: 0,
+    pin_locked_until: null,
+    active: true,
+    created_by: null,
   },
   ai_messages: {
     model: null,
@@ -79,6 +94,9 @@ export class FakeSupabase {
   tables: Record<string, Row[]> = {}
   /** token → auth user. A token not in this map is rejected by `/auth/v1/user`. */
   authUsers: Record<string, { id: string; email: string }> = {}
+  /** Magic links `admin/generate_link` issued and `verify` has not consumed: token hash → auth user. */
+  magicLinks: Record<string, { id: string; email: string }> = {}
+  private issued = 0
   rpcs: Record<string, (args: Row) => unknown> = {}
   requests: RecordedRequest[] = []
   private faults: Fault[] = []
@@ -89,6 +107,7 @@ export class FakeSupabase {
   reset(): void {
     this.tables = {}
     this.authUsers = {}
+    this.magicLinks = {}
     this.rpcs = {}
     this.requests = []
     this.faults = []
@@ -200,7 +219,7 @@ export class FakeSupabase {
     }
     switch (rec.service) {
       case 'auth':
-        return this.handleAuth(req)
+        return this.handleAuth(req, name, body)
       case 'rpc': {
         const fn = this.rpcs[name]
         if (!fn) return json(404, { code: 'PGRST202', message: `Could not find the function public.${name}` })
@@ -211,19 +230,61 @@ export class FakeSupabase {
     }
   }
 
-  private handleAuth(req: Request): Response {
+  private handleAuth(req: Request, name: string, body: unknown): Response {
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+    const input = (body ?? {}) as Record<string, unknown>
+    // The service role mints a magic link for an existing user; the hash is single-use.
+    if (name === 'admin/generate_link' && req.method === 'POST') {
+      const user = Object.values(this.authUsers).find((u) => u.email === input.email)
+      if (input.type !== 'magiclink' || !user) {
+        return json(404, { code: 404, error_code: 'user_not_found', msg: 'User not found' })
+      }
+      const hashed = `hashed-${++this.issued}`
+      this.magicLinks[hashed] = user
+      return json(200, {
+        ...authUserJson(user),
+        action_link: `https://fake.supabase.test/auth/v1/verify?token=${hashed}&type=magiclink`,
+        email_otp: '000000',
+        hashed_token: hashed,
+        redirect_to: '',
+        verification_type: 'magiclink',
+      })
+    }
+    // Verifying the hash yields a session whose access token `/auth/v1/user` then accepts.
+    if (name === 'verify' && req.method === 'POST') {
+      const hashed = typeof input.token_hash === 'string' ? input.token_hash : ''
+      const user = this.magicLinks[hashed]
+      if (!user || input.type !== 'magiclink') {
+        return json(403, {
+          code: 403,
+          error_code: 'otp_expired',
+          msg: 'Email link is invalid or has expired',
+        })
+      }
+      delete this.magicLinks[hashed]
+      const accessToken = `sess-${++this.issued}`
+      this.authUsers[accessToken] = user
+      return json(200, {
+        access_token: accessToken,
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: `refresh-${this.issued}`,
+        user: authUserJson(user),
+      })
+    }
+    // `admin.signOut(jwt, scope)`: the session behind the bearer stops working.
+    if (name === 'logout' && req.method === 'POST') {
+      if (!this.authUsers[token]) return json(401, { code: 401, error_code: 'bad_jwt', msg: 'invalid JWT' })
+      delete this.authUsers[token]
+      return new Response(null, { status: 204 })
+    }
+    if (name !== 'user' || req.method !== 'GET') {
+      return json(404, { code: 404, error_code: 'not_found', msg: `fake-supabase: no auth route ${name}` })
+    }
     const user = this.authUsers[token]
     if (!user) return json(401, { code: 401, error_code: 'bad_jwt', msg: 'invalid JWT' })
-    return json(200, {
-      id: user.id,
-      aud: 'authenticated',
-      role: 'authenticated',
-      email: user.email,
-      app_metadata: {},
-      user_metadata: {},
-      created_at: '2026-01-01T00:00:00Z',
-    })
+    return json(200, authUserJson(user))
   }
 
   private newRow(table: string, raw: Row): Row {
@@ -380,6 +441,18 @@ function untilOrAbort<T>(until: Promise<T>, signal: AbortSignal): Promise<T> {
     signal.addEventListener('abort', abort, { once: true })
     until.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
   })
+}
+
+function authUserJson(user: { id: string; email: string }): Row {
+  return {
+    id: user.id,
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: user.email,
+    app_metadata: {},
+    user_metadata: {},
+    created_at: '2026-01-01T00:00:00Z',
+  }
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {

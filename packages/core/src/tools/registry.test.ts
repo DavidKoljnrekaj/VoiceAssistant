@@ -9,7 +9,7 @@ import { ToolRegistry } from './registry.js'
 import { toAnthropicTool } from './schema.js'
 
 const ROLES: Role[] = ['admin', 'member']
-const CHANNELS: Channel[] = ['chat', 'voice']
+const CHANNELS: Channel[] = ['chat', 'voice', 'phone']
 
 const search = defineTool({
   name: 'search_things',
@@ -120,8 +120,10 @@ describe('ToolRegistry', () => {
       admin: {
         chat: ['audit_things', 'create_thing', 'get_thing', 'search_things'],
         voice: ['audit_things', 'search_things'],
+        // Not named by this allowlist: default-deny.
+        phone: [],
       },
-      member: { chat: ['create_thing', 'get_thing', 'search_things'], voice: ['search_things'] },
+      member: { chat: ['create_thing', 'get_thing', 'search_things'], voice: ['search_things'], phone: [] },
     }
     for (const role of ROLES) {
       for (const channel of CHANNELS) {
@@ -170,7 +172,9 @@ describe('ToolRegistry', () => {
     const registry = new ToolRegistry([pack], { chat: 'all' })
     expect(registry.select({ role: 'admin' }, 'voice')).toEqual([])
     expect(registry.anthropicTools({ role: 'admin' }, 'voice')).toEqual([])
-    expect(registry.refusalReason({ role: 'admin' }, 'search_things', 'voice')).toBe('not_permitted_on_channel')
+    expect(registry.refusalReason({ role: 'admin' }, 'search_things', 'voice')).toBe(
+      'not_permitted_on_channel',
+    )
     expect(() => new ToolRegistry([], {})).not.toThrow()
     // The allowlist is the composing app's: core exports none (tools-* → core, never back).
     const core = await import('../index.js')

@@ -11,8 +11,13 @@ import { VOICE_INTRO_HR, VOICE_PRESENTATION_HR } from './voice.hr.js'
 
 export { CHAT_INTRO_HR, CHAT_PRESENTATION_HR, DOMAIN_RULES_HR, VOICE_INTRO_HR, VOICE_PRESENTATION_HR }
 
-const INTRO: Record<Channel, string> = { chat: CHAT_INTRO_HR, voice: VOICE_INTRO_HR }
-const PRESENTATION: Record<Channel, string> = { chat: CHAT_PRESENTATION_HR, voice: VOICE_PRESENTATION_HR }
+// `phone` shares voice's bytes on purpose: one cache entry for both (Part 11 §7).
+const INTRO: Record<Channel, string> = { chat: CHAT_INTRO_HR, voice: VOICE_INTRO_HR, phone: VOICE_INTRO_HR }
+const PRESENTATION: Record<Channel, string> = {
+  chat: CHAT_PRESENTATION_HR,
+  voice: VOICE_PRESENTATION_HR,
+  phone: VOICE_PRESENTATION_HR,
+}
 
 /** The static, user-independent system prompt of a channel. */
 export function buildStaticSystemPrompt(channel: Channel): string {

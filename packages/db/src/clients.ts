@@ -22,6 +22,16 @@ export function createUserClient(jwt: string): DbClient {
 }
 
 /**
+ * A client with the anon key and no user: what a browser has before sign-in. The voice worker
+ * verifies a magic link through it to obtain a phone caller's session (Part 11 §4); nothing
+ * reads data through it.
+ */
+export function createAnonClient(): DbClient {
+  const env = getDbEnv()
+  return createClient<Database>(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: serverAuth })
+}
+
+/**
  * A client with the service role: bypasses RLS. For persistence only, and every call carries an
  * explicit `user_id` or `session_id` filter (`ctx.serviceClient`).
  */

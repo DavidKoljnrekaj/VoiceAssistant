@@ -18,6 +18,8 @@ describe('prompts', () => {
     expect(buildStaticSystemPrompt('voice')).toBe(
       `${VOICE_INTRO_HR}\n\n${DOMAIN_RULES_HR}\n\n${VOICE_PRESENTATION_HR}`,
     )
+    // One cache entry for the two spoken channels.
+    expect(buildStaticSystemPrompt('phone')).toBe(buildStaticSystemPrompt('voice'))
   })
 
   it('P02: byte-identical across calls and time, and different per channel', () => {

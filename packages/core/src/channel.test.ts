@@ -25,10 +25,20 @@ describe('channelSettings', () => {
     })
   })
 
+  it('C01b: phone takes the voice column, as its own copy', () => {
+    expect(CHANNEL_DEFAULTS.phone).toEqual(CHANNEL_DEFAULTS.voice)
+    expect(CHANNEL_DEFAULTS.phone).not.toBe(CHANNEL_DEFAULTS.voice)
+  })
+
   it('C02: env overrides model and effort per channel, empty values keep the default', () => {
     const env = { AI_CHAT_MODEL: 'claude-haiku-5-5', AI_CHAT_EFFORT: 'high', AI_VOICE_EFFORT: '' }
     expect(channelSettings('chat', env)).toMatchObject({ model: 'claude-haiku-5-5', effort: 'high' })
     expect(channelSettings('voice', env)).toMatchObject({ model: 'claude-sonnet-5-5', effort: 'low' })
+    expect(channelSettings('phone', { ...env, AI_PHONE_EFFORT: 'medium' })).toMatchObject({
+      model: 'claude-sonnet-5-5',
+      effort: 'medium',
+    })
+    expect(channelSettings('voice', { AI_PHONE_EFFORT: 'medium' }).effort).toBe('low')
   })
 
   it('C03: an invalid effort throws, naming the variable and not the value', () => {

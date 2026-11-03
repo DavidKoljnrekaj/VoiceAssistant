@@ -185,15 +185,16 @@ collapse to two. The Croatian strings are marked for native review (`CORE-1`).
 
 ## Channels
 
-| Setting                   | chat                                | voice                               |
-| ------------------------- | ----------------------------------- | ----------------------------------- |
-| model / effort / thinking | Opus 5.5 / medium / adaptive (omit) | Sonnet 5.5 / low / `between_tools`  |
-| `max_tokens` / iterations | 8192 / 10                           | 1024 / 4                            |
-| tool / request timeout    | 15 s / 90 s                         | 6 s / 25 s                          |
-| history rows              | 200 (`ai_session_history`)          | 20 (the call's own context)         |
-| compaction                | off (later)                         | off                                 |
-| hold (spoken sink)        | 200 ms (no sink holds)              | 200 ms (`holdMs`, `VOICE-8`)        |
-| env overrides             | `AI_CHAT_MODEL`, `AI_CHAT_EFFORT`   | `AI_VOICE_MODEL`, `AI_VOICE_EFFORT` |
+| Setting                   | chat                                | voice                               | phone (Part 11)                     |
+| ------------------------- | ----------------------------------- | ----------------------------------- | ----------------------------------- |
+| model / effort / thinking | Opus 5.5 / medium / adaptive (omit) | Sonnet 5.5 / low / `between_tools`  | as voice (its own copy)             |
+| `max_tokens` / iterations | 8192 / 10                           | 1024 / 4                            | as voice                            |
+| tool / request timeout    | 15 s / 90 s                         | 6 s / 25 s                          | as voice                            |
+| history rows              | 200 (`ai_session_history`)          | 20 (the call's own context)         | as voice                            |
+| compaction                | off (later)                         | off                                 | off                                 |
+| hold (spoken sink)        | 200 ms (no sink holds)              | 200 ms (`holdMs`, `VOICE-8`)        | as voice                            |
+| env overrides             | `AI_CHAT_MODEL`, `AI_CHAT_EFFORT`   | `AI_VOICE_MODEL`, `AI_VOICE_EFFORT` | `AI_PHONE_MODEL`, `AI_PHONE_EFFORT` |
+| static prompt             | `CHAT_*`                            | `VOICE_*`                           | voice's bytes (one cache entry)     |
 
 `CHANNEL_DEFAULTS` is the table as data; `channelSettings(channel, env)` applies the overrides
 (an empty variable keeps the default, an invalid one throws naming the variable). Rate limits
