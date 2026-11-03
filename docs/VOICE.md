@@ -349,7 +349,9 @@ The worker needs a home. Two options, both EU:
   can run next to it.
 
 Recorded as `VOICE-1` (the API and the PWA are `OPS-3`); the proposal with regions and the
-first-deploy order is `docs/OPS.md` → Deploy sketch. Decide before the first user trial. Either way `AGENT_NAME` keeps the
+first-deploy order is `docs/OPS.md` → Deploy sketch. Decide before the first user trial; since
+2026-11-03 it is step 0 of `docs/plan/10-integration-roadmap.md`, ahead of the phone channel
+(Part 11), which reuses this worker, its providers and its call lifecycle. Either way `AGENT_NAME` keeps the
 worker to dispatched jobs, and nothing in the worker depends on where it runs.
 
 ## Testing

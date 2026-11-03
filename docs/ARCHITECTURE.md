@@ -1,7 +1,11 @@
 # Architecture
 
 One shared engine behind every channel. This file is the map; each package has its own doc
-(`docs/<PACKAGE>.md`), and the decisions behind the shape are in `docs/decisions/`.
+(`docs/<PACKAGE>.md`), and the decisions behind the shape are in `docs/decisions/`. The product is
+used from the car, so the phone number is the first channel to build (decision 0012,
+`docs/plan/11-phone-channel.md`); the in-app call and the PWA below are as built, and the PWA's
+role is the companion: where a call's turns, drafts and links are reviewed afterwards. The order
+of the integrations is `docs/plan/10-integration-roadmap.md`.
 
 ## Layout
 
@@ -20,7 +24,7 @@ VoiceAssistant/
 │   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile
 │   └── web/                      # @va/web   — React PWA: auth, chat panel, call button; Dockerfile (nginx), e2e/ smoke
 ├── supabase/                     # config.toml, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
-├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/
+├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/, research/
 └── tools/                        # repo-level scripts only (no app code)
 ```
 
@@ -48,7 +52,11 @@ Supabase client (ESLint).
       │◀── LiveKit room token ─┘── creates ai_sessions(channel='voice') + voice_calls(JWT by opaque token)
       │                                              └─ dispatches the agent with { callToken } in job metadata
       └──WebRTC──▶ LiveKit Cloud ──▶ apps/voice worker: Soniox STT ─▶ @va/core loop (in-process,
-                                                       SpokenTextSink) ─▶ ElevenLabs TTS
+                                        ▲              SpokenTextSink) ─▶ ElevenLabs TTS
+ phone (Part 11) ──PSTN──▶ SIP trunk ───┘  the worker resolves the caller from the number, asks a
+                                           keypad PIN where the role needs one, mints a 15-min JWT,
+                                           writes its own ai_sessions + voice_calls rows, then the
+                                           same path
 ```
 
 One brain: one loop, one tool registry, one role gate, one prompt lineage. Channels differ only
@@ -69,6 +77,8 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 | rate limits               | 20 user turns / 5 min, 200 / day               | 50 turns per call, 20 calls per user per day, 3 concurrent calls globally                    |
 | compaction                | later (port Landmark `context-window.ts`)      | off                                                                                          |
 
+`phone` (Part 11) takes the voice column throughout; `whatsapp` (roadmap step 6) will too.
+
 ## Data
 
 Six tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
@@ -86,24 +96,26 @@ users are in `docs/DB.md`.
 
 Every later part extends this table.
 
-| Concern                                                           | Lives in                               | Since  |
-| ----------------------------------------------------------------- | -------------------------------------- | ------ |
-| Workspace tooling (TypeScript, ESLint, Prettier, Vitest projects) | root config files                      | Part 1 |
-| Claude Code harness (permissions, hooks, rules, skills, agents)   | `.claude/`                             | Part 1 |
-| CI (typecheck, lint, unit tests, audit; pgTAP)                    | `.github/workflows/`                   | Part 1 |
-| CI (coverage, PWA build, image builds; Playwright smoke)          | `.github/workflows/`                   | Part 7 |
-| Decisions                                                         | `docs/decisions/`                      | Part 1 |
-| Backlog by area, release checklist                                | `docs/backlog/`                        | Part 1 |
-| Implementation plan                                               | `docs/plan/`                           | Part 1 |
-| Schema, RLS, pgTAP, seed                                          | `supabase/`                            | Part 2 |
-| Generated types, client factories, env schema                     | `packages/db`                          | Part 2 |
-| Loop, tool registry, prompts, history, sinks, fakes               | `packages/core`                        | Part 3 |
-| Example tool pack                                                 | `packages/tools-demo`                  | Part 3 |
-| HTTP API, SSE, rate limits, voice session endpoints               | `apps/api`                             | Part 4 |
-| Voice worker, bench scripts                                       | `apps/voice`                           | Part 5 |
-| PWA                                                               | `apps/web`                             | Part 6 |
-| Env matrix, logging fields, CI, containers, deploy, runbook       | `docs/OPS.md`                          | Part 7 |
-| Security checklist, threat notes, personal data                   | `docs/SECURITY.md`                     | Part 7 |
-| Operator steps on the dev project: push, sweep, types             | `docs/RELEASE-RUNBOOK.md`              | Part 7 |
-| The log helper and the call-site lint test                        | `packages/core/src/log.ts`             | Part 7 |
-| Container images, dev compose                                     | `apps/*/Dockerfile`, `compose.dev.yml` | Part 7 |
+| Concern                                                           | Lives in                               | Since      |
+| ----------------------------------------------------------------- | -------------------------------------- | ---------- |
+| Workspace tooling (TypeScript, ESLint, Prettier, Vitest projects) | root config files                      | Part 1     |
+| Claude Code harness (permissions, hooks, rules, skills, agents)   | `.claude/`                             | Part 1     |
+| CI (typecheck, lint, unit tests, audit; pgTAP)                    | `.github/workflows/`                   | Part 1     |
+| CI (coverage, PWA build, image builds; Playwright smoke)          | `.github/workflows/`                   | Part 7     |
+| Decisions                                                         | `docs/decisions/`                      | Part 1     |
+| Backlog by area, release checklist                                | `docs/backlog/`                        | Part 1     |
+| Implementation plan                                               | `docs/plan/`                           | Part 1     |
+| Schema, RLS, pgTAP, seed                                          | `supabase/`                            | Part 2     |
+| Generated types, client factories, env schema                     | `packages/db`                          | Part 2     |
+| Loop, tool registry, prompts, history, sinks, fakes               | `packages/core`                        | Part 3     |
+| Example tool pack                                                 | `packages/tools-demo`                  | Part 3     |
+| HTTP API, SSE, rate limits, voice session endpoints               | `apps/api`                             | Part 4     |
+| Voice worker, bench scripts                                       | `apps/voice`                           | Part 5     |
+| PWA                                                               | `apps/web`                             | Part 6     |
+| Env matrix, logging fields, CI, containers, deploy, runbook       | `docs/OPS.md`                          | Part 7     |
+| Security checklist, threat notes, personal data                   | `docs/SECURITY.md`                     | Part 7     |
+| Operator steps on the dev project: push, sweep, types             | `docs/RELEASE-RUNBOOK.md`              | Part 7     |
+| The log helper and the call-site lint test                        | `packages/core/src/log.ts`             | Part 7     |
+| Container images, dev compose                                     | `apps/*/Dockerfile`, `compose.dev.yml` | Part 7     |
+| Integration order and sizing; research notes behind decisions     | `docs/plan/10-…`, `docs/research/`     | 2026-11-03 |
+| Phone channel: trunk, caller identity, PIN, minted JWT (planned)  | `apps/voice/src/phone/`, migration     | Part 11    |

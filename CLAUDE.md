@@ -2,9 +2,11 @@
 
 ## What this is
 
-A company AI assistant that users type to (web PWA) and talk to (in-app voice call) now, and that
-will later answer on WhatsApp and a phone number, read and act on email, and search company
-documents. One shared engine (`packages/core`) sits behind every channel: one loop, one tool
+A company AI assistant used from the car: users call a phone number (the first channel to build,
+decision 0012, `docs/plan/11-phone-channel.md`), talk to it in the app (in-app voice call) and type
+to it (web PWA, the companion that shows afterwards what a call heard and drafted). It will read
+and act on email, search company documents and data, and later answer on WhatsApp; the order is
+`docs/plan/10-integration-roadmap.md`. One shared engine (`packages/core`) sits behind every channel: one loop, one tool
 registry, one role gate, one prompt lineage. Channels differ only through a sink, a store, loop
 hooks and a settings row. The reference implementation is Landmark at
 `/home/user/Dev/Pannonia/Landmark` (read its `docs/voice/` when porting; never copy its domain
@@ -87,6 +89,9 @@ or React. Import a package through its root (`@va/core`), never through `src/`.
 | max_tokens / iterations   | 8192 / 10                                      | 1024 / 4                                        |
 | tool / request timeout    | 15 s / 90 s                                    | 6 s / 25 s                                      |
 | rate limits               | 20 turns / 5 min, 200 / day                    | 50 turns per call, 20 calls / day, 3 concurrent |
+
+`phone` (Part 11) takes the voice column: same sink, settings, allowlist and limits, with caller
+identity (number plus a keypad PIN) and a minted per-call JWT in front of it.
 
 ## Data layer
 

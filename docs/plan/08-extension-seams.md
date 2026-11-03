@@ -4,6 +4,11 @@ This part is a map, not a session. Each seam names what the skeleton already pro
 part adds, and what Landmark already specified. When one of these is started, write its own plan
 file in `docs/plan/` first.
 
+> **Order changed 2026-11-03** (decision 0012, `docs/plan/10-integration-roadmap.md`): the phone
+> number (§4) is the car channel and comes first, as Part 11; the write protocol (§2) and the
+> tool packs (§1) follow it; WhatsApp (§3) moves behind them and starts with calls through LiveKit
+> Connectors rather than text. The sections below keep their numbers; the roadmap has the order.
+
 ## 1. Tool packs (the company's platforms, email, documents)
 
 **Provided by the skeleton:** `ToolPack { name, tools, domainRules? }`, `defineTool`, the registry with
@@ -42,6 +47,10 @@ summary plus "Da" / "Ne", never DTMF for content). Keep writes off voice until t
 
 ## 3. WhatsApp channel
 
+Behind the phone channel and the email pack (roadmap step 6). Calls first, through LiveKit
+Connectors (no SIP trunk; identity from the caller's `wa_id` mapped to `users.phone_e164`; the same
+worker, channel `whatsapp`), then text as follows.
+
 Meta Cloud API webhook into `apps/api` (`POST /webhooks/whatsapp`, signature verified), identity from
 `users.phone_e164`, session keyed by `(channel 'whatsapp', external_id = wa_id)`, a `TextSink` that
 buffers the answer into one message (no streaming on WhatsApp), voice notes transcribed with the same
@@ -54,7 +63,8 @@ LiveKit SIP trunk → the same worker. Identity: `voice_caller_identities` (phon
 lockout), **mandatory DTMF PIN for roles that can hear financial data**, unknown or withheld numbers
 refused before the model sees anything, a short-lived JWT minted for the mapped user so RLS still
 applies, alerting on repeated PIN failures. Landmark's plan §9 specifies all of it, including the
-schema; port it when v1 voice has run in production.
+schema. **Planned in full as `docs/plan/11-phone-channel.md`** (2026-11-03): it is the car channel
+and the next part, not a follow-up to a production run of the in-app call.
 
 ## 5. Compaction and long sessions
 

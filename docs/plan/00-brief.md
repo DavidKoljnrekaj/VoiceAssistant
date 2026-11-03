@@ -2,10 +2,13 @@
 
 ## 1. What we are building
 
-An AI assistant for the company that a user can **type to** (web PWA) and **talk to** (in-app
-voice call), with the same brain behind both. Later it will also answer on WhatsApp and on a phone
-number, read and act on email, search company documents, and reach into the company's own
-platforms. **This plan builds the skeleton:** the repository and tooling, the Claude Code harness,
+An AI assistant for the company that a user **calls from the car** (a phone number, decision
+0012), **talks to** in the app (the in-app voice call) and **types to** (web PWA), with the same
+brain behind every channel. It will read and act on email, search company documents, reach into
+the company's own platforms, and later answer on WhatsApp. The order of those integrations is
+`docs/plan/10-integration-roadmap.md` (2026-11-03): the phone call first, then email, documents
+and data for the caller, then the PWA as the companion that shows afterwards what the car heard
+and drafted. **This plan builds the skeleton:** the repository and tooling, the Claude Code harness,
 the database, one shared conversation engine with streaming and tool calling, an HTTP API, a voice
 worker, and a PWA shell. Every integration listed above is a seam the skeleton leaves open, not
 work in this plan.
@@ -122,18 +125,18 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 
 ## 7. Channels
 
-| Setting | chat | voice |
-|---|---|---|
-| sink | `SseEventSink` (deltas + blocks + tool events) | `SpokenTextSink` (text only, filler, held first sentence, speakable rewriting) |
-| history source | DB, bounded walk from the leaf | the call's own context (worker memory), last 20 messages, system messages dropped |
-| persistence | per row, inside the loop | deferred, after the answer, fire-and-forget |
-| model / effort / thinking | Opus 5.5 / `medium` / adaptive | Sonnet 5.5 / `low` / `between_tools` |
-| `max_tokens` | 8192 | 1024 |
-| max iterations | 10 | 4 |
-| tool timeout | 15 s | 6 s |
-| request timeout | 90 s | 25 s |
-| rate limits | 20 user turns / 5 min, 200 / day (tool-result rows do not count) | 50 turns per call, 20 calls per user per day, 3 concurrent calls globally |
-| compaction | later (port Landmark `context-window.ts`) | off |
+| Setting | chat | voice | phone (Part 11) |
+|---|---|---|---|
+| sink | `SseEventSink` (deltas + blocks + tool events) | `SpokenTextSink` (text only, filler, held first sentence, speakable rewriting) | as voice |
+| history source | DB, bounded walk from the leaf | the call's own context (worker memory), last 20 messages, system messages dropped | as voice |
+| persistence | per row, inside the loop | deferred, after the answer, fire-and-forget | as voice |
+| model / effort / thinking | Opus 5.5 / `medium` / adaptive | Sonnet 5.5 / `low` / `between_tools` | as voice |
+| `max_tokens` | 8192 | 1024 | as voice |
+| max iterations | 10 | 4 | as voice |
+| tool timeout | 15 s | 6 s | as voice |
+| request timeout | 90 s | 25 s | as voice |
+| rate limits | 20 user turns / 5 min, 200 / day (tool-result rows do not count) | 50 turns per call, 20 calls per user per day, 3 concurrent calls globally | as voice |
+| compaction | later (port Landmark `context-window.ts`) | off | as voice |
 
 ## 8. Conventions
 
@@ -169,7 +172,7 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 
 ## 10. Glossary
 
-- **Channel** — where a conversation happens (`chat`, `voice`; later `whatsapp`, `phone`). Decides sink,
+- **Channel** — where a conversation happens (`chat`, `voice`, `phone`; later `whatsapp`). Decides sink,
   settings and tool allowlist.
 - **Sink** — `EventSink`, the loop's output port. One per channel.
 - **Store** — `MessageStore`, the loop's persistence port. Chat inserts per row; voice defers.

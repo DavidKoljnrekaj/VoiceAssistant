@@ -4,8 +4,10 @@ Written 2026-10-26 from a read of the Landmark voice assistant (`/home/user/Dev/
 branch `feature/voice-latency`) and of `shanraisshan/claude-code-best-practice`. It covers the
 **skeleton only**: repository, Claude Code harness, database, the shared conversation engine, the
 HTTP API with streaming, the voice worker, the PWA shell, and the quality tooling around them.
-Email, WhatsApp, PSTN, company documents and the company platforms are **extension seams**
-(Part 8), not work in this plan.
+Email, WhatsApp, the phone number, company documents and the company platforms were **extension
+seams** (Part 8); since 2026-11-03 their order and sizing are **Part 10**, the integration
+roadmap, and the phone channel (the car channel, decision 0012) is **Part 11**, the next part to
+build.
 
 ## How to use these files
 
@@ -37,6 +39,9 @@ each part is sized to finish well inside one context window.
 | 7 | [07-ops-and-quality.md](./07-ops-and-quality.md) | 4, 5, 6 | 1 | — |
 | 8 | [08-extension-seams.md](./08-extension-seams.md) | all | later | — |
 | 9 | [09-appendix.md](./09-appendix.md) | — | reference | — |
+| 10 | [10-integration-roadmap.md](./10-integration-roadmap.md) | 1–7 | map | — |
+| 11 | [11-phone-channel.md](./11-phone-channel.md) | hosting (`OPS-3`) | 3 (11a, 11b, 11c) | 12, 14 |
+| 12–16 | written when their turn comes (Part 10 sketches them) | see Part 10 | | |
 
 Roughly 10–12 sessions for the skeleton. Parallel work goes in git worktrees, one session each.
 
@@ -58,3 +63,6 @@ Tick when a part is merged to `main`.
 
 The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did not fix is in
 `docs/backlog/`.
+
+- [ ] Part 11 — the phone channel (11a schema, identity, minted JWT; 11b worker SIP path; 11c the
+      trunk and the live checklist through a car). Blocked on hosting (`OPS-3`, roadmap step 0).
