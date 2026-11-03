@@ -28,17 +28,6 @@ CI, hooks, env, logging, deploy, dependencies.
 - **Fix direction:** drop each override when the dependency that pulls it moves past the patched
   version (`@livekit/agents` ≥ 1.9.3 pins `sharp` 0.35.5; watch `onnxruntime-node`)
 
-### OPS-3 · Medium · OQ: where the API, the worker and the PWA run is not decided
-
-- **Check:** Confirmed (by design; `docs/OPS.md` → Deploy sketch is a proposal, the user decides)
-- **Where:** `apps/api/Dockerfile`, `apps/voice/Dockerfile`, `apps/web/Dockerfile` build images
-  nothing deploys; `compose.dev.yml` runs them locally only
-- **What happens:** nothing is reachable outside a developer machine; no user trial can start
-- **Fix direction:** the user picks the provider and regions (proposal: one Hetzner VM in
-  Falkenstein with the two containers behind Caddy, Cloudflare Pages for the PWA, Supabase
-  Frankfurt, LiveKit Cloud EU; alternatives in `docs/OPS.md`), then the first-deploy order in
-  `docs/OPS.md` runs and a `docs/decisions/` entry records it; closes `VOICE-1` with it
-
 ### OPS-4 · Medium · OQ: retention for voice (and chat) rows is not decided
 
 - **Check:** Confirmed (by design; Landmark's voice plan §8 left it open too)
@@ -97,5 +86,19 @@ CI, hooks, env, logging, deploy, dependencies.
   spread case stays a review item (documented at the top of the test)
 
 ## Resolved
+
+### OPS-3 · Medium · Where the API, the worker and the PWA run (decided 2026-11-03)
+
+- **Check:** Confirmed (by design; `docs/OPS.md` → Deploy sketch is a proposal, the user decides)
+- **Where:** `apps/api/Dockerfile`, `apps/voice/Dockerfile`, `apps/web/Dockerfile` build images
+  nothing deploys; `compose.dev.yml` runs them locally only
+- **What happens:** nothing is reachable outside a developer machine; no user trial can start
+- **Resolved:** decision 0013: a Hetzner VM in Falkenstein for the api and voice containers
+  behind Caddy, Vercel for the PWA, Supabase Frankfurt, LiveKit Cloud EU. The deploy itself is
+  `REL-9`; closes `VOICE-1` with it.
+- **Was the fix direction:** the user picks the provider and regions (proposal: one Hetzner VM in
+  Falkenstein with the two containers behind Caddy, Cloudflare Pages for the PWA, Supabase
+  Frankfurt, LiveKit Cloud EU; alternatives in `docs/OPS.md`), then the first-deploy order in
+  `docs/OPS.md` runs and a `docs/decisions/` entry records it; closes `VOICE-1` with it
 
 Nothing yet.

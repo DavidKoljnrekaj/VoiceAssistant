@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-9 (next free)
+Ids: REL-10 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -12,7 +12,25 @@ three sets of checks) and says how to paste the results back.
 - [ ] Part 1 / Part 7: create branch protection on `main` with the Actions job checks `test`, `db`,
       `docker (api)`, `docker (voice)` and `docker (web)` as required checks, and enable Dependabot
       security updates (repository settings → Code security). `e2e` stays optional.
-- [ ] REL-1 · Part 2: apply `20261028100000_users.sql`, `20261028100100_ai_sessions_and_messages.sql` and
+- [x] Done 2026-11-03 by the operator through `docs/RELEASE-RUNBOOK.md` (`REL-1`, `REL-3`,
+      `REL-7`): the five migrations are on the dev project, `/db-types` regenerated
+      `packages/db/src/database.ts` with `demo_items` and `demo_notes`, and the `DemoDatabase`
+      cast in `packages/tools-demo` is dropped. The after-apply checks are the runbook's; paste
+      anything that did not match back into the matching item.
+
+- [ ] REL-9 · Step 0 of `docs/plan/10-integration-roadmap.md`: the first deploy on the hosts of
+      decision 0013. (a) Hetzner VM (Falkenstein, Docker, Caddy): the api and voice images from a
+      tagged commit, secrets from the matrix in the host's env store, `CORS_ORIGINS` = the Vercel
+      origin, `VOICE_AGENT_NAME` = `AGENT_NAME`; `OPS-1` (built `dist`, which also removes the
+      worker's 6 s import, `VOICE-4`) ships with it. (b) Vercel project for `apps/web` with the
+      three production `VITE_` values. (c) `REL-8` auth URLs to the Vercel origin. (d) DNS for
+      the API at Caddy. (e) The smoke: `/health`, one streamed turn from the PWA, one in-app call
+      against the hosted worker (`REL-5`), the Lighthouse audit (`REL-4`), and the live checklist
+      of `docs/VOICE.md` with the figures recorded as the hosted baseline. (f) DPAs with Hetzner
+      and Vercel noted in `OPS-5`. Done when a call from the PWA reaches the hosted worker with
+      every developer machine off.
+
+- [x] REL-1 · Part 2: apply `20261028100000_users.sql`, `20261028100100_ai_sessions_and_messages.sql` and
       `20261028100200_voice_calls.sql` to the dev project `kdplqbldohrzsewhckgl` (`supabase link` then
       `supabase db push`, both run by the operator), enable pg_cron (Dashboard → Database → Extensions)
       and re-run the last DO block of the voice_calls migration so `voice-calls-sweep` is scheduled.
@@ -31,7 +49,7 @@ three sets of checks) and says how to paste the results back.
       20-try count. Still open: the full 20 tries once a take reliably provokes a long answer, and
       the bench against a database that has the demo tables (`CORE-2`).
 
-- [ ] REL-3 · Part 5: apply `20261029100000_demo_tables.sql` to the dev project (after `REL-1`, by the
+- [x] REL-3 · Part 5: apply `20261029100000_demo_tables.sql` to the dev project (after `REL-1`, by the
       operator), then `/db-types`, commit `packages/db/src/database.ts`, and drop the `DemoDatabase`
       cast in `packages/tools-demo/src/demo-db.ts`. Check after applying: as a signed-in user
       `select count(*) from demo_items` works and an insert is refused; the dev project has no demo
@@ -66,7 +84,7 @@ three sets of checks) and says how to paste the results back.
       `apps/web/env.example` lists `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and
       `VITE_API_URL` with a one-line comment each and no values.
 
-- [ ] REL-7 · DB-2: apply `20261102100000_voice_calls_expiry_cap.sql` to the dev project (after
+- [x] REL-7 · DB-2: apply `20261102100000_voice_calls_expiry_cap.sql` to the dev project (after
       `REL-1`, by the operator). Check after applying: `select conname from pg_constraint where
 conname = 'voice_calls_expires_within_cap'` returns one row, and as the service role an
       insert into `voice_calls` with `expires_at = now() + interval '16 minutes'` is refused with

@@ -36,12 +36,12 @@ and `docs/decisions/0012-phone-call-first.md` (2026-11-03) is a different decisi
 | 8 | Is Microsoft Entra sign-in needed in the PWA from the start (Landmark has it)? | Part 6 |
 | 9 | Should chat use Sonnet 5.5 at low effort too, after a bench, to cut cost? | after Part 5 bench |
 | 10 | Is the company on Microsoft 365 or Google Workspace, and can a tenant admin grant consent? | Part 13 (email) |
-| 11 | Telephony provider and number: Twilio or Telnyx, a Croatian `+385` number or any EU number; whose account? | Part 11 |
-| 12 | Which roles need a PIN on the phone: every caller, or only roles that hear financial data? | Part 11 |
+| 11 | ~~Telephony provider and number~~ Answered 2026-11-03: Twilio, a Croatian `+385` number (decision 0013); the account is the user's | Part 11 |
+| 12 | ~~Which roles need a PIN~~ Answered 2026-11-03: every caller during the pilot (decision 0013) | Part 11 |
 | 13 | How many pilot callers, and who enrols them (admin page in Part 15, or SQL in the runbook until then)? | Part 11 |
 | 14 | The company API: who builds it, where it runs, how it authenticates our users? | Part 14 |
 | 15 | Is a native wrapper for the in-app call wanted at all, or does the phone number cover the car entirely? | Part 15 |
-| 16 | Does the dev Supabase project use the legacy HS256 JWT secret or asymmetric signing keys (the minting path, Part 11 §4)? | Part 11 |
+| 16 | ~~HS256 secret or asymmetric keys?~~ Answered 2026-11-03: ECC P-256 is current, HS256 is a previous key only; Part 11 §4 takes the magic-link path (decision 0013) | Part 11 |
 
 ## C. Landmark → new project map
 

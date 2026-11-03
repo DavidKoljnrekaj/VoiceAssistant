@@ -50,8 +50,8 @@ Roughly 10–12 sessions for the skeleton. Parallel work goes in git worktrees, 
 Tick when a part is merged to `main`.
 
 - [x] Part 1 — repository, tooling, Claude Code harness, CI (2026-10-26)
-- [x] Part 2 — Supabase project, schema, RLS, pgTAP, generated types (2026-10-28; the migrations
-      are applied to no project yet, `REL-1`)
+- [x] Part 2 — Supabase project, schema, RLS, pgTAP, generated types (2026-10-28; applied to the
+      dev project 2026-11-03, `REL-1`)
 - [x] Part 3a — core: types, tool registry, prompts, fakes (2026-10-28, #6)
 - [x] Part 3b — core: orchestration loop, history assembly (2026-10-28, #7)
 - [x] Part 3c — core: spoken-text sink (2026-10-28, #9)
@@ -64,5 +64,6 @@ Tick when a part is merged to `main`.
 The skeleton is reviewed in `docs/review-2026-10-30.md`; what it found and did not fix is in
 `docs/backlog/`.
 
-- [ ] Part 11 — the phone channel (11a schema, identity, minted JWT; 11b worker SIP path; 11c the
-      trunk and the live checklist through a car). Blocked on hosting (`OPS-3`, roadmap step 0).
+- [ ] Part 11 — the phone channel (11a schema, identity, the call's JWT; 11b worker SIP path; 11c
+      the trunk and the live checklist through a car). Hosts decided 2026-11-03 (decision 0013);
+      11c waits for the deploy (`REL-9`, roadmap step 0).
