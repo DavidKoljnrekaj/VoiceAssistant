@@ -48,7 +48,11 @@ export function openGate(key: string, value: unknown = { key }): void {
   gate(key).open(value)
 }
 
+/** What `confirmed_write` wrote, in order; cleared by `reset()`. */
+export const executions: string[] = []
+
 export function resetTestTools(): void {
+  executions.length = 0
   handlerEvents.length = 0
   waiters.length = 0
   gates.clear()
@@ -182,6 +186,32 @@ export const unserialisable = defineTool({
     return input.kind === 'function' ? () => 'x' : Symbol('x')
   },
 })
+
+/** The write protocol's subject: previews, then writes only on a confirmed request. */
+export const confirmedWrite = defineTool({
+  name: 'confirmed_write',
+  description: 'Writes a note. The user is asked to confirm before anything is written.',
+  input: z.object({ text: z.string().describe('Note text.') }),
+  requiredRoles: ['admin', 'member'],
+  readOnly: false,
+  confirmation: 'required',
+  async preview(input) {
+    if (input.text === 'preview-boom') throw new Error('preview failed')
+    return `Zapisat ću: "${input.text}"`
+  },
+  async handler(input) {
+    if (input.text === 'boom') throw new Error('kaboom')
+    if (input.text === 'envelope') return { error: 'the system said no' }
+    executions.push(input.text)
+    return { written: input.text }
+  },
+})
+
+/** The write protocol's pack: one plain read, one confirmed write. */
+export const CONFIRM_PACK: ToolPack = {
+  name: 'confirm',
+  tools: [echo, confirmedWrite] as ToolPack['tools'],
+}
 
 export const TEST_PACK: ToolPack = {
   name: 'test',

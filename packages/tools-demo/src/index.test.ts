@@ -1,8 +1,15 @@
 // The demo pack against the fakes, as the user: the handlers, the strict schemas, the allowlist,
-// and one scenario per tool through the real loop (D10, D12, D13; D11 is the voice refusal).
+// and one scenario per tool through the real loop (D10, D12, D13; D11 is the voice refusal;
+// D13 and D14 cover the write protocol on create_note).
 import { describe, expect, it } from 'vitest'
 
-import { type ChannelAllowlist, toAnthropicTool, ToolRegistry, type ToolHandlerExtras } from '@va/core'
+import {
+  type ChannelAllowlist,
+  MemoryConfirmationStore,
+  toAnthropicTool,
+  ToolRegistry,
+  type ToolHandlerExtras,
+} from '@va/core'
 import {
   anthropic,
   answer,
@@ -35,7 +42,10 @@ describe('@va/tools-demo', () => {
       'get_item',
       'search_items',
     ])
-    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(['get_item', 'search_items'])
+    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual([
+      'get_item',
+      'search_items',
+    ])
     expect(registry.find({ role: 'admin' }, 'create_note', 'voice')).toBeUndefined()
   })
 
@@ -191,9 +201,15 @@ describe('@va/tools-demo', () => {
   scenario(
     'D12 through the loop: get_item reads one item as the user; the item reaches the model, the tool_result row and the sink',
     async () => {
-      anthropic.script(callTools(toolUse('get_item', { item_id: ITEMS.laptop.id })), answer('Košta 1299 eura.'))
+      anthropic.script(
+        callTools(toolUse('get_item', { item_id: ITEMS.laptop.id })),
+        answer('Košta 1299 eura.'),
+      )
       const ctx = await authAs('member')
-      const run = await runChat(ctx, 'Koliko košta prijenosno računalo?', { packs: [demoPack], allowlist: ALLOWLIST })
+      const run = await runChat(ctx, 'Koliko košta prijenosno računalo?', {
+        packs: [demoPack],
+        allowlist: ALLOWLIST,
+      })
       const read = db.requestsTo('demo_items', 'GET')[0]!
       expect(clientOf(read)).toBe('user')
       expect(read.params.get('id')).toBe(`eq.${ITEMS.laptop.id}`)
@@ -214,31 +230,77 @@ describe('@va/tools-demo', () => {
   )
 
   scenario(
-    'D13 through the loop: create_note writes as the user with the caller’s user_id; the note id reaches the model',
+    'D13 through the loop: create_note previews first (nothing written, the confirm event carries the item’s name), then writes as the user on the confirmed turn',
     async () => {
+      anthropic.script(
+        callTools(toolUse('create_note', { item_id: ITEMS.desk.id, text: 'Naručiti dva.' })),
+        answer('Želite li da zabilježim?'),
+      )
+      const ctx = await authAs('member')
+      const store = new MemoryConfirmationStore()
+      const first = await runChat(ctx, 'Zabilježi: naručiti dva radna stola', {
+        packs: [demoPack],
+        allowlist: ALLOWLIST,
+        confirmations: store,
+      })
+      expect(db.requestsTo('demo_notes', 'POST')).toHaveLength(0)
+      expect(clientOf(db.requestsTo('demo_items', 'GET')[0]!)).toBe('user')
+      expect(first.sink.toolResults[0]!.output).toMatchObject({
+        pending_confirmation: true,
+        summary: 'Zabilježit ću uz artikl "Radni stol": "Naručiti dva."',
+      })
+      expect(first.sink.confirms).toHaveLength(1)
+      const id = first.sink.confirms[0]!.id
+      expect(first.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+
       anthropic.script(
         callTools(toolUse('create_note', { item_id: ITEMS.desk.id, text: 'Naručiti dva.' })),
         answer('Zabilježeno.'),
       )
-      const ctx = await authAs('member')
-      const run = await runChat(ctx, 'Zabilježi: naručiti dva radna stola', {
+      const run = await runChat(ctx, 'Da.', {
         packs: [demoPack],
         allowlist: ALLOWLIST,
+        confirmations: store,
+        sessionId: first.sessionId,
+        parentId: first.rows().at(-1)!.id as string,
+        extras: { confirmation: { id } },
       })
       const write = db.requestsTo('demo_notes', 'POST')[0]!
       expect(clientOf(write)).toBe('user')
       expect(write.body).toEqual({ user_id: USERS.member.id, item_id: ITEMS.desk.id, text: 'Naručiti dva.' })
       const notes = db.rows('demo_notes')
       expect(notes).toHaveLength(1)
-      expect(notes[0]).toMatchObject({ user_id: USERS.member.id, item_id: ITEMS.desk.id, text: 'Naručiti dva.' })
-      const sent = toolResultSentToModel(1, run.sink.toolCalls[0]!.id) as { id: string; created_at: string }
+      expect(notes[0]).toMatchObject({
+        user_id: USERS.member.id,
+        item_id: ITEMS.desk.id,
+        text: 'Naručiti dva.',
+      })
+      const sent = toolResultSentToModel(3, run.sink.toolCalls[0]!.id) as { id: string; created_at: string }
       expect(sent.id).toBe(notes[0]!.id)
       expect(sent).toHaveProperty('created_at')
-      expect(run.sink.toolResults[0]).toMatchObject({ tool: 'create_note', isError: false, output: { id: notes[0]!.id } })
-      expect(run.rows().map((r) => r.turn_kind)).toEqual(['user', 'assistant', 'tool_result', 'assistant'])
+      expect(run.sink.toolResults[0]).toMatchObject({
+        tool: 'create_note',
+        isError: false,
+        output: { id: notes[0]!.id },
+      })
+      expect(run.sink.confirms).toEqual([])
+      expect(store.rows[0]).toMatchObject({ id, outcome: 'executed' })
       expect(run.sink.doneEvent?.stopReason).toBe('end_turn')
     },
   )
+
+  it('D14: create_note is under the write protocol; its preview reads the item as the user and refuses an unknown one', async () => {
+    reset()
+    const ctx = await authAs('member')
+    expect(createNote.confirmation).toBe('required')
+    expect(await createNote.preview!({ item_id: ITEMS.lamp.id, text: 'x' }, ctx, extras)).toBe(
+      'Zabilježit ću uz artikl "Stolna lampa": "x"',
+    )
+    expect(clientOf(db.requestsTo('demo_items', 'GET').at(-1)!)).toBe('user')
+    await expect(
+      createNote.preview!({ item_id: '00000000-0000-4000-8000-000000000999', text: 'x' }, ctx, extras),
+    ).rejects.toThrow('item not found')
+  })
 
   scenario(
     'D11 through the loop on voice: create_note is not advertised and is refused at dispatch',

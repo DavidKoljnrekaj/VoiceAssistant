@@ -127,9 +127,15 @@ describe('history assembly', () => {
       assistant('a3', 'x'),
     ]
     for (const boundary of ['a1', 'r1']) {
-      const applied = assembleHistory(rows, { ...opts, summary: { text: 'SAŽETAK', throughMessageId: boundary } })
+      const applied = assembleHistory(rows, {
+        ...opts,
+        summary: { text: 'SAŽETAK', throughMessageId: boundary },
+      })
       expect(validateConversation(applied), boundary).toBeNull()
-      expect(applied.map((m) => m.role), boundary).toEqual(['user', 'assistant'])
+      expect(
+        applied.map((m) => m.role),
+        boundary,
+      ).toEqual(['user', 'assistant'])
       const first = applied[0]!.content[0] as unknown as { type: string; text: string }
       expect(first.type).toBe('text')
       expect(first.text).toContain('SAŽETAK')

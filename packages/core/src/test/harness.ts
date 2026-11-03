@@ -12,9 +12,17 @@ import type { Json } from '@va/db'
 
 import { authenticateToken, type AuthContext } from '../auth.js'
 import { type Channel, type ChannelSettings, channelSettings } from '../channel.js'
+import { MemoryConfirmationStore } from '../loop/confirmations.js'
 import { assembleHistory } from '../loop/history.js'
 import { runOrchestrationLoop } from '../loop/orchestrator.js'
-import type { LoopHooks, LoopMark, MessageRow, MessageStore, UsageReport } from '../loop/ports.js'
+import type {
+  ConfirmationStore,
+  LoopHooks,
+  LoopMark,
+  MessageRow,
+  MessageStore,
+  UsageReport,
+} from '../loop/ports.js'
 import { buildStaticSystemPrompt, buildUserContext } from '../prompts/index.js'
 import { BufferedSink } from '../sinks/buffered.js'
 import type { ToolHandlerExtras, ToolPack } from '../tools/define.js'
@@ -163,6 +171,8 @@ export interface RunChatOptions {
   sink?: BufferedSink
   /** A store the test owns (a deferred one, say); `serviceStore` otherwise. */
   store?: MessageStore
+  /** The session's pending confirmations; a fresh in-memory store otherwise. */
+  confirmations?: ConfirmationStore
 }
 
 export interface RunChatResult {
@@ -261,6 +271,7 @@ export async function runChat(
       ],
       tools: registry.anthropicTools(ctx, channel),
       registry,
+      confirmations: opts.confirmations ?? new MemoryConfirmationStore(),
       logTag: '[test]',
     },
     { sessionId, messages, lastInsertedId: userRow.id, extras },

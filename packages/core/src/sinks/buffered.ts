@@ -1,6 +1,6 @@
 // A sink that keeps everything: for tests and for any non-streamed response.
 import type { ErrorCode } from '../errors.js'
-import type { EventSink, Usage } from '../loop/ports.js'
+import type { ConfirmEvent, EventSink, Usage } from '../loop/ports.js'
 
 export class BufferedSink implements EventSink {
   /** Every delta concatenated. */
@@ -9,6 +9,7 @@ export class BufferedSink implements EventSink {
   blocks: Array<{ text: string; messageId: string }> = []
   toolCalls: Array<{ tool: string; input: unknown; id: string }> = []
   toolResults: Array<{ tool: string; output: unknown; id: string; isError: boolean }> = []
+  confirms: ConfirmEvent[] = []
   doneEvent: { stopReason: string; usage: Usage } | null = null
   errorEvent: { code: ErrorCode; message: string } | null = null
   /** Every call in order, by method name, for ordering assertions. */
@@ -33,6 +34,10 @@ export class BufferedSink implements EventSink {
   async toolResult(tool: string, output: unknown, id: string, isError: boolean): Promise<void> {
     this.toolResults.push({ tool, output, id, isError })
     this.order.push('toolResult')
+  }
+  async confirm(c: ConfirmEvent): Promise<void> {
+    this.confirms.push(c)
+    this.order.push('confirm')
   }
   async done(stopReason: string, usage: Usage): Promise<void> {
     this.doneEvent = { stopReason, usage }

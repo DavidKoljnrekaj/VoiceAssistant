@@ -11,8 +11,8 @@ import { toAnthropicTool } from './schema.js'
  * Default-deny per channel: `'all'` opens a channel to every registered tool its role allows, a
  * list names the tools it gets, and a channel absent from the record gets none. The app that
  * composes the packs supplies it (`apps/api/src/tools.ts`, `apps/voice/src/tools.ts`): core
- * names no pack's tools. Every tool named for a spoken channel is read-only, asserted when the
- * registry is built.
+ * names no pack's tools. Every tool named for a spoken channel is read-only or runs only after
+ * the user confirmed (`confirmation: 'required'`), asserted when the registry is built.
  */
 export type ChannelAllowlist = Partial<Record<Channel, 'all' | readonly string[]>>
 
@@ -82,8 +82,8 @@ export class ToolRegistry {
   }
 }
 
-/** Throws when an allowlist names a tool that is not registered or that writes, so a bad
- * composition fails at load, not at the first call. */
+/** Throws when an allowlist names a tool that is not registered, or one that writes without the
+ * confirmation protocol, so a bad composition fails at load, not at the first call. */
 export function assertAllowlist(
   tools: ReadonlyMap<string, ToolDefinition<unknown>>,
   allowlist: ChannelAllowlist,
@@ -93,7 +93,9 @@ export function assertAllowlist(
     for (const name of names) {
       const tool = tools.get(name)
       if (!tool) throw new Error(`allowlist.${channel} names an unknown tool: ${name}`)
-      if (!tool.readOnly) throw new Error(`allowlist.${channel} names a tool that writes: ${name}`)
+      if (!tool.readOnly && tool.confirmation !== 'required') {
+        throw new Error(`allowlist.${channel} names a tool that writes without confirmation: ${name}`)
+      }
     }
   }
 }

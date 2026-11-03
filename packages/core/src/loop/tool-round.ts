@@ -6,6 +6,7 @@ import type { Json } from '@va/db'
 
 import type { AuthContext } from '../auth.js'
 import { log } from '../log.js'
+import type { ToolHandlerExtras } from '../tools/define.js'
 import { dispatchToolWithTimeout, type ToolOutcome } from './dispatch.js'
 import type {
   EventSink,
@@ -32,7 +33,7 @@ export interface ToolRoundInput {
   parentId: string
   sessionId: string
   iteration: number
-  extras: Parameters<typeof dispatchToolWithTimeout>[4]
+  extras: ToolHandlerExtras
 }
 
 export async function runToolRound(
@@ -49,20 +50,18 @@ export async function runToolRound(
     results = toolUses.map(() => ({ output: CANCELLED_BEFORE_RUN, isError: true }))
   } else {
     hooks.mark?.('tools_start')
+    const dc = {
+      registry: config.registry,
+      ctx,
+      extras: input.extras,
+      channel: config.channel,
+      sessionId: input.sessionId,
+      confirmations: config.confirmations,
+      logTag: config.logTag,
+    }
     results = await dispatchAll(
       toolUses.map(
-        (tu) => () =>
-          dispatchToolWithTimeout(
-            config.registry,
-            tu.name,
-            tu.input,
-            ctx,
-            input.extras,
-            config.settings.toolTimeoutMs,
-            config.channel,
-            signal,
-            config.logTag,
-          ),
+        (tu) => () => dispatchToolWithTimeout(dc, tu.name, tu.input, config.settings.toolTimeoutMs, signal),
       ),
       signal,
     )
@@ -73,8 +72,10 @@ export async function runToolRound(
 }
 
 /** Persists the single `tool_result` row (blocks in `tool_use` order), then emits one
- * `toolResult` per outcome unless the request was aborted (silent return: the request owner
- * decides what to say). The sink gets the outcome itself, the value the row's `content` holds. */
+ * `toolResult` per outcome, and a `confirm` right after the result of a tool that previewed,
+ * unless the request was aborted (silent return: the request owner decides what to say). The
+ * sink gets the outcome itself, the value the row's `content` holds; the confirmation id goes
+ * to the sink only. */
 export async function persistThenEmit(
   input: Pick<ToolRoundInput, 'ctx' | 'config' | 'toolUses' | 'parentId' | 'sessionId' | 'iteration'>,
   results: readonly ToolOutcome[],
@@ -104,8 +105,9 @@ export async function persistThenEmit(
   }
   if (!aborted) {
     for (const [i, tu] of input.toolUses.entries()) {
-      const { output, isError } = results[i]!
+      const { output, isError, pending } = results[i]!
       await sink.toolResult(tu.name, output, tu.id, isError)
+      if (pending) await sink.confirm({ ...pending, tool: tu.name, toolUseId: tu.id })
     }
   }
   return { kind: 'persisted', rowId: row.id, blocks, aborted }

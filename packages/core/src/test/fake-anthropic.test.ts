@@ -120,7 +120,9 @@ describe('fake-anthropic', () => {
       { role: 'user', content: [{ type: 'tool_result', tool_use_id: tu.id, content: '{}' }] },
       { role: 'user', content: [text('c')] },
     ]
-    expect(validateConversation(roundTrip, [])).toMatch(/messages\.1\.content\.0: `tool_use` blocks require `tools`/)
+    expect(validateConversation(roundTrip, [])).toMatch(
+      /messages\.1\.content\.0: `tool_use` blocks require `tools`/,
+    )
     expect(validateConversation(roundTrip, [{ name: 'search_items' }])).toBeNull()
     expect(validateConversation(roundTrip)).toBeNull()
     reset()

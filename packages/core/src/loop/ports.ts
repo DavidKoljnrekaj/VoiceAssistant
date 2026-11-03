@@ -70,8 +70,49 @@ export interface EventSink {
   toolCall(tool: string, input: unknown, id: string): Promise<void>
   /** After the `tool_result` row is persisted. */
   toolResult(tool: string, output: unknown, id: string, isError: boolean): Promise<void>
+  /** A write awaits the user's answer: after that tool's `toolResult`. The id is the channel's
+   * to keep; it never reaches the model. */
+  confirm(c: ConfirmEvent): Promise<void>
   done(stopReason: string, usage: Usage): Promise<void>
   error(code: ErrorCode, message: string): Promise<void>
+}
+
+/** What the sink gets when a confirmed tool previewed instead of running. */
+export interface ConfirmEvent {
+  id: string
+  tool: string
+  /** The `tool_use` block this answers. */
+  toolUseId: string
+  summary: string
+  expiresAt: string
+}
+
+/** A confirmation as issued: who may answer it and what exactly it unlocks. */
+export interface PendingConfirmation {
+  sessionId: string
+  userId: string
+  tool: string
+  /** `inputHash` of the validated input the summary describes. */
+  inputHash: string
+  summary: string
+  expiresAt: string
+}
+
+export interface ConsumeMatch {
+  sessionId: string
+  userId: string
+  tool: string
+  inputHash: string
+}
+
+export type ConsumeResult = 'ok' | 'not_found' | 'mismatch' | 'used' | 'expired'
+
+/** Where pending confirmations live: the API's table for chat, the worker's memory for a call.
+ * `consume` is single use: the first matching call wins. None of these throw to the loop. */
+export interface ConfirmationStore {
+  issue(c: PendingConfirmation): Promise<{ id: string } | { id: null; code?: string }>
+  consume(id: string, match: ConsumeMatch): Promise<ConsumeResult>
+  settle(id: string, outcome: 'executed' | 'failed', errorCode?: string): Promise<void>
 }
 
 /** One `ai_messages` row without its session (the store knows it). */
@@ -115,6 +156,8 @@ export interface LoopConfig {
   /** `registry.anthropicTools(ctx, channel)`: sorted, strict, breakpoint on the last. */
   tools: Anthropic.Tool[]
   registry: ToolRegistry
+  /** Pending confirmations of this session (the write protocol). */
+  confirmations: ConfirmationStore
   /** The owning channel's log tag, e.g. `[api]`. */
   logTag: string
 }
