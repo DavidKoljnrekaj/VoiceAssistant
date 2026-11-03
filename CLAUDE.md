@@ -50,6 +50,7 @@ apps/api             @va/api         Hono: /chat (SSE), /voice/sessions, /health
 apps/voice           @va/voice       LiveKit Agents worker; imports @va/core in-process
 apps/web             @va/web         React PWA: auth, chat panel, call button
 supabase/            config, migrations/, tests/database/ (pgTAP), seed.sql
+deploy/              compose.prod.yml + Caddyfile for the VM; vercel.json at the root for the PWA
 docs/                one doc per package, decisions/, backlog/, plan/
 tools/               repo-level scripts only
 ```
@@ -120,8 +121,9 @@ behaviour change updates its tests in the same commit, never inside a refactor.
 
 `docs/<PACKAGE>.md` per package, updated in the same change as the code. `docs/ARCHITECTURE.md`
 when the layout changes. `docs/OPS.md` holds the env matrix (a test fails when an `env.ts` adds a
-variable it misses), the log fields and the runbook; `docs/SECURITY.md` is the checklist every PR
-is reviewed against. `docs/decisions/NNNN-title.md` for choices (one page). `docs/backlog/`
+variable it misses), the log fields and the runbook; `docs/DEPLOY-RUNBOOK.md` and
+`docs/RELEASE-RUNBOOK.md` are the operator's click-by-click steps; `docs/SECURITY.md` is the
+checklist every PR is reviewed against. `docs/decisions/NNNN-title.md` for choices (one page). `docs/backlog/`
 for anything found and not fixed, with an id (`/backlog`). The implementation plan is
 `docs/plan/`; read `00-brief.md` and the current part before starting a session's work.
 

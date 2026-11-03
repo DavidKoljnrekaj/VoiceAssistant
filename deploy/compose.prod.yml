@@ -1,0 +1,79 @@
+# The api and the voice worker on the VM, behind Caddy for HTTPS (decision 0013; the operator
+# steps are docs/DEPLOY-RUNBOOK.md). Run from the repository root on the VM:
+#
+#   docker compose -f deploy/compose.prod.yml up -d --build
+#
+# Secrets come from env files outside the repo, readable by root only:
+#   /etc/va/api.env    SUPABASE_*, ANTHROPIC_API_KEY, LIVEKIT_*, CORS_ORIGINS, VOICE_AGENT_NAME
+#   /etc/va/voice.env  AGENT_NAME, LIVEKIT_*, SONIOX_API_KEY, ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, SUPABASE_*
+# and the API's public hostname from deploy/.env (API_HOST=api.example.hr; copy deploy/env.example).
+# Caddy gets and renews the certificate for API_HOST by itself; the api has no host port, only
+# Caddy reaches it. The worker is an outbound client of LiveKit Cloud and exposes nothing.
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      API_HOST: ${API_HOST:?set API_HOST in deploy/.env (copy deploy/env.example)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - /etc/va/api.env
+    environment:
+      PORT: '3000'
+    expose:
+      - '3000'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://127.0.0.1:3000/health\").then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: '20m'
+        max-file: '5'
+
+  voice:
+    build:
+      context: ..
+      dockerfile: apps/voice/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - /etc/va/voice.env
+    environment:
+      VOICE_LOGS_DIR: /app/apps/voice/logs
+      LOG_LEVEL: info
+    volumes:
+      - voice-logs:/app/apps/voice/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: '20m'
+        max-file: '5'
+
+volumes:
+  caddy-data:
+  caddy-config:
+  voice-logs:

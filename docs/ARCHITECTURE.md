@@ -15,6 +15,8 @@ VoiceAssistant/
 ├── .claude/                      # settings.json, rules/, hooks/, skills/, agents/
 ├── .github/workflows/            # test.yml (checks, PWA build, image builds), db-tests.yml, e2e.yml; dependabot.yml
 ├── compose.dev.yml               # api + voice + web containers against the local Supabase stack
+├── deploy/                       # compose.prod.yml + Caddyfile: api and voice on the VM behind Caddy (docs/DEPLOY-RUNBOOK.md)
+├── vercel.json                   # the PWA on Vercel: build apps/web, serve apps/web/dist, SPA rewrite, caching headers
 ├── packages/
 │   ├── core/                     # @va/core — the engine: loop, tools registry, prompts, history, sinks, fakes
 │   ├── db/                       # @va/db   — generated Supabase types, client factories, env
@@ -96,26 +98,27 @@ users are in `docs/DB.md`.
 
 Every later part extends this table.
 
-| Concern                                                           | Lives in                               | Since      |
-| ----------------------------------------------------------------- | -------------------------------------- | ---------- |
-| Workspace tooling (TypeScript, ESLint, Prettier, Vitest projects) | root config files                      | Part 1     |
-| Claude Code harness (permissions, hooks, rules, skills, agents)   | `.claude/`                             | Part 1     |
-| CI (typecheck, lint, unit tests, audit; pgTAP)                    | `.github/workflows/`                   | Part 1     |
-| CI (coverage, PWA build, image builds; Playwright smoke)          | `.github/workflows/`                   | Part 7     |
-| Decisions                                                         | `docs/decisions/`                      | Part 1     |
-| Backlog by area, release checklist                                | `docs/backlog/`                        | Part 1     |
-| Implementation plan                                               | `docs/plan/`                           | Part 1     |
-| Schema, RLS, pgTAP, seed                                          | `supabase/`                            | Part 2     |
-| Generated types, client factories, env schema                     | `packages/db`                          | Part 2     |
-| Loop, tool registry, prompts, history, sinks, fakes               | `packages/core`                        | Part 3     |
-| Example tool pack                                                 | `packages/tools-demo`                  | Part 3     |
-| HTTP API, SSE, rate limits, voice session endpoints               | `apps/api`                             | Part 4     |
-| Voice worker, bench scripts                                       | `apps/voice`                           | Part 5     |
-| PWA                                                               | `apps/web`                             | Part 6     |
-| Env matrix, logging fields, CI, containers, deploy, runbook       | `docs/OPS.md`                          | Part 7     |
-| Security checklist, threat notes, personal data                   | `docs/SECURITY.md`                     | Part 7     |
-| Operator steps on the dev project: push, sweep, types             | `docs/RELEASE-RUNBOOK.md`              | Part 7     |
-| The log helper and the call-site lint test                        | `packages/core/src/log.ts`             | Part 7     |
-| Container images, dev compose                                     | `apps/*/Dockerfile`, `compose.dev.yml` | Part 7     |
-| Integration order and sizing; research notes behind decisions     | `docs/plan/10-…`, `docs/research/`     | 2026-11-03 |
-| Phone channel: trunk, caller identity, PIN, minted JWT (planned)  | `apps/voice/src/phone/`, migration     | Part 11    |
+| Concern                                                           | Lives in                                           | Since      |
+| ----------------------------------------------------------------- | -------------------------------------------------- | ---------- |
+| Workspace tooling (TypeScript, ESLint, Prettier, Vitest projects) | root config files                                  | Part 1     |
+| Claude Code harness (permissions, hooks, rules, skills, agents)   | `.claude/`                                         | Part 1     |
+| CI (typecheck, lint, unit tests, audit; pgTAP)                    | `.github/workflows/`                               | Part 1     |
+| CI (coverage, PWA build, image builds; Playwright smoke)          | `.github/workflows/`                               | Part 7     |
+| Decisions                                                         | `docs/decisions/`                                  | Part 1     |
+| Backlog by area, release checklist                                | `docs/backlog/`                                    | Part 1     |
+| Implementation plan                                               | `docs/plan/`                                       | Part 1     |
+| Schema, RLS, pgTAP, seed                                          | `supabase/`                                        | Part 2     |
+| Generated types, client factories, env schema                     | `packages/db`                                      | Part 2     |
+| Loop, tool registry, prompts, history, sinks, fakes               | `packages/core`                                    | Part 3     |
+| Example tool pack                                                 | `packages/tools-demo`                              | Part 3     |
+| HTTP API, SSE, rate limits, voice session endpoints               | `apps/api`                                         | Part 4     |
+| Voice worker, bench scripts                                       | `apps/voice`                                       | Part 5     |
+| PWA                                                               | `apps/web`                                         | Part 6     |
+| Env matrix, logging fields, CI, containers, deploy, runbook       | `docs/OPS.md`                                      | Part 7     |
+| Security checklist, threat notes, personal data                   | `docs/SECURITY.md`                                 | Part 7     |
+| Operator steps on the dev project: push, sweep, types             | `docs/RELEASE-RUNBOOK.md`                          | Part 7     |
+| The log helper and the call-site lint test                        | `packages/core/src/log.ts`                         | Part 7     |
+| Container images, dev compose                                     | `apps/*/Dockerfile`, `compose.dev.yml`             | Part 7     |
+| Production compose, Caddy, Vercel config; the deploy runbook      | `deploy/`, `vercel.json`, `docs/DEPLOY-RUNBOOK.md` | `REL-9`    |
+| Integration order and sizing; research notes behind decisions     | `docs/plan/10-…`, `docs/research/`                 | 2026-11-03 |
+| Phone channel: trunk, caller identity, PIN, minted JWT (planned)  | `apps/voice/src/phone/`, migration                 | Part 11    |

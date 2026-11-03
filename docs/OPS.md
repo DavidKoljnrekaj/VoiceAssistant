@@ -32,12 +32,12 @@ app whose `env.ts` does not validate it (`X01b`–`X03b`).
 
 ### Where values are set
 
-| Environment              | Where the values live                                                                                                                                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| local, `pnpm dev`        | `apps/<app>/.env` (gitignored; the dev scripts read it), or `set -a; source ~/.config/va/<app>.env; set +a` for the vendor keys (`docs/VOICE.md` → Running locally)                                             |
-| local, `compose.dev.yml` | `~/.config/va/api.env` and `~/.config/va/voice.env` (`VA_CONFIG_DIR` overrides the directory); `SUPABASE_ANON_KEY` exported in the shell for the PWA build                                                      |
-| CI                       | `test.yml`: placeholders for the PWA build only, no secrets. `e2e.yml`: the `E2E_*` repository secrets below                                                                                                    |
-| dev, prod                | the host's secret store (proposal below: an env file readable by root on the VM, or `fly secrets`; LiveKit Cloud agent secrets if the worker is hosted there); Supabase dashboard for Auth settings and pg_cron |
+| Environment              | Where the values live                                                                                                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| local, `pnpm dev`        | `apps/<app>/.env` (gitignored; the dev scripts read it), or `set -a; source ~/.config/va/<app>.env; set +a` for the vendor keys (`docs/VOICE.md` → Running locally)                                                                                           |
+| local, `compose.dev.yml` | `~/.config/va/api.env` and `~/.config/va/voice.env` (`VA_CONFIG_DIR` overrides the directory); `SUPABASE_ANON_KEY` exported in the shell for the PWA build                                                                                                    |
+| CI                       | `test.yml`: placeholders for the PWA build only, no secrets. `e2e.yml`: the `E2E_*` repository secrets below                                                                                                                                                  |
+| dev, prod                | `/etc/va/api.env` and `/etc/va/voice.env` on the VM, root-only (`docs/DEPLOY-RUNBOOK.md` step 5); `deploy/.env` for the API's hostname; Vercel's project environment variables for the three `VITE_` values; Supabase dashboard for Auth settings and pg_cron |
 
 Secrets never sit in the repository: `.gitignore` keeps every `.env` and `.env.*` out,
 `.dockerignore` keeps them out of the images, the Claude Code harness is denied `Read` on `.env*`
@@ -159,6 +159,12 @@ the root `package.json` are `OPS-2`.
 | `apps/voice/Dockerfile` | `node:24-slim`                       | the same for the worker, `src/agent.ts start`; `onnxruntime-node` for Silero is prebuilt for linux-x64                                 | none (outbound only) |
 | `apps/web/Dockerfile`   | `node:24-slim` → `nginx:1.28-alpine` | the PWA built with the three `VITE_` build args, served with the SPA fallback and no-cache on the entry points (`apps/web/nginx.conf`) | 80                   |
 
+`deploy/compose.prod.yml` runs the api and the worker on the VM behind Caddy
+(`deploy/Caddyfile`, certificate by Caddy, no host port on the api), with the secrets in
+`/etc/va/*.env` and the API's hostname in `deploy/.env`; `vercel.json` at the repository root
+builds and serves the PWA on Vercel with the same caching rules as `nginx.conf`. The operator
+steps, click by click, are `docs/DEPLOY-RUNBOOK.md` (`REL-9`).
+
 `compose.dev.yml` brings the three up against the local Supabase stack: the containers reach it
 as `host.docker.internal:54431`, the browser as `127.0.0.1:54431`, so the PWA is built with the
 host-side URLs. The recipe is at the top of the file. It is a convenience for trying the images;
@@ -177,8 +183,9 @@ harness prompt); `REL-6` holds the first run.
 | Telephony    | Twilio, a Croatian `+385` number (regulatory bundle), trunk region Dublin or Frankfurt → LiveKit's EU SIP endpoint (Part 11)                  | any EU number first; Telnyx                                                   | LiveKit's EU trunk guide is written against Twilio; a local number is what drivers save in contacts                              |
 | LiveKit      | LiveKit Cloud, EU (Frankfurt is what the live checklist ran against, `docs/VOICE.md`)                                                         | self-hosted LiveKit on the VM (later, if egress cost matters)                 | measured; recording off at the project                                                                                           |
 
-The first deploy, in order (`REL-9`; the migrations, pg_cron and the sweep were applied to the
-dev project on 2026-11-03, `REL-1`, `REL-3`, `REL-7`): set the
+The first deploy is written out step by step in `docs/DEPLOY-RUNBOOK.md`. In order (`REL-9`;
+the migrations, pg_cron and the sweep were applied to the dev project on 2026-11-03, `REL-1`,
+`REL-3`, `REL-7`): set the
 Auth site URL and redirect URLs to the PWA origin (`REL-8`); create the LiveKit project (EU) and its API
 key; put the secrets from the matrix into the host's store; build the two images from the
 tagged commit and start them with `CORS_ORIGINS` set to the PWA origin and `VOICE_AGENT_NAME` =
