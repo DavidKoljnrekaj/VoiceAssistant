@@ -1,54 +1,13 @@
-// The demo tables, typed by hand. `demo_items` and `demo_notes` have a migration
-// (`20261029100000_demo_tables.sql`) but no generated type until it is applied to a project and
-// `/db-types` runs (docs/backlog/release.md REL-3), so the pack narrows the user client to this
-// shape. A real pack reads tables that are in `@va/db`'s generated `Database` and needs no cast.
-import type { SupabaseClient } from '@supabase/supabase-js'
-
+// The demo tables are in `@va/db`'s generated `Database` since the migration
+// (`20261029100000_demo_tables.sql`) reached the dev project and `/db-types` ran (2026-11-03,
+// `REL-3`), so the pack reads them through the user's client as it is: no cast, no hand-written
+// shape. A pack depends on `@va/core` only; the queries are typed by the client the engine hands
+// every handler. This is the contract for a real pack.
 import type { AuthContext } from '@va/core'
 
-export type DemoItem = {
-  id: string
-  name: string
-  category: string
-  price: number
-  description: string | null
-  updated_at: string
-}
-
-export type DemoNote = {
-  id: string
-  user_id: string
-  item_id: string
-  text: string
-  created_at: string
-}
-
-export type DemoDatabase = {
-  public: {
-    Tables: {
-      demo_items: {
-        Row: DemoItem
-        Insert: Omit<DemoItem, 'id' | 'updated_at'>
-        Update: Partial<DemoItem>
-        Relationships: []
-      }
-      demo_notes: {
-        Row: DemoNote
-        Insert: Omit<DemoNote, 'id' | 'created_at'>
-        Update: Partial<DemoNote>
-        Relationships: []
-      }
-    }
-    Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
-    Enums: { [_ in never]: never }
-    CompositeTypes: { [_ in never]: never }
-  }
-}
-
-/** The user's RLS client, narrowed to the demo tables. Still the user's JWT: RLS applies. */
-export function demoClient(ctx: AuthContext): SupabaseClient<DemoDatabase> {
-  return ctx.userClient as unknown as SupabaseClient<DemoDatabase>
+/** The user's RLS client: still the user's JWT, RLS applies. */
+export function demoClient(ctx: AuthContext): AuthContext['userClient'] {
+  return ctx.userClient
 }
 
 /**
