@@ -50,6 +50,7 @@ export class SpokenTextSink implements EventSink {
   private pending = ''
   private streamed = ''
   private fillerSpoken = false
+  private confirmed = false
   private holding = true
   private holdTimer: ReturnType<typeof setTimeout> | null = null
   /** Everything spoken so far, after `speakable()`. */
@@ -169,11 +170,16 @@ export class SpokenTextSink implements EventSink {
    * happen, not the model's paraphrase of it; the model then only asks. The owner keeps the id
    * for the yes/no turn (`CallSession`, Part 12b). */
   async confirm(c: ConfirmEvent): Promise<void> {
+    // One write per spoken turn: the call keeps one pending id, so a second preview in the same
+    // turn is neither read out nor confirmable (the model's question covers the first).
+    if (this.confirmed) return
+    this.confirmed = true
+    // The id first: a failed `say` must not lose the write the caller is about to answer.
+    this.onConfirm?.(c)
     this.clearHold()
     await this.flushAll()
     // The paragraph break makes the TTS speak the summary at once, before the model's question.
     await this.say(`${this.joiner()}${c.summary}\n\n`)
-    this.onConfirm?.(c)
   }
 
   async done(stopReason: string, _usage: Usage): Promise<void> {
