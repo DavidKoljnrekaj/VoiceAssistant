@@ -70,7 +70,8 @@ or React. Import a package through its root (`@va/core`), never through `src/`.
 3. A branch never ends on a bare `tool_use`: abort, timeout and persistence failure persist a
    `tool_result` (synthetic `is_error` where needed); history assembly repairs what it still finds.
 4. Default-deny per channel: chat gets registered tools; voice and later channels only what their
-   allowlist names, in a reviewed diff. Every voice tool is `readOnly: true`, asserted at load.
+   allowlist names, in a reviewed diff. Every voice tool is `readOnly: true` or carries
+   `confirmation: 'required'` (decision 0015), asserted at load.
 5. The gate is applied at dispatch, not only at advertisement; an unknown or forbidden tool name
    becomes an `is_error` result, logged.
 6. Tools read as the user through `ctx.userClient` (RLS). `ctx.serviceClient` is for persistence

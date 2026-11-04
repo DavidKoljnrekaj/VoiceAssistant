@@ -17,7 +17,8 @@ gets, a scenario test.
       `tool_result` row (real output for finished tools, a synthetic `is_error` for the rest).
       History assembly repairs any unanswered `tool_use` it still finds.
 - [ ] **Default-deny per channel.** Registration reaches chat; a channel allowlist reaches voice and
-      every later channel. Every allowlisted voice tool is `readOnly: true`, asserted at module load.
+      every later channel. Every allowlisted voice tool is `readOnly: true` or carries
+      `confirmation: 'required'` (decision 0015), asserted at module load.
 - [ ] **The gate is applied at dispatch**, through the same role-and-channel filter as advertisement.
       Unknown or forbidden names become an `is_error` result and a log line.
 - [ ] **Tools read as the user** (`ctx.userClient`). `ctx.serviceClient` only persists, always with

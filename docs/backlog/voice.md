@@ -119,8 +119,9 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 ### VOICE-18 · Low · The voice prompt had no confirmation rule (fixed 2026-11-04, Part 13c)
 
 - `VOICE_INTRO_HR` says changes happen only after the caller confirms and tells the model not to
-  repeat the summary the system reads out (`P06`); the bench before and after is in
-  `docs/VOICE.md` → Measurements.
+  repeat the summary the system reads out (`P26`). The bench after this change is owed by the
+  operator (`docs/VOICE.md` → Measurements, "Owed: Part 13c on voice"); the "before" is the
+  `91b06fe` row.
 
 ### VOICE-19 · Low · On a call the caller confirms the model's paraphrase (fixed 2026-11-04, Part 13c)
 

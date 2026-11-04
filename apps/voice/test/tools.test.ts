@@ -15,7 +15,7 @@ import { mailTokenProvider } from '../src/mail.js'
 import { createRegistry, VOICE_ALLOWLIST } from '../src/tools.js'
 
 describe('voice tools', () => {
-  it('W20 CORE-10: the worker names its voice tools; every one is read-only; an unknown or a write tool fails at load', () => {
+  it('W20 CORE-10: the worker names its voice tools; every one is read-only or confirmation-required; an unknown or a plain write tool fails at load', () => {
     // Part 11: the phone channel hears exactly what the in-app call hears, from one list.
     // Part 13c: the two confirmed mail writes joined.
     const spoken = [

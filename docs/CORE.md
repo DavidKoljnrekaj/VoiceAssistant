@@ -155,14 +155,20 @@ assertion is amended: a tool named for `voice` or `phone` is read-only or confir
 Scenarios E40–E47 (`confirm.test.ts`); the demo pack's `create_note` is the first tool under it
 (D13, D14), the mail pack's `reply_mail` and `flag_mail` the first spoken ones (Part 13c).
 
-**A confirmed write runs to its real outcome** (`isConfirmedWrite`, Part 13c). When the request
-carries the user's confirmation and the tool requires one, the handler's signal fires only on its
-own ceiling (`CONFIRMED_WRITE_TIMEOUT_MS`, 20 s), not on the channel's tool timeout (6 s on a
-call) or the loop's abort, and `dispatchAll` awaits it even after an abort, so the `tool_result`
-row says what happened (E46, E47): an email accepted but reported as failed would invite a
-second send. On a call the spoken sink reads the preview's summary verbatim before the model's
+**A confirmed write runs to its real outcome** (Part 13c). From the moment `consume` returns ok
+and the handler is about to run (the hold `dispatchToolWithTimeout` grants), the handler's
+signal fires only on its own ceiling (`LoopConfig.writeTimeoutMs`, `CONFIRMED_WRITE_TIMEOUT_MS`
+20 s by default), not on the channel's tool timeout (6 s on a call) or the loop's abort, and
+`dispatchAll` awaits that dispatch even after an abort, so the `tool_result` row says what
+happened (E46, E47, E50): an email accepted but reported as failed would invite a second send.
+Past the ceiling the result is `write_outcome_unknown` (E49). Before the hold nothing changes: a
+request aborted before consume runs nothing and leaves the id pending, and a preview cut short
+issues nothing (E48). A turn can therefore outlast its request timeout by up to the write's
+ceiling (the caller hears the timeout line after the write's outcome). On a spoken channel the
+pending result tells the model the summary was read out (E51), and the sink reads only the
+first preview of a turn and hands only its id on (S16). On a call the spoken sink reads the preview's summary verbatim before the model's
 question (`SpokenTextSink.confirm`, S15, `VOICE-19`); the voice prompt tells the model not to
-repeat it (P06, `VOICE-18`).
+repeat it (P26, `VOICE-18`).
 
 ### History assembly
 

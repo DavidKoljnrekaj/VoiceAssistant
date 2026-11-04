@@ -185,7 +185,8 @@ Fixed in code, not settings: `turnDetection: 'stt'` (LiveKit's turn detector has
 `interruption.mode: 'vad'` (never LiveKit's hosted "adaptive" model), the Soniox EU host and
 `stt-rt-v5`, `languageHints: ['hr']` strict, `eleven_v4_turbo` with `language: 'hr'`, and the
 voice channel's engine settings (`docs/CORE.md` → Channels: Sonnet 5.5, `low`, `between_tools`,
-1024 tokens, 4 iterations, 6 s per tool, 25 s per request, last 20 messages, the sink's 200 ms
+1024 tokens, 4 iterations, 6 s per tool (a confirmed write up to 20 s: once the caller said yes it
+runs to its outcome, so a turn may outlast its 25 s by that much), 25 s per request, last 20 messages, the sink's 200 ms
 hold, which `runVoiceTurn` takes from `settings.holdMs`).
 
 ## Latency budget and measurements

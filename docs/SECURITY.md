@@ -33,12 +33,14 @@ item says so in its description.
       only `/me`, never another mailbox; the token comes from `tokenFor` through the service
       role by `user_id` (`docs/MAIL.md`). Tests: the packs' scenarios (`D`, `Z01`–`Z18`), `B28`,
       `B29`, `demo_tables.test.sql` (pgTAP).
-- [ ] **The voice allowlist is read-only; dispatch re-applies the gate; speech is untrusted
-      input.** `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`, the only place a tool is named for
-      voice) with the `readOnly` assertion at module load (`packages/core/src/tools/registry.ts`);
+- [ ] **The voice allowlist is read-only or confirmed; dispatch re-applies the gate; speech is
+      untrusted input.** `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`, the only place a tool is
+      named for voice) with the assertion at module load that every one is read-only or carries
+      `confirmation: 'required'` (decision 0015, `packages/core/src/tools/registry.ts`); a spoken
+      write runs only on the caller's yes decided in code, after its preview was read out;
       `dispatchTool` resolves the name through the same role-and-channel filter and answers an
       `is_error` result (invariants 4 and 5). Tests: `T02`, `T05`, `T08`, `E08`–`E10`, `W06`,
-      `W20`, `R01`.
+      `W20`, `R01`, `E40`–`E51`, `S15`, `S16`, `W35`–`W43`, `Z19`–`Z27`, `B30`.
 - [ ] **The JWT never leaves our side; LiveKit learns the user id and nothing else.** LiveKit
       job metadata carries only the opaque call token and the session id; the browser gets only
       a LiveKit room token whose participant identity is `users.id` with no name (so no email);
