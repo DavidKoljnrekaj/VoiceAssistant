@@ -1,0 +1,18 @@
+{
+  "name": "@va/tools-mail",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The email pack: Outlook through Microsoft Graph (the Graph client in 13a; tools in 13b and 13c)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@va/core": "workspace:*"
+  }
+}

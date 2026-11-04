@@ -14,6 +14,7 @@ export default defineConfig({
       exclude: [
         '**/*.test.{ts,tsx}',
         'packages/core/src/test/**', // the fakes and the harness
+        'packages/integrations/src/test/**', // the fake Microsoft
         'packages/db/src/database.ts', // generated
         'apps/web/src/components/**/*.tsx', // components: no DOM tests (Playwright covers the shell)
         'apps/web/src/pages/**',

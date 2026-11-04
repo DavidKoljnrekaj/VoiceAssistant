@@ -1,5 +1,6 @@
 // In-memory stand-in for the Supabase services the engine talks to: GoTrue (`/auth/v1/user`,
-// and the magic-link flow the phone channel uses: `admin/generate_link`, `verify`, `logout`)
+// the magic-link flow the phone channel uses: `admin/generate_link`, `verify`, `logout`, and
+// `admin/users/<id>` for the Outlook callback's identity check)
 // and PostgREST (`/rest/v1/*`, including `rpc/`). Ported from Landmark without its Storage part.
 //
 // It speaks HTTP, not a client API: the real supabase-js / postgrest-js in the code under test
@@ -10,7 +11,9 @@
 // or FK hint, with `!inner`; filters eq/neq/gt/gte/lt/lte/like/ilike/is/in, `not.` negation,
 // embedded filters (`alias.col`) and `or=(...)`; order with nulls first/last; limit/offset;
 // `Prefer: count=exact` (+ HEAD); `vnd.pgrst.object+json` (single); insert / update / delete
-// with `return=representation` (delete returns the removed rows); and RPCs registered by the test.
+// with `return=representation` (delete returns the removed rows); upsert (`on_conflict` with
+// `resolution=merge-duplicates` or `ignore-duplicates`) on the unique keys below, and `23505` for
+// a plain insert that breaks one; and RPCs registered by the test.
 
 export type Row = Record<string, unknown>
 
@@ -26,6 +29,12 @@ const FKS: Record<string, Record<string, string>> = {
   voice_caller_identities: { user_id: 'users', created_by: 'users' },
   tool_confirmations: { session_id: 'ai_sessions', user_id: 'users' },
   demo_notes: { user_id: 'users' },
+  user_integrations: { user_id: 'users' },
+}
+
+// Unique keys besides `id`, from the DDL: an insert that repeats one is `23505`, an upsert merges on it.
+const UNIQUE: Record<string, string[][]> = {
+  user_integrations: [['user_id', 'provider']],
 }
 
 // Column defaults applied on insert, mirroring the DDL.
@@ -48,6 +57,12 @@ const DEFAULTS: Record<string, Row> = {
     active: true,
     created_by: null,
   },
+  user_integrations: {
+    access_token_enc: null,
+    access_expires_at: null,
+    status: 'active',
+    last_error_code: null,
+  },
   ai_messages: {
     model: null,
     input_tokens: null,
@@ -58,7 +73,14 @@ const DEFAULTS: Record<string, Row> = {
     parent_id: null,
   },
 }
-const HAS_UPDATED_AT = new Set(['users', 'ai_sessions'])
+const HAS_UPDATED_AT = new Set(['users', 'ai_sessions', 'user_integrations'])
+
+export interface FakeAuthUser {
+  id: string
+  email: string
+  confirmed?: boolean
+  banned?: boolean
+}
 
 export interface RecordedRequest {
   method: string
@@ -94,10 +116,11 @@ interface Cond {
 
 export class FakeSupabase {
   tables: Record<string, Row[]> = {}
-  /** token → auth user. A token not in this map is rejected by `/auth/v1/user`. */
-  authUsers: Record<string, { id: string; email: string }> = {}
+  /** token → auth user. A token not in this map is rejected by `/auth/v1/user`. `confirmed`
+   * (default true) and `banned` shape `email_confirmed_at` and `banned_until`. */
+  authUsers: Record<string, FakeAuthUser> = {}
   /** Magic links `admin/generate_link` issued and `verify` has not consumed: token hash → auth user. */
-  magicLinks: Record<string, { id: string; email: string }> = {}
+  magicLinks: Record<string, FakeAuthUser> = {}
   private issued = 0
   rpcs: Record<string, (args: Row) => unknown> = {}
   requests: RecordedRequest[] = []
@@ -275,6 +298,13 @@ export class FakeSupabase {
         user: authUserJson(user),
       })
     }
+    // `admin.getUserById(id)`, service role only: the auth user as GoTrue holds it.
+    const byId = name.match(/^admin\/users\/([^/]+)$/)
+    if (byId && req.method === 'GET') {
+      const user = Object.values(this.authUsers).find((u) => u.id === byId[1])
+      if (!user) return json(404, { code: 404, error_code: 'user_not_found', msg: 'User not found' })
+      return json(200, authUserJson(user))
+    }
     // `admin.signOut(jwt, scope)`: the session behind the bearer stops working.
     if (name === 'logout' && req.method === 'POST') {
       if (!this.authUsers[token]) return json(401, { code: 401, error_code: 'bad_jwt', msg: 'invalid JWT' })
@@ -294,6 +324,7 @@ export class FakeSupabase {
     const row: Row = { ...(DEFAULTS[table] ?? {}), id: crypto.randomUUID(), created_at: createdAt }
     if (HAS_UPDATED_AT.has(table)) row.updated_at = createdAt
     if (table === 'voice_calls') row.last_seen_at = createdAt // DDL: `DEFAULT now()`
+    if (table === 'user_integrations') row.connected_at = createdAt // DDL: `DEFAULT now()`
     return { ...row, ...raw }
   }
 
@@ -337,13 +368,31 @@ export class FakeSupabase {
         }
         case 'POST': {
           const input = Array.isArray(body) ? body : [body]
+          const onConflict = params.get('on_conflict')?.split(',')
+          const merge = /resolution=merge-duplicates/.test(prefer)
+          const ignore = /resolution=ignore-duplicates/.test(prefer)
           const inserted: Row[] = []
           for (const raw of input as Row[]) {
+            if (onConflict && (merge || ignore)) {
+              const existing = rows.find((r) => onConflict.every((c) => r[c] === raw[c]))
+              if (existing) {
+                if (merge) {
+                  Object.assign(existing, raw, HAS_UPDATED_AT.has(table) ? { updated_at: this.now() } : {})
+                  inserted.push(existing)
+                }
+                continue
+              }
+            }
             const row = this.newRow(table, raw)
-            if (rows.some((r) => r.id === row.id)) {
+            const broken = rows.some((r) => r.id === row.id)
+              ? `${table}_pkey`
+              : (UNIQUE[table] ?? [])
+                  .filter((key) => rows.some((r) => key.every((c) => r[c] === row[c])))
+                  .map((key) => `${table}_${key.join('_')}_key`)[0]
+            if (broken) {
               return json(409, {
                 code: '23505',
-                message: `duplicate key value violates unique constraint "${table}_pkey"`,
+                message: `duplicate key value violates unique constraint "${broken}"`,
                 details: null,
                 hint: null,
               })
@@ -445,12 +494,14 @@ function untilOrAbort<T>(until: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-function authUserJson(user: { id: string; email: string }): Row {
+function authUserJson(user: FakeAuthUser): Row {
   return {
     id: user.id,
     aud: 'authenticated',
     role: 'authenticated',
     email: user.email,
+    email_confirmed_at: user.confirmed === false ? null : '2026-01-01T00:00:00Z',
+    banned_until: user.banned ? '2099-01-01T00:00:00Z' : null,
     app_metadata: {},
     user_metadata: {},
     created_at: '2026-01-01T00:00:00Z',

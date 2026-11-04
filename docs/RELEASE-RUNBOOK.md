@@ -427,6 +427,77 @@ number to another user set `active = false` on the old row first. To reset a loc
 To change a PIN, update `pin_hash` with a new hash. To revoke a caller, set `active = false`
 (their sessions keep pointing at the row) or delete the row.
 
+## Connecting Outlook (Part 13a: `REL-12`, `REL-14`, `REL-13`)
+
+For an operator who has not used Entra before. Do it after the administrator's reply to
+`docs/requests/entra-admin-request.md` (tenant id, client id, the secret by a one-time link,
+consent granted). Nothing here needs the administrator again.
+
+**A. The database (`REL-12`).** `supabase db push` applies
+`20261104100000_user_integrations.sql` to the dev project, as in steps 4, 6 and 7 above. Then
+the after-apply check of `REL-12` in `docs/backlog/release.md`, then `/db-types` and commit
+`packages/db/src/database.ts`.
+
+**B. Supabase Auth (`REL-14`).** Supabase Dashboard → the project → **Authentication** →
+**Sign In / Providers**:
+
+1. Under **User Signups**, switch **Allow new users to sign up** off. Save.
+2. Under **Email**, keep **Confirm email** on. Save.
+3. Users from now on are added by **Authentication → Users → Add user → Send invitation**.
+4. Each pilot user's assistant email must be exactly their Microsoft work address (their UPN,
+   what they type at the Microsoft sign-in): **Authentication → Users**, the **Email** column.
+   A different address is refused at connect as `account_mismatch`.
+
+Check: the `curl` of `REL-14` answers `422` `signup_disabled`.
+
+**C. The key.** On your machine: `printf 'k1:%s\n' "$(openssl rand -base64 32)"`. Keep the output
+in your password manager as "Asistent INTEGRATIONS_KEY (dev)". The API and the worker get the same
+value. Losing it disconnects everyone (they reconnect); it is never sent to anyone.
+
+**D. Local env (`REL-13`).** In `apps/api/.env` (copy `apps/api/env.example` if it does not
+exist), fill:
+
+```
+MS_TENANT_ID=<Directory (tenant) ID from the admin>
+MS_CLIENT_ID=<Application (client) ID from the admin>
+MS_CLIENT_SECRET=<the secret value from the one-time link>
+MS_REDIRECT_URI=http://localhost:3000/integrations/microsoft/callback
+INTEGRATIONS_KEY=<the key from C>
+WEB_APP_URL=http://localhost:5173
+```
+
+In `apps/voice/.env` the first three and `INTEGRATIONS_KEY`, the same values. Start the api and
+the web (`pnpm --filter @va/api dev`, `pnpm --filter @va/web dev`); the api's `listening` line
+says `"microsoft":"configured"`.
+
+**E. The first connect.** In the PWA: the gear icon (Postavke) → **Poveži Outlook** → Microsoft's
+page → pick the work account → back on Postavke with "Outlook je povezan." and
+"Povezano: <your address>". Expect the address you sign in to the assistant with. If it says
+"Prijavili ste se drugim Microsoftovim računom", the Microsoft account was not the one whose
+address the assistant account has (B.4). As the service role in the SQL editor:
+`select status, left(refresh_token_enc, 3) from user_integrations` gives `active`, `k1:`. Then
+**Odspoji** → confirm → "Outlook nije povezan."; the same query gives `revoked` and null.
+
+**F. Production, with `REL-9`.** As the app's owner, Entra admin center (entra.microsoft.com) →
+**Identity** → **Applications** → **App registrations** → **All applications** → `Asistent` →
+**Authentication** → under **Web**, **Add URI** →
+`https://API_HOST/integrations/microsoft/callback` (your real API host) → **Save**. On the VM,
+add to `/etc/va/api.env` the six variables with `MS_REDIRECT_URI` set to that address and
+`WEB_APP_URL` to the Vercel origin, and to `/etc/va/voice.env` the four; a production
+`INTEGRATIONS_KEY` of its own (C again). `docker compose -f deploy/compose.prod.yml up -d`.
+
+**G. Later, as the owner, without the administrator.**
+
+- **Another user:** Entra admin center → **Identity** → **Applications** → **Enterprise
+  applications** → `Asistent` → **Users and groups** → **Add user/group** → pick them → **Assign**;
+  and invite them in Supabase (B.3) with their work address.
+- **The secret before it expires** (24 months; the date came with the admin's reply): App
+  registrations → `Asistent` → **Certificates & secrets** → **New client secret** (24 months) →
+  copy the value at once → set `MS_CLIENT_SECRET` on both hosts and restart → delete the old
+  secret. An expired secret shows as `microsoft refused the client` error lines.
+- **Rotating the key:** a new key first, the old after a comma (`k2:…,k1:…`) on both hosts,
+  restart; drop `k1` after 90 days.
+
 ## Pasting the results back
 
 Paste one message into the next session, in this shape, one section per step, the terminal

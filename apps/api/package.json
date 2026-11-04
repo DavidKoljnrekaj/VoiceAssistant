@@ -19,6 +19,7 @@
     "@supabase/supabase-js": "2.117.3",
     "@va/core": "workspace:*",
     "@va/db": "workspace:*",
+    "@va/integrations": "workspace:*",
     "@va/tools-demo": "workspace:*",
     "hono": "4.13.13",
     "livekit-server-sdk": "2.19.1",

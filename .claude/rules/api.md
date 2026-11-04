@@ -6,7 +6,9 @@ paths:
 # API (`@va/api`, Hono)
 
 - **Authenticate every request** from `Authorization: Bearer <jwt>` and re-read the profile from the
-  database on every request; never trust the token's claims for role or identity.
+  database on every request; never trust the token's claims for role or identity. The one
+  exception is `GET /integrations/microsoft/callback`, Microsoft's browser redirect: its identity
+  is the single-use OAuth state, and the profile is re-read from the user id the state holds.
 - **Error envelope.** Pre-stream failures are `{ error: { code, message } }` with a real status:
 
   | status | code                                                      |
@@ -20,6 +22,7 @@ paths:
   | 429    | `rate_limited`                                            |
   | 500    | `internal_error`                                          |
   | 502    | `voice_dispatch_failed`                                   |
+  | 503    | `integration_unavailable`                                 |
 
   Mid-stream failures are `error` events on the already-open 200 stream.
 

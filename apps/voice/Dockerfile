@@ -14,6 +14,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 COPY apps/voice/package.json apps/voice/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
+COPY packages/integrations/package.json packages/integrations/
 COPY packages/tools-demo/package.json packages/tools-demo/
 RUN pnpm install --frozen-lockfile --filter @va/voice...
 
@@ -23,11 +24,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/voice/node_modules ./apps/voice/node_modules
 COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=deps /app/packages/integrations/node_modules ./packages/integrations/node_modules
 COPY --from=deps /app/packages/tools-demo/node_modules ./packages/tools-demo/node_modules
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/voice ./apps/voice
 COPY packages/core ./packages/core
 COPY packages/db ./packages/db
+COPY packages/integrations ./packages/integrations
 COPY packages/tools-demo ./packages/tools-demo
 RUN pnpm --filter @va/voice typecheck
 RUN mkdir -p apps/voice/logs && chown node apps/voice/logs

@@ -4,8 +4,11 @@
 #   docker compose -f deploy/compose.prod.yml up -d --build
 #
 # Secrets come from env files outside the repo, readable by root only:
-#   /etc/va/api.env    SUPABASE_*, ANTHROPIC_API_KEY, LIVEKIT_*, CORS_ORIGINS, VOICE_AGENT_NAME
-#   /etc/va/voice.env  AGENT_NAME, LIVEKIT_*, SONIOX_API_KEY, ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, SUPABASE_*
+#   /etc/va/api.env    SUPABASE_*, ANTHROPIC_API_KEY, LIVEKIT_*, CORS_ORIGINS, VOICE_AGENT_NAME,
+#                      and for Outlook MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MS_REDIRECT_URI,
+#                      INTEGRATIONS_KEY, WEB_APP_URL (docs/MAIL.md; all six or none)
+#   /etc/va/voice.env  AGENT_NAME, LIVEKIT_*, SONIOX_API_KEY, ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, SUPABASE_*,
+#                      and MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, INTEGRATIONS_KEY (the same values)
 # and the API's public hostname from deploy/.env (API_HOST=api.example.hr; copy deploy/env.example).
 # Caddy gets and renews the certificate for API_HOST by itself; the api has no host port, only
 # Caddy reaches it. The worker is an outbound client of LiveKit Cloud and exposes nothing.

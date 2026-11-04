@@ -45,7 +45,9 @@ Dependencies are pinned exactly and must be at least two weeks old when added.
 ```
 packages/core        @va/core        engine: loop, tools registry, prompts, history, sinks, fakes
 packages/db          @va/db          generated Supabase types, client factories, env
+packages/integrations @va/integrations sealed tokens, Microsoft OAuth, tokenFor (docs/MAIL.md)
 packages/tools-demo  @va/tools-demo  example tool pack (the contract for real packs)
+packages/tools-mail  @va/tools-mail  the email pack (Graph client; tools from Part 13b)
 apps/api             @va/api         Hono: /chat (SSE), /voice/sessions, /health
 apps/voice           @va/voice       LiveKit Agents worker; imports @va/core in-process
 apps/web             @va/web         React PWA: auth, chat panel, call button
@@ -56,7 +58,7 @@ tools/               repo-level scripts only
 ```
 
 Dependency direction is strict: `web → api` (HTTP only); `api → core → db`; `voice → core → db`;
-`tools-* → core` (types only). `core` never imports an app, never does HTTP, never imports LiveKit
+`tools-* → core` (types only); `api, voice → integrations → db, core` (decision 0016). `core` never imports an app, never does HTTP, never imports LiveKit
 or React. Import a package through its root (`@va/core`), never through `src/`.
 
 ## Invariants

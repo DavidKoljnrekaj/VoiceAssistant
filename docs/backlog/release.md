@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-12 (next free)
+Ids: REL-15 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -39,6 +39,37 @@ three sets of checks) and says how to paste the results back.
       query is refused with `42501`. Then `/db-types`, commit `packages/db/src/database.ts`, and
       drop the hand-written types in `apps/voice/src/phone/db.ts` for the generated ones. Then
       enrol the pilot caller (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller).
+
+- [ ] REL-12 · Part 13a: apply `20261104100000_user_integrations.sql` to the dev project (by the
+      operator, `supabase db push`). Check after applying: as a signed-in user
+      `select status from user_integrations` returns 0 rows and
+      `select refresh_token_enc from user_integrations` is refused with `42501`; as the service role an insert with
+      `provider = 'google'` is refused with `23514`. Then `/db-types`, commit
+      `packages/db/src/database.ts`, and drop the hand-written table types in
+      `packages/integrations/src/db.ts` (and the untyped cast in
+      `packages/core/src/test/fake-supabase.test.ts`) for the generated ones.
+
+- [ ] REL-13 · Part 13a: the first live connect, on a developer machine, once the admin's reply
+      (`docs/requests/entra-admin-request.md`) is in: `MS_TENANT_ID`, `MS_CLIENT_ID`,
+      `MS_CLIENT_SECRET` from it, `MS_REDIRECT_URI=http://localhost:3000/integrations/microsoft/callback`,
+      a generated `INTEGRATIONS_KEY`, `WEB_APP_URL=http://localhost:5173` in `apps/api/.env`, the
+      same four in `apps/voice/.env`; after `REL-12` and `REL-14`. Check: Settings → Poveži Outlook
+      → Microsoft → back on Settings with "Povezano: <UPN>"; as the service role the row's
+      `refresh_token_enc` starts with `k1:`; Odspoji leaves `status = 'revoked'` and both token
+      columns null. Then with `REL-9`: the owner adds
+      `https://API_HOST/integrations/microsoft/callback` in the app registration, and the api host
+      gets the six variables (the voice host the four) in its env file. Before the first real
+      mailbox: `OPS-4` and `OPS-5`.
+
+- [ ] REL-14 · Part 13a, and a precondition of Part 14: public sign-up off on every Supabase
+      project the assistant uses (Dashboard → Authentication → Sign In / Providers → "Allow new
+      users to sign up" off; users are invited), and email confirmation stays on. The Outlook
+      callback requires the user's confirmed email to equal the mailbox's UPN, and Landmark's
+      `assistant-api` maps our signed `sub` (the user's email) to a Landmark user; with sign-up
+      open and confirmation off, anyone could register a colleague's address first and reach
+      their mailbox or their Landmark data. Check: a `POST` to
+      `$SUPABASE_URL/auth/v1/signup` with the anon key as `apikey` and any email and password
+      answers `422` with `signup_disabled` (`docs/RELEASE-RUNBOOK.md` → Connecting Outlook, B).
 
 - [x] REL-11 · Part 12a: apply `20261103150000_tool_confirmations.sql` to the dev project (by the
       operator, `supabase db push`). Check after applying: as a signed-in user

@@ -78,28 +78,47 @@ magic-link flow, and calls Landmark's own `dispatchTool(name, input, ctx, extras
 already gates by role and channel. It exposes the twelve tools of `TOOL_ALLOWLIST.voice`; the
 document tools and `create_document` stay out.
 
-## §2 The contract (the request's §3 is authoritative)
+## §2 The contract (as built, Landmark's `docs/ASSISTANT_API.md`, 2026-11-04)
+
+Built and tested on Landmark's `feat/assistant-api`, not deployed. Where it departs from the
+request, the built contract wins and this section follows it.
 
 All requests: `POST`, `Authorization: Bearer <assertion>`, JSON. All failures: `{ error: { code,
-message } }` with a real status, the codes below.
+message } }` with a real status.
 
 | Route | Body | Answer |
 | --- | --- | --- |
-| `/assistant-api/me` | `{}` | `{ role, display_name, tools: [names this role may call] }` |
-| `/assistant-api/manifest` | `{}` | `{ version, tools: [{ name, description, input_schema, roles, voice_safe }], domain_rules_hr }` |
-| `/assistant-api/tools/<name>` | `{ input, channel: 'chat' \| 'voice' }` | `{ data }` exactly as the handler returns it, voice-clamped when `channel` is `voice` |
+| `/assistant-api/me` | `{}` | `{ role, display_name, tools: { chat: [names], voice: [names] } }`; `display_name` may be null |
+| `/assistant-api/manifest` | `{}` | `{ version, tools: [{ name, description, input_schema, roles, voice }], domain_rules_hr }`; needs a valid assertion, not a mapped user; `version` changes exactly when a tool or the rules change |
+| `/assistant-api/tools/<name>` | `{ input, channel: 'chat' \| 'voice' }` | `{ data }` where `data` is literally what `dispatchTool` returned: `{ data: … }` on success, `{ error: '…' }` for a handler's own refusal |
+
+**Two levels of `data`.** A success is `{ "data": { "data": { … } } }`. A handler's own error
+("Project not found or not accessible") is **200** `{ "data": { "error": "…" } }`, not a failure:
+the client maps it to an `is_error` tool result, as Landmark's chat model sees it. Only a thrown
+handler or a timeout is 500.
+
+The checks run in this order and each stops the request:
 
 | Status | Code | When |
 | --- | --- | --- |
-| 400 | `bad_request` | input fails the tool's schema |
-| 401 | `bad_assertion` | missing, malformed, wrong audience, expired or replayed (`jti` seen in the last minute) |
-| 403 | `not_mapped` | no active Landmark user for the email |
-| 403 | `forbidden_tool` | the role may not call it |
-| 404 | `unknown_tool` | not exposed |
-| 429 | `rate_limited` | per user, the limits Landmark's chat uses |
-| 500 | `internal_error` | a handler threw; logged in Landmark with ids, never content |
+| 405 | `method_not_allowed` | not `POST` |
+| 404 | `not_found` | not one of the three routes |
+| 401 | `bad_assertion` | signature, `alg` not HS256, `iss`, `aud`, expired, `exp − iat` > 60 s, `jti` seen in the last 120 s, `sub` not an email (or holding `*` / `%`) |
+| 404 | `unknown_tool` | not one of the twelve, on either channel |
+| 413 | `payload_too_large` | body over 64 KB |
+| 400 | `bad_request` | body not an object, `channel` not `chat`/`voice`, `input` not an object or failing the tool's schema (the message names the field) |
+| 403 | `not_mapped` | not exactly one `public.users` row with a login for the email |
+| 429 | `rate_limited` | more than 30 tool calls by one user in a minute (in memory per isolate: best effort) |
+| 403 | `forbidden_tool` | the role may not call it on that channel |
+| 500 | `internal_error` | no session could be opened, the handler threw, or it ran past 6 s (voice) / 15 s (chat) |
 
-The function logs ids, the tool name, the status and timings; never inputs or outputs.
+**Voice clamps** (when `channel` is `voice`): an array over 5 is cut to 5 with a sibling `total`
+(`<key>_total` when that name is taken or several arrays are cut; a cut top-level array becomes
+`{ items, total }`); strings over 200 characters are clipped with `…`; ids stay. `search_help`
+returns one markdown string, so on voice it is clipped to 200 characters (Landmark `COLLAB-16`).
+
+The function logs ids, the tool name, the channel, the status and timings; never inputs, outputs,
+the email, the assertion or a token.
 
 ## §3 Our side: `packages/tools-landmark`
 
@@ -129,11 +148,27 @@ packages/tools-landmark/
 - **Voice.** The worker's allowlist names the twelve under `voice` and `phone`, the commit saying
   each is Landmark's own voice-safe choice with its clamps.
 - **Errors to the model**: `not_mapped` and `forbidden_tool` become one short error result the
-  prompt knows how to say; a timeout is the engine's own (6 s on voice).
+  prompt knows how to say; a timeout is the engine's own (6 s on voice). The client unwraps
+  `data.data` as the tool's output and returns `data.error` as an `is_error` result.
+- **Advertisement reads `/me`'s per-channel list** (`tools.chat` or `tools.voice` for the
+  request's channel).
+- **Who may be signed for.** `sub` is our `users.email`, and Landmark trusts it. The client signs
+  only for a user whose auth email GoTrue confirmed and who is not banned (the check of
+  `apps/api/src/integrations/identity.ts`), and our Supabase project allows no public sign-up
+  (`REL-14`); otherwise anyone could register a colleague's address and read their Landmark data.
+- **Latency.** Every Landmark call mints a session there first (magic link, verify, re-read)
+  before the handler runs, so the engine's 6 s voice timeout covers the minting, the network and
+  the handler, and fires before Landmark's own 6 s. The bench measures it before the twelve go on
+  the voice allowlist.
+- **GoTrue's verification limit.** Each call makes one `/verify` request to Landmark's GoTrue,
+  limited per IP, and all our traffic leaves from one VM. Raise "token verifications" on
+  Landmark's dev project before the live check (Landmark `SEC-A14`); a hit shows as
+  `500 internal_error` here.
 
 ## §4 Security
 
-- The assertion is the only thing that crosses: 60 s, single use, audience-bound. The secret lives
+- The assertion is the only thing that crosses: 60 s, single use (`jti` remembered 120 s per
+  Landmark isolate), audience-bound. The secret lives
   in four env stores (our api and voice, Landmark's function secrets for dev, later prod) and is
   rotated by changing all four.
 - Landmark re-reads the role and the assigned projects on every call; RLS applies to every read the

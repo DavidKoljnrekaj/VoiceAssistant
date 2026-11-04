@@ -17,7 +17,8 @@
     "language": "Jezik",
     "language_save_failed": "Jezik nije spremljen. Pokušajte ponovno.",
     "menu": "Izbornik",
-    "dismiss": "Zatvori obavijest"
+    "dismiss": "Zatvori obavijest",
+    "settings": "Postavke"
   },
   "auth": {
     "title": "Prijava",
@@ -75,5 +76,32 @@
   "lang": {
     "hr": "Hrvatski",
     "en": "English"
+  },
+  "settings": {
+    "back": "Natrag na razgovor",
+    "outlook": {
+      "title": "Outlook",
+      "description": "Povežite svoj poslovni pretinac kako bi asistent mogao čitati vašu poštu i kalendar. Prije nego što odgovori na poruku ili je označi, uvijek traži vašu potvrdu.",
+      "connect": "Poveži Outlook",
+      "reconnect": "Ponovno poveži",
+      "disconnect": "Odspoji",
+      "connected_as": "Povezano: {{account}}",
+      "not_connected": "Outlook nije povezan.",
+      "reauth_required": "Veza s Outlookom je istekla. Povežite ga ponovno.",
+      "unavailable": "Povezivanje s Outlookom trenutno nije dostupno.",
+      "disconnect_title": "Odspojiti Outlook?",
+      "revoke_note": "Odspajanje briše pristup koji asistent čuva. Pristup aplikaciji u Microsoftu opozivate na stranici Moje aplikacije (myapps.microsoft.com).",
+      "connected_toast": "Outlook je povezan.",
+      "disconnected_toast": "Outlook je odspojen.",
+      "action_failed": "Radnja nije uspjela. Pokušajte ponovno.",
+      "errors": {
+        "state_invalid": "Povezivanje je isteklo ili je već iskorišteno. Pokušajte ponovno.",
+        "denied": "Povezivanje je otkazano u Microsoftu.",
+        "exchange_failed": "Microsoft nije dovršio povezivanje. Pokušajte ponovno.",
+        "account_mismatch": "Prijavili ste se drugim Microsoftovim računom. Povežite pretinac s adresom kojom se prijavljujete u asistent.",
+        "failed": "Povezivanje nije spremljeno. Pokušajte ponovno.",
+        "unknown": "Povezivanje nije uspjelo."
+      }
+    }
   }
 }

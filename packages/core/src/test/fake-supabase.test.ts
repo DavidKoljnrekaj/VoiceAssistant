@@ -1,10 +1,14 @@
 // Tests for the fake PostgREST / GoTrue through the real supabase-js clients.
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 
 import { createServiceClient, createUserClient } from '@va/db'
 
 import { ITEMS, MSG_TOOL_RESULT, MSG_USER, SESSION_MEMBER_CHAT, TOKENS, USERS } from './fixtures.js'
 import { db, reset } from './harness.js'
+
+// `user_integrations` is typed once `/db-types` runs with its migration applied (REL-12).
+const untyped = () => createServiceClient() as unknown as SupabaseClient
 
 describe('fake-supabase', () => {
   it('G01: select with eq, ilike, order and limit', async () => {
@@ -84,5 +88,57 @@ describe('fake-supabase', () => {
     expect(bounded.data).toHaveLength(2)
     const unknown = await client.rpc('ai_session_history', { p_leaf_id: ITEMS.lamp.id, p_max_rows: 200 })
     expect(unknown.data).toEqual([])
+  })
+  it('G07: an upsert on a unique key inserts once, then merges into the same row', async () => {
+    reset()
+    const client = untyped()
+    const first = await client
+      .from('user_integrations')
+      .upsert(
+        {
+          user_id: USERS.member.id,
+          provider: 'microsoft',
+          account: 'a@x.test',
+          scopes: ['openid'],
+          refresh_token_enc: 'k1:a',
+        },
+        { onConflict: 'user_id,provider' },
+      )
+      .select('id, status, account')
+      .single()
+    expect(first.error).toBeNull()
+    expect(first.data).toMatchObject({ status: 'active', account: 'a@x.test' })
+    const second = await client
+      .from('user_integrations')
+      .upsert(
+        {
+          user_id: USERS.member.id,
+          provider: 'microsoft',
+          account: 'b@x.test',
+          scopes: ['openid'],
+          refresh_token_enc: 'k1:b',
+        },
+        { onConflict: 'user_id,provider' },
+      )
+      .select('id, account')
+      .single()
+    expect(second.data).toEqual({ id: first.data!.id, account: 'b@x.test' })
+    expect(db.rows('user_integrations')).toHaveLength(1)
+    expect(db.requestsTo('user_integrations', 'POST')[1]!.params.get('on_conflict')).toBe('user_id,provider')
+  })
+
+  it('G08: a plain insert that repeats a unique key is refused with 23505', async () => {
+    reset()
+    const row = {
+      user_id: USERS.member.id,
+      provider: 'microsoft',
+      account: 'a@x.test',
+      scopes: [],
+      refresh_token_enc: 'k1:a',
+    }
+    db.seed('user_integrations', [row])
+    const { error } = await untyped().from('user_integrations').insert(row)
+    expect(error?.code).toBe('23505')
+    expect(db.rows('user_integrations')).toHaveLength(1)
   })
 })

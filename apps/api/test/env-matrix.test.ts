@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { apiEnvSchema } from '../src/env.js'
+import { parseApiEnv, apiEnvSchema } from '../src/env.js'
 
 /** The names in the first column of docs/OPS.md → The matrix, and nothing from the prose. */
 function matrixNames(doc: string): Set<string> {
@@ -54,5 +54,23 @@ describe('env matrix', () => {
     expect(rows.length).toBeGreaterThan(3)
     const unknown = rows.map((row) => row.name).filter((name) => !(name in apiEnvSchema.shape))
     expect(unknown).toEqual([])
+  })
+
+  it('X01c: env.example, copied as it is with only the secrets filled in, starts the api', () => {
+    const example = readFileSync(join(import.meta.dirname, '..', 'env.example'), 'utf8')
+    const values = Object.fromEntries(
+      example
+        .split('\n')
+        .filter((line) => /^[A-Z0-9_]+=/.test(line))
+        .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
+    )
+    const secrets: Record<string, string> = {
+      SUPABASE_ANON_KEY: 'x',
+      SUPABASE_SERVICE_ROLE_KEY: 'x',
+      ANTHROPIC_API_KEY: 'x',
+    }
+    const filled = { ...values }
+    for (const [name, value] of Object.entries(secrets)) if (!filled[name]) filled[name] = value
+    expect(() => parseApiEnv(filled)).not.toThrow()
   })
 })

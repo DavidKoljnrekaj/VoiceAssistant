@@ -26,6 +26,16 @@ export const FORBIDDEN_LOG_FIELDS = [
   'body',
   'email',
   'input',
+  // The Microsoft connection (Part 13a): its credentials and the mailbox's address.
+  'refresh_token',
+  'refreshToken',
+  'client_secret',
+  'clientSecret',
+  'code_verifier',
+  'codeVerifier',
+  'verifier',
+  'upn',
+  'account',
 ] as const
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', 'logs', 'e2e', 'public'])
 const SOURCE_ROOTS = ['apps', 'packages']

@@ -33,18 +33,25 @@ Dependencies: `hono`, `@hono/node-server`, `livekit-server-sdk`, `@anthropic-ai/
 
 ## Endpoints
 
-| Method | Path                          | Auth | Body                                                                                                   | Answer                                                                                  |
-| ------ | ----------------------------- | ---- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| GET    | `/health`                     | no   |                                                                                                        | `{ ok: true, service: '@va/api' }`                                                      |
-| POST   | `/chat`                       | yes  | `{ session_id: uuid \| null, message: string, parent_message_id?: uuid, client_context?: { route? } }` | SSE stream (below) or a flat error                                                      |
-| PATCH  | `/sessions/:id`               | yes  | `{ title: string (1..200) }`                                                                           | `{ ok: true }`; 404 when not the caller's                                               |
-| DELETE | `/sessions/:id`               | yes  |                                                                                                        | `{ ok: true }`; 404 when not the caller's                                               |
-| POST   | `/voice/sessions`             | yes  |                                                                                                        | `{ url, token, room, session_id }`                                                      |
-| POST   | `/voice/sessions/:id/refresh` | yes  |                                                                                                        | `{ ok: true }`; 404 when there is no live call: none, expired, or gone under the update |
-| POST   | `/voice/sessions/:id/end`     | yes  |                                                                                                        | `{ ok: true }`, idempotent; 404 for another user's                                      |
+| Method | Path                               | Auth           | Body                                                                                                   | Answer                                                                                                                         |
+| ------ | ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/health`                          | no             |                                                                                                        | `{ ok: true, service: '@va/api' }`                                                                                             |
+| POST   | `/chat`                            | yes            | `{ session_id: uuid \| null, message: string, parent_message_id?: uuid, client_context?: { route? } }` | SSE stream (below) or a flat error                                                                                             |
+| PATCH  | `/sessions/:id`                    | yes            | `{ title: string (1..200) }`                                                                           | `{ ok: true }`; 404 when not the caller's                                                                                      |
+| DELETE | `/sessions/:id`                    | yes            |                                                                                                        | `{ ok: true }`; 404 when not the caller's                                                                                      |
+| POST   | `/voice/sessions`                  | yes            |                                                                                                        | `{ url, token, room, session_id }`                                                                                             |
+| POST   | `/voice/sessions/:id/refresh`      | yes            |                                                                                                        | `{ ok: true }`; 404 when there is no live call: none, expired, or gone under the update                                        |
+| POST   | `/voice/sessions/:id/end`          | yes            |                                                                                                        | `{ ok: true }`, idempotent; 404 for another user's                                                                             |
+| GET    | `/integrations`                    | yes            |                                                                                                        | `{ available: { microsoft }, integrations: [{ provider, account, status, connected_at }] }`                                    |
+| GET    | `/integrations/microsoft/start`    | yes            |                                                                                                        | `{ url }`: Microsoft's authorize URL; 503 `integration_unavailable` without the MS_ variables                                  |
+| GET    | `/integrations/microsoft/callback` | no (the state) | query `code`, `state` (or `error`) from Microsoft                                                      | 302 to `WEB_APP_URL/settings?connected=1` or `?connect_error=state_invalid\|denied\|exchange_failed\|account_mismatch\|failed` |
+| DELETE | `/integrations/microsoft`          | yes            |                                                                                                        | 204, idempotent                                                                                                                |
 
-Every route except `/health` runs, in order: request id, CORS, the 405 guard for known paths,
-the 64 KB body limit, authentication. `Authorization: Bearer <jwt>` is required; the profile
+Every route except `/health` and `/integrations/microsoft/callback` runs, in order: request id,
+CORS, the 405 guard for known paths, the 64 KB body limit, authentication. The callback is
+Microsoft's browser redirect and carries no bearer token: its identity is the single-use OAuth
+state, and the profile and the auth user are re-read from the user id the state holds
+(`docs/MAIL.md` → The connection; HEAD on it and on `start` is 405). `Authorization: Bearer <jwt>` is required; the profile
 (`public.users`) is re-read with the service role on every request and the token's claims are
 never trusted. A known path with the wrong method is 405 before authentication. The PWA lists
 sessions and loads messages through supabase-js (RLS); the API only mutates them.
@@ -122,6 +129,7 @@ Croatian text from `@va/core`'s catalogue.
 | 429    | `rate_limited`                    | a limit below                                                                                           |
 | 500    | `internal_error`                  | a failed write or read; the pre-stream deadline; LiveKit not configured or its token signing failed     |
 | 502    | `voice_dispatch_failed`           | LiveKit refused the agent dispatch (both rows removed)                                                  |
+| 503    | `integration_unavailable`         | the MS_ variables are not set: `/integrations/microsoft/start` and the callback                         |
 
 Mid-stream failures are `error` events on the open 200 stream: the model codes
 (`model_rate_limited`, `model_timeout`, `model_unreachable`, `model_bad_request`,

@@ -1,10 +1,33 @@
 # Backlog — api
 
-Ids: API-13 (next free)
+Ids: API-15 (next free)
 
 The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpoints.
 
 ## Open
+
+### API-14 · Medium · OQ: one email per person, but the Outlook check uses the UPN and Landmark the mail address
+
+- **Check:** Open decision (found comparing 13a with Landmark's built `assistant-api`, 2026-11-04)
+- **Where:** `apps/api/src/integrations/identity.ts` (the UPN must equal `users.email`, as asked);
+  Part 14's assertion `sub` is the same `users.email`, which Landmark matches against its own
+  `public.users.email`, filled from its Microsoft sign-in (usually the `mail` attribute)
+- **What happens:** for anyone whose mail address differs from their UPN (an alias), no single
+  assistant email satisfies both: either Outlook refuses `account_mismatch` or Landmark answers
+  `not_mapped`. For everyone whose mail equals their UPN, nothing happens
+- **Fix direction:** decide whether the callback also accepts `/me`'s `mail` (already read), or
+  the pilot users are checked to have mail = UPN (Entra → Users → the user → User principal name
+  and Email); pinned as-is by `B05` / `B06`
+
+### API-13 · Low · The Outlook connect state lives in one process's memory
+
+- **Check:** By design (decision 0016, the user's choice on 2026-11-04)
+- **Where:** `apps/api/src/integrations/state.ts`
+- **What happens:** a restart between start and Microsoft's redirect loses the pending connect
+  (the user clicks again and gets `state_invalid` once); a second API instance behind a balancer
+  would refuse every callback that lands on the other one
+- **Fix direction:** before a second instance, a table `user_integration_states` (state hash,
+  user, sealed verifier, expiry) with a single-use conditional delete, and its pgTAP test
 
 ### API-1 · Low · OQ: the rate limiter has a check-then-act race
 

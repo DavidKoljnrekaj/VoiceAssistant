@@ -1,4 +1,4 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import Button from '../ui/Button'
 import LanguageSwitcher from './LanguageSwitcher'
 
-/** Header (name, language, sign-out) and the main area. The chat panel owns everything below. */
+/** Header (name, language, settings, sign-out) and the main area. The chat panel owns everything below. */
 export default function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
   const { profile, signOut } = useAuth()
@@ -22,6 +22,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {profile?.display_name ?? profile?.email ?? ''}
           </span>
           <LanguageSwitcher />
+          <Link
+            to="/settings"
+            aria-label={t('common.settings')}
+            title={t('common.settings')}
+            className="rounded-lg p-2 text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+          </Link>
           <Button
             variant="ghost"
             onClick={() => void signOut()}

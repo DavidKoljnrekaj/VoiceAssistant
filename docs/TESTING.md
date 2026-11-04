@@ -24,6 +24,10 @@ Tests live beside the code as `*.test.ts`. Each package has a `vitest.config.ts`
   (`POST /v1/messages`, JSON and SSE), PostgREST and GoTrue are answered by fakes routed through
   `globalThis.fetch`; `@anthropic-ai/sdk` and `supabase-js` run for real. The fakes live under
   `packages/core/src/test/` and are exported from `@va/core/test` (`docs/CORE.md` → Testing).
+  Microsoft's token endpoint and Graph `/me` are `FakeMicrosoft` (`@va/integrations/test`),
+  Graph v1.0 is `FakeGraph` (`packages/tools-mail/test/fake-graph.ts`); both are handed to the
+  code as its `fetch`, and the API harness fails any request to a Microsoft host that reaches
+  the global `fetch` (`docs/MAIL.md` → Tests).
 - **A scenario starts from a freshly seeded world** (`fixtures`) and must consume exactly the model
   turns it scripted.
 - **Assert on wire output, rows and requests sent**, never on internals. Scenario names carry an

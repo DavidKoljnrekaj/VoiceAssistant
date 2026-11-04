@@ -27,6 +27,7 @@
     "@supabase/supabase-js": "2.117.3",
     "@va/core": "workspace:*",
     "@va/db": "workspace:*",
+    "@va/integrations": "workspace:*",
     "@va/tools-demo": "workspace:*",
     "onnxruntime-node": "1.24.3",
     "zod": "4.6.7"

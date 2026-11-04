@@ -20,11 +20,13 @@ VoiceAssistant/
 ├── packages/
 │   ├── core/                     # @va/core — the engine: loop, tools registry, prompts, history, sinks, fakes
 │   ├── db/                       # @va/db   — generated Supabase types, client factories, env
-│   └── tools-demo/               # @va/tools-demo — one example tool pack (the contract for real packs)
+│   ├── integrations/             # @va/integrations — sealed tokens, the Microsoft OAuth, the token store (docs/MAIL.md)
+│   ├── tools-demo/               # @va/tools-demo — one example tool pack (the contract for real packs)
+│   └── tools-mail/               # @va/tools-mail — the email pack: the Graph client (13a); tools in 13b, 13c
 ├── apps/
-│   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /health; Dockerfile
+│   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /integrations, /health; Dockerfile
 │   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile
-│   └── web/                      # @va/web   — React PWA: auth, chat panel, call button; Dockerfile (nginx), e2e/ smoke
+│   └── web/                      # @va/web   — React PWA: auth, chat panel, call button, settings; Dockerfile (nginx), e2e/ smoke
 ├── supabase/                     # config.toml, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
 ├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/, research/, requests/ (asks to people outside this repo)
 └── tools/                        # repo-level scripts only (no app code)
@@ -35,9 +37,14 @@ VoiceAssistant/
 ```
 web ──HTTP──▶ api ──▶ core ──▶ db
               voice ─▶ core ──▶ db
-              tools-* ─▶ core (defineTool and types)
+              tools-* ─▶ core (defineTool, log and types)
               api, voice ─▶ tools-* (an app composes the packs it registers; a pack never imports an app)
+              api, voice ─▶ integrations ─▶ db, core (log)   (decision 0016)
 ```
+
+`@va/integrations` holds what both processes need to act on a user's outside account: the
+sealed tokens, the Microsoft OAuth and `tokenFor`. A pack never imports it; the app builds the
+token store and hands a pack a token function, so `tools-* → core` stays the packs' only edge.
 
 `core` never imports an app, never does HTTP, never imports LiveKit or React. Packages are
 imported through their root (`@va/core`), never through `src/` (ESLint). Inside an app the layers
@@ -83,13 +90,16 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
 
 ## Data
 
-Seven tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
+Nine tables, all with RLS: `users` (one profile per auth user; `role` gates tools, `language`
 picks the presentation), `ai_sessions` (one conversation per row; `channel` already allows
 chat, voice, whatsapp and phone), `ai_messages` (one Anthropic message per row, a tree through
 `parent_id`; `turn_kind` separates real user turns from tool results) and `voice_calls` (the
 caller's JWT handed to the voice worker by an opaque token, service role only),
 `voice_caller_identities` (the phone channel's enrolled numbers with their keypad PIN hash and
-lockout, service role only, Part 11; `ai_sessions.caller_identity_id` points at it), plus the example
+lockout, service role only, Part 11; `ai_sessions.caller_identity_id` points at it),
+`tool_confirmations` (the write protocol's confirmations and audit, Part 12),
+`user_integrations` (a user's Microsoft 365 connection: sealed OAuth tokens, service role only;
+the owner reads its state columns, Part 13a), plus the example
 pack's `demo_items` (a company-wide catalogue, read by every signed-in user) and `demo_notes`
 (owner-scoped). Signed-in users
 read their own sessions and messages; every write goes through the API with the service role.

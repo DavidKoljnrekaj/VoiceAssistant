@@ -1,0 +1,21 @@
+{
+  "name": "@va/integrations",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Connections to outside services: sealed tokens, the Microsoft OAuth, the token store",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./test": "./src/test/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.3",
+    "@va/core": "workspace:*",
+    "@va/db": "workspace:*"
+  }
+}
