@@ -15,6 +15,7 @@ interface MessageListProps {
   status: MessagesStatus
   isStreaming: boolean
   onRetry: () => void
+  onConfirmAnswer?: (confirmationId: string, answer: 'confirm' | 'decline') => void
 }
 
 export default function MessageList({
@@ -23,6 +24,7 @@ export default function MessageList({
   status,
   isStreaming,
   onRetry,
+  onConfirmAnswer,
 }: MessageListProps) {
   const { t } = useTranslation()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -70,7 +72,12 @@ export default function MessageList({
       data-testid="message-list"
     >
       {messages.map((message) => (
-        <Message key={message.id} message={message} />
+        <Message
+          key={message.id}
+          message={message}
+          onConfirmAnswer={onConfirmAnswer}
+          answersDisabled={isStreaming}
+        />
       ))}
       {pendingText !== null && (
         <div className="flex justify-start" data-kind="pending" aria-live="off">

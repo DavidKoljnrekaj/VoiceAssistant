@@ -7,11 +7,13 @@ import {
   type AuthContext,
   type ErrorCode,
   log,
+  type ConfirmEvent,
   MemoryConfirmationStore,
   MESSAGES_HR,
   type SpokenEnd,
 } from '@va/core'
 
+import { classifyAnswer } from './answers.js'
 import type { CallIdentity } from './call.js'
 import { LOG_TAG, type VoiceDeps } from './config.js'
 import { withDeadline } from './deadline.js'
@@ -69,6 +71,8 @@ export class CallSession {
   /** The call's pending confirmations (the write protocol); a call is one process, so memory
    * is the store. Part 12b reads the ids back from the sink's `confirm` for the yes/no turn. */
   readonly confirmations = new MemoryConfirmationStore()
+  /** The write the model asked about last, until the caller answers or it expires. */
+  private pendingConfirmation: ConfirmEvent | null = null
   private readonly maxTurns: number
   private readonly identityTimeoutMs: number
   /** Set once the goodbye was spoken: later turns (the caller spoke before the hang-up landed)
@@ -137,6 +141,9 @@ export class CallSession {
     }
     const authMs = Math.round(performance.now() - t0)
     this.identity.touch()
+    // A pending write: "da" carries its id into dispatch, "ne" settles it, anything else is a
+    // plain turn with the write still waiting (Part 12b). Decided here, never by the model.
+    const confirmation = await this.answerPending(io.userText, ids)
     const result = await runVoiceTurn({
       deps: this.deps,
       ctx,
@@ -148,6 +155,10 @@ export class CallSession {
       end: io.end,
       signal: io.signal,
       confirmations: this.confirmations,
+      ...(confirmation ? { confirmation } : {}),
+      onConfirm: (c) => {
+        this.pendingConfirmation = c
+      },
       persistAfter: this.saves,
       ...(this.options.pickFiller ? { pickFiller: this.options.pickFiller } : {}),
     })
@@ -171,6 +182,30 @@ export class CallSession {
       outcome: result.outcome,
     })
     return result
+  }
+
+  private async answerPending(
+    userText: string,
+    ids: Record<string, unknown>,
+  ): Promise<{ id: string } | null> {
+    const pending = this.pendingConfirmation
+    if (!pending) return null
+    // The wall clock: dispatch stamps `expiresAt` with it (`CONFIRMATION_TTL_MS`).
+    if (Date.parse(pending.expiresAt) <= Date.now()) {
+      this.pendingConfirmation = null
+      log('info', LOG_TAG, 'confirmation expired', { ...ids, tool: pending.tool })
+      return null
+    }
+    const verdict = classifyAnswer(userText)
+    if (verdict === 'other') return null
+    this.pendingConfirmation = null
+    log('info', LOG_TAG, 'confirmation answered', { ...ids, tool: pending.tool, verdict })
+    if (verdict === 'yes') return { id: pending.id }
+    await this.confirmations.decline(pending.id, {
+      sessionId: this.identity.sessionId,
+      userId: this.identity.userId,
+    })
+    return null
   }
 
   /** The identity read under its deadline; a read that outlives it is the same failure as a

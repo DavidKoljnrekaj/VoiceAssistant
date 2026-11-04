@@ -97,17 +97,17 @@ a button on `LoginForm` and a call in the context.
 
 `useChatStore` is called once, by `ChatProvider`; consumers use `useChat()`. The state:
 
-| Field                        | What                                                                                                                 |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `sessions`, `sessionsStatus` | the chat sessions (`channel = 'chat'`, newest activity first); `idle → ready \| error`                               |
-| `currentSessionId`           | the open conversation, null for a new one                                                                            |
-| `messages`                   | `RenderMessage[]`: `user`, `assistant` (with `provisional`), `tool` (pending → done / error), `error`, `interrupted` |
-| `pendingText`                | the deltas of the assistant block being streamed; null between blocks                                                |
-| `messagesStatus`             | `loading → ready \| error \| not_found` for a selected session                                                       |
-| `isStreaming`                | a `POST /chat` is open                                                                                               |
+| Field                        | What                                                                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sessions`, `sessionsStatus` | the chat sessions (`channel = 'chat'`, newest activity first); `idle → ready \| error`                                                                                  |
+| `currentSessionId`           | the open conversation, null for a new one                                                                                                                               |
+| `messages`                   | `RenderMessage[]`: `user`, `assistant` (with `provisional`), `tool` (pending → done / error), `error`, `interrupted`, `confirm` (a write waiting for the user, Part 12) |
+| `pendingText`                | the deltas of the assistant block being streamed; null between blocks                                                                                                   |
+| `messagesStatus`             | `loading → ready \| error \| not_found` for a selected session                                                                                                          |
+| `isStreaming`                | a `POST /chat` is open                                                                                                                                                  |
 
-Actions: `fetchSessions`, `newConversation`, `selectSession`, `sendMessage`, `stop`,
-`renameSession`, `deleteSession`. `sendMessage` pushes an optimistic user row, streams, then
+Actions: `fetchSessions`, `newConversation`, `selectSession`, `sendMessage`,
+`answerConfirmation`, `stop`, `renameSession`, `deleteSession`. `sendMessage` pushes an optimistic user row, streams, then
 reloads the canonical rows of the session and refetches the list (the API set the title). The
 reload keeps the stream's client-only tail after the canonical rows: its error rows and, when
 the request failed before any event arrived (the API persists the user row before the first
@@ -132,6 +132,16 @@ Failures reach the user by one mechanism: an inline `kind: 'error'` row worded f
 mid-stream `error` event). The two list loads are the exception: a failed session list or
 conversation load shows `ErrorState` with a retry, never an empty list. The one state reset on
 a changed user happens during render (React's pattern), so no effect sets state synchronously.
+
+**The confirm card (Part 12).** A `confirm` event (after the `tool_result` it belongs to) is a
+`kind: 'confirm'` row: `ConfirmCard` shows the tool's summary verbatim with "Potvrdi" and
+"Odustani". `answerConfirmation(id, answer)` settles the card (its outcome stays as the record of
+what was asked) and sends the next turn with a fixed text ("Da." / "Ne.", `chat.confirm_yes_text`,
+`chat.confirm_no_text`) and `confirm` or `decline` in the body; the buttons are disabled while a
+stream is open and gone once answered or past `expires_at` (five minutes). On a reload the
+session's pending rows of `tool_confirmations` (owner SELECT, `listPendingConfirmations`) follow
+the branch as cards, so an unanswered write survives a refresh. A `confirmation_invalid` answer
+is an inline error row like any pre-stream failure. N08, N09, H08, K10, K11.
 
 ## SSE handling
 

@@ -102,8 +102,7 @@ provisional exception, and an `error` with `persistence_error` means the client 
 provisional text of that block. `done.stop_reason` is the model's raw value (`end_turn`,
 `max_tokens`, `refusal`, `tool_limit_reached`). After `done` or `error` the stream closes.
 A `confirm` event means a write is waiting for the user: the client shows the summary and
-sends the next turn with `confirm` or `decline` (Part 12b builds the card; until then the PWA
-ignores the event).
+sends the next turn with `confirm` or `decline` (the PWA's confirm card, `docs/WEB.md`).
 Changing an event changes the web client in the same change.
 
 ## Errors

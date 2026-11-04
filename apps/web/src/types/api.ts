@@ -9,6 +9,15 @@ export type ChatEvent =
   | { type: 'turn'; role: 'assistant'; text: string; message_id: string }
   | { type: 'tool_call'; tool: string; input: unknown; tool_use_id: string }
   | { type: 'tool_result'; tool: string; output: unknown; tool_use_id: string; is_error: boolean }
+  /** A write waits for the user (Part 12): the client shows the summary and answers with the id. */
+  | {
+      type: 'confirm'
+      confirmation_id: string
+      tool: string
+      tool_use_id: string
+      summary: string
+      expires_at: string
+    }
   | { type: 'done'; stop_reason: string; usage: { input_tokens: number; output_tokens: number } }
   | { type: 'error'; code: string; message: string }
 
@@ -23,6 +32,13 @@ const EVENT_SHAPES: Record<ChatEventType, Shape> = {
   turn: { text: 'string', message_id: 'string' },
   tool_call: { tool: 'string', tool_use_id: 'string' },
   tool_result: { tool: 'string', tool_use_id: 'string', is_error: 'boolean' },
+  confirm: {
+    confirmation_id: 'string',
+    tool: 'string',
+    tool_use_id: 'string',
+    summary: 'string',
+    expires_at: 'string',
+  },
   done: {},
   error: { code: 'string', message: 'string' },
 }

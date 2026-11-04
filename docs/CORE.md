@@ -180,6 +180,10 @@ not built (`CORE-3`).
 the API (`docs/API.md`). The voice sink lives here, so every later spoken channel (phone) reuses
 it.
 
+Every sink implements `confirm(c)` (Part 12): the buffered sink records it, the SSE sink
+writes the `confirm` event, the spoken sink hands it to an optional `onConfirm` callback (the
+voice worker's call state).
+
 ### SpokenTextSink
 
 `new SpokenTextSink(say, end, pickFiller?, holdMs?)` turns the loop's events into sentences for

@@ -344,6 +344,23 @@ LABEL=vad pnpm --filter @va/voice call-test bargein ~/takes/q01.wav        # int
 Barge-in acceptance: 20 tries each with `INTERRUPT_ON=vad` and `stt`, the agent stops within
 0.5 s in at least 18 of 20.
 
+## A write on a call (Part 12b)
+
+The write protocol on a spoken channel: the model previews a write and asks; the sink's
+`confirm` hands the pending id to `CallSession` (`onConfirm`), which keeps the newest one. On the
+next turn `answers.ts` decides in code, before the model sees the text, whether the caller said
+yes or no: a closed set of Croatian answers matched whole after normalisation ("da", "može",
+"u redu", "potvrđujem", "pošalji" …; "ne", "nemoj", "odustani" …). A yes carries the id into
+the turn (`extras.confirmation`, consumed once by dispatch); a no settles the write as declined
+and the turn is a plain one; anything else ("da, ali…", a question) is a plain turn with the
+write still waiting; a pending write older than five minutes is forgotten (`confirmation
+expired`). The store is the call's `MemoryConfirmationStore`. Logs: `confirmation answered`
+(`answer`), `confirmation expired`; never the text. W35–W39. No write tool is named for a spoken
+channel yet; Part 13 names the first with the reason in its commit, and the voice prompt gets its
+confirmation line then, measured (`VOICE-18`). The reviewer's open point for that part: the
+model paraphrases the summary, so the caller confirms what the model said, not the preview
+verbatim (`VOICE-19`).
+
 ## The phone channel (Part 11; 11a and 11b built 2026-11-03)
 
 The same worker, dispatched by a LiveKit SIP trunk instead of the API (`docs/plan/11-phone-channel.md`,

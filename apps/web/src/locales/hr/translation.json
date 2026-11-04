@@ -53,7 +53,13 @@
     "rename_title": "Naslov razgovora",
     "delete_title": "Obrisati razgovor?",
     "delete_message": "Razgovor i sve njegove poruke bit će trajno obrisani.",
-    "session_actions": "Mogućnosti razgovora"
+    "session_actions": "Mogućnosti razgovora",
+    "confirm_title": "Potrebna je vaša potvrda",
+    "confirm_expired": "Potvrda je istekla. Zatražite radnju ponovno.",
+    "confirmed": "Potvrđeno",
+    "declined": "Odbijeno",
+    "confirm_yes_text": "Da.",
+    "confirm_no_text": "Ne."
   },
   "call": {
     "start": "Glasovni poziv",

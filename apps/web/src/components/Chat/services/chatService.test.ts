@@ -264,6 +264,24 @@ describe('chatService.streamMessage', () => {
     expect(backend.sent('POST', '/chat')[0]?.body).toEqual({ session_id: null, message: 'Bok' })
   })
 
+  it('C05b: the body carries confirm or decline as given, never both, never when absent', async () => {
+    backend.route('POST', API_ORIGIN, '/chat', () =>
+      sseResponse([{ type: 'done', stop_reason: 'end_turn', usage: {} }]),
+    )
+    const base = {
+      sessionId: S1,
+      parentMessageId: null,
+      route: null,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    }
+    await streamMessage({ ...base, message: 'Da.', confirm: 'c1' })
+    await streamMessage({ ...base, message: 'Ne.', decline: 'c2' })
+    const [yes, no] = backend.sent('POST', '/chat')
+    expect(yes?.body).toEqual({ session_id: S1, message: 'Da.', confirm: 'c1' })
+    expect(no?.body).toEqual({ session_id: S1, message: 'Ne.', decline: 'c2' })
+  })
+
   it('C06: a pre-stream envelope is thrown as ApiHttpError before any event', async () => {
     backend.route('POST', API_ORIGIN, '/chat', () => apiError(429, 'rate_limited', 'Previše zahtjeva.'))
     const events: ChatEvent[] = []
