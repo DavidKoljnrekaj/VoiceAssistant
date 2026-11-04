@@ -238,7 +238,7 @@ three before). Trimmed (`16fd4c5`: the two write descriptions halved, the confir
 shortened): cached read 4,346, first text p50 1.89 s (+0.07 s), whole answer p50 4.50 s
 (+0.16 s), p95 lower on both. Most of the rest is q08 at three rounds (6.93 s against 3.78 s),
 the right path for a "details" question; one q10 repeat had one `invalid tool input` the model
-corrected within its three rounds.
+corrected within its three rounds. Accepted by the user on 2026-11-04: kept.
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
