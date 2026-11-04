@@ -8,6 +8,8 @@ import type { DbClient } from '@va/db'
 export type MailboxOwnership = 'ok' | 'mismatch' | 'no_profile' | 'lookup_failed'
 
 const ASCII = /^[\x21-\x7e]+$/
+/** The ceiling of each read: the callback has no pre-stream deadline of its own. */
+const LOOKUP_TIMEOUT_MS = 10_000
 
 export async function ownsMailbox(
   service: DbClient,
@@ -19,11 +21,17 @@ export async function ownsMailbox(
     .from('users')
     .select('auth_user_id, email')
     .eq('id', userId)
-    .abortSignal(signal)
+    .abortSignal(AbortSignal.any([signal, AbortSignal.timeout(LOOKUP_TIMEOUT_MS)]))
     .maybeSingle()
   if (error) return 'lookup_failed'
   if (!profile) return 'no_profile'
-  const { data, error: authError } = await service.auth.admin.getUserById(profile.auth_user_id)
+  // GoTrue's admin client takes no signal: raced against the same ceiling.
+  const lookup = await Promise.race([
+    service.auth.admin.getUserById(profile.auth_user_id),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), LOOKUP_TIMEOUT_MS).unref()),
+  ])
+  if (lookup === null) return 'lookup_failed'
+  const { data, error: authError } = lookup
   if (authError && authError.status === 404) return 'no_profile'
   if (authError || !data.user) return 'lookup_failed'
   const auth = data.user
