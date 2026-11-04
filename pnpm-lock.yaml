@@ -66,6 +66,9 @@ importers:
       '@va/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@va/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@va/tools-demo':
         specifier: workspace:*
         version: link:../../packages/tools-demo
@@ -112,6 +115,9 @@ importers:
       '@va/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@va/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@va/tools-demo':
         specifier: workspace:*
         version: link:../../packages/tools-demo

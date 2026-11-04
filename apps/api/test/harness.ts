@@ -1,11 +1,21 @@
 // Runs the real Hono app in-process against the @va/core fakes. Importing `@va/core/test` sets
 // the Supabase and Anthropic env for the process and routes `globalThis.fetch` to the fakes;
 // nothing in the app is stubbed. `app.request()` takes ordinary Request objects: no port.
+import { randomBytes } from 'node:crypto'
+
 import { anthropicClient, scenario as coreScenario, TOKENS } from '@va/core/test'
+import {
+  FAKE_CLIENT_ID,
+  FAKE_CLIENT_SECRET,
+  FAKE_REDIRECT_URI,
+  FAKE_TENANT_ID,
+  FakeMicrosoft,
+} from '@va/integrations/test'
 
 import { createApp } from '../src/app.js'
 import type { AppDeps } from '../src/deps.js'
 import { parseApiEnv } from '../src/env.js'
+import { createMicrosoft } from '../src/integrations/microsoft.js'
 import { createRegistry } from '../src/tools.js'
 import type { JoinTokenInput, LiveKitPort } from '../src/voice/livekit.js'
 
@@ -43,6 +53,21 @@ export class FakeLiveKit implements LiveKitPort {
 
 export const livekit = new FakeLiveKit()
 
+/** Microsoft's token endpoint and Graph `/me`. The app gets its `fetch`; nothing reaches Microsoft. */
+export const microsoftFake = new FakeMicrosoft()
+export const WEB_APP_URL = 'https://web.test'
+
+// Belt and braces: whatever reaches the global fetch for a Microsoft host fails the test loudly
+// instead of going to the network.
+const globalFetch = globalThis.fetch
+globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+  const host = new URL(input instanceof Request ? input.url : String(input)).host
+  if (/(^|\.)(microsoftonline\.com|microsoft\.com)$/.test(host)) {
+    throw new Error(`harness: a request to ${host} went to the global fetch, not the fake`)
+  }
+  return globalFetch(input, init)
+}) as typeof fetch
+
 export const env = parseApiEnv({
   ...process.env,
   PORT: '3000',
@@ -51,6 +76,12 @@ export const env = parseApiEnv({
   LIVEKIT_API_KEY: 'lk-key',
   LIVEKIT_API_SECRET: 'lk-secret',
   CORS_ORIGINS: '*',
+  MS_TENANT_ID: FAKE_TENANT_ID,
+  MS_CLIENT_ID: FAKE_CLIENT_ID,
+  MS_CLIENT_SECRET: FAKE_CLIENT_SECRET,
+  MS_REDIRECT_URI: FAKE_REDIRECT_URI,
+  INTEGRATIONS_KEY: `k1:${randomBytes(32).toString('base64')}`,
+  WEB_APP_URL,
 })
 
 export function buildApp(overrides: Partial<AppDeps> = {}) {
@@ -59,6 +90,7 @@ export function buildApp(overrides: Partial<AppDeps> = {}) {
     registry: createRegistry(),
     env,
     livekit,
+    microsoft: createMicrosoft(env, () => new Date(), microsoftFake.fetch),
     clock: () => new Date(),
     ...overrides,
   })
@@ -66,7 +98,7 @@ export function buildApp(overrides: Partial<AppDeps> = {}) {
 
 export const app = buildApp()
 
-/** A scenario with the LiveKit fake reset too. */
+/** A scenario with the LiveKit and Microsoft fakes reset too. */
 export function scenario(
   name: string,
   fn: () => Promise<void>,
@@ -76,7 +108,10 @@ export function scenario(
     name,
     async () => {
       livekit.reset()
+      microsoftFake.reset()
       await fn()
+      if (microsoftFake.unexpectedCalls > 0)
+        throw new Error(`${microsoftFake.unexpectedCalls} request(s) to an unknown Microsoft route`)
     },
     opts,
   )

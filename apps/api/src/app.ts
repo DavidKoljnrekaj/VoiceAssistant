@@ -1,6 +1,7 @@
 // The Hono app, built from injected dependencies so tests run it in-process (`app.request`)
-// against the fakes with a fixed clock. Every route except /health runs request id, CORS, the
-// body limit and authentication, in that order.
+// against the fakes with a fixed clock. Every route except /health and Microsoft's redirect to
+// /integrations/microsoft/callback runs request id, CORS, the body limit and authentication, in
+// that order; the callback's identity is its single-use OAuth state.
 import { Hono } from 'hono'
 
 import { log } from '@va/core'
@@ -13,6 +14,7 @@ import { corsMiddleware } from './middleware/cors.js'
 import { requestIdMiddleware } from './middleware/request-id.js'
 import { chatRoute } from './routes/chat.js'
 import { healthRoute } from './routes/health.js'
+import { integrationsRoute } from './routes/integrations.js'
 import { sessionsRoute } from './routes/sessions.js'
 import { voiceRoute } from './routes/voice.js'
 
@@ -30,6 +32,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     '/voice/sessions': ['POST'],
     '/voice/sessions/:id/refresh': ['POST'],
     '/voice/sessions/:id/end': ['POST'],
+    '/integrations': ['GET'],
+    '/integrations/microsoft': ['DELETE'],
+    '/integrations/microsoft/start': ['GET'],
+    '/integrations/microsoft/callback': ['GET'],
   }
   for (const [path, methods] of Object.entries(allowed)) {
     app.on(
@@ -39,13 +45,22 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     )
   }
 
-  for (const path of ['/chat', '/sessions/*', '/voice/*']) {
+  // Not `/integrations/*`: that would put the callback behind a bearer token it cannot carry.
+  for (const path of [
+    '/chat',
+    '/sessions/*',
+    '/voice/*',
+    '/integrations',
+    '/integrations/microsoft',
+    '/integrations/microsoft/start',
+  ]) {
     app.use(path, bodyLimitMiddleware())
     app.use(path, authMiddleware())
   }
   app.route('/', chatRoute(deps))
   app.route('/', sessionsRoute())
   app.route('/', voiceRoute(deps))
+  app.route('/', integrationsRoute(deps))
 
   app.notFound((c) => fail(c, 'not_found'))
   app.onError((err, c) => {

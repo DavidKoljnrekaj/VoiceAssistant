@@ -6,10 +6,13 @@ import { log } from '@va/core'
 
 import { createApp } from './app.js'
 import { parseApiEnv } from './env.js'
+import { createMicrosoft } from './integrations/microsoft.js'
 import { createRegistry } from './tools.js'
 import { createLiveKit } from './voice/livekit.js'
 
 const env = parseApiEnv(process.env)
+const clock = () => new Date()
+const microsoft = createMicrosoft(env, clock)
 const app = createApp({
   anthropic: new Anthropic({
     apiKey: env.ANTHROPIC_API_KEY,
@@ -18,11 +21,16 @@ const app = createApp({
   registry: createRegistry(),
   env,
   livekit: createLiveKit(env),
-  clock: () => new Date(),
+  microsoft,
+  clock,
 })
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  log('info', '[api]', 'listening', { port: info.port, livekit: env.LIVEKIT_URL ? 'configured' : 'absent' })
+  log('info', '[api]', 'listening', {
+    port: info.port,
+    livekit: env.LIVEKIT_URL ? 'configured' : 'absent',
+    microsoft: microsoft ? 'configured' : 'absent',
+  })
 })
 
 const shutdown = (signal: string): void => {

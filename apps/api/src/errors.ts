@@ -18,6 +18,7 @@ export const STATUS: Partial<Record<ErrorCode, ContentfulStatusCode>> = {
   rate_limited: 429,
   internal_error: 500,
   voice_dispatch_failed: 502,
+  integration_unavailable: 503,
 }
 
 export interface ErrorBody {

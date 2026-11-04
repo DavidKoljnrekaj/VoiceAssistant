@@ -27,6 +27,7 @@ export type ErrorCode =
   | 'cancelled'
   | 'voice_dispatch_failed'
   | 'confirmation_invalid'
+  | 'integration_unavailable'
 
 /** User-facing messages. Ported from Landmark where it had one. <!-- needs native review --> */
 export const MESSAGES_HR: Record<ErrorCode, string> = {
@@ -53,6 +54,7 @@ export const MESSAGES_HR: Record<ErrorCode, string> = {
   cancelled: 'Zahtjev je prekinut.',
   voice_dispatch_failed: 'Glasovni poziv nije uspio. Pokušajte ponovno.',
   confirmation_invalid: 'Potvrda više ne vrijedi. Zatražite radnju ponovno.',
+  integration_unavailable: 'Povezivanje s Outlookom trenutno nije dostupno.',
 }
 
 export interface MappedError {
