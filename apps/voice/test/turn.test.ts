@@ -90,12 +90,14 @@ describe('a spoken turn', () => {
         logs.some((l) => l.line.includes('tool refused at dispatch') && l.line.includes('create_note')),
       ).toBe(true)
       // The request advertised only the allowlisted tools.
-      // Part 13b: the four mail reads joined the allowlist.
+      // Part 13b: the four mail reads joined the allowlist; Part 13c the two confirmed writes.
       expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual([
+        'flag_mail',
         'get_item',
         'list_calendar',
         'list_mail',
         'read_mail',
+        'reply_mail',
         'search_items',
         'search_mail',
       ])

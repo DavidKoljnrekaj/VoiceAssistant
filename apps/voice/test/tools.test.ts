@@ -17,21 +17,43 @@ import { createRegistry, VOICE_ALLOWLIST } from '../src/tools.js'
 describe('voice tools', () => {
   it('W20 CORE-10: the worker names its voice tools; every one is read-only; an unknown or a write tool fails at load', () => {
     // Part 11: the phone channel hears exactly what the in-app call hears, from one list.
-    const spoken = ['search_items', 'get_item', 'list_mail', 'read_mail', 'search_mail', 'list_calendar']
+    // Part 13c: the two confirmed mail writes joined.
+    const spoken = [
+      'search_items',
+      'get_item',
+      'list_mail',
+      'read_mail',
+      'search_mail',
+      'list_calendar',
+      'reply_mail',
+      'flag_mail',
+    ]
     expect(VOICE_ALLOWLIST).toEqual({ voice: spoken, phone: spoken })
     expect(VOICE_ALLOWLIST.phone).toBe(VOICE_ALLOWLIST.voice)
     const registry = createRegistry()
-    const advertised = ['get_item', 'list_calendar', 'list_mail', 'read_mail', 'search_items', 'search_mail']
+    const advertised = [
+      'flag_mail',
+      'get_item',
+      'list_calendar',
+      'list_mail',
+      'read_mail',
+      'reply_mail',
+      'search_items',
+      'search_mail',
+    ]
     expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(advertised)
     expect(registry.select({ role: 'member' }, 'phone').map((t) => t.name)).toEqual(advertised)
     expect(registry.domainRules()).toHaveLength(1)
-    expect(registry.select({ role: 'member' }, 'voice').every((t) => t.readOnly)).toBe(true)
+    // Every spoken tool is read-only or waits for the caller's confirmation (decision 0015).
+    expect(
+      registry.select({ role: 'member' }, 'voice').every((t) => t.readOnly || t.confirmation === 'required'),
+    ).toBe(true)
     // The worker serves voice only: nothing is advertised for chat from this process.
     expect(registry.select({ role: 'admin' }, 'chat')).toEqual([])
     expect(() => new ToolRegistry([], VOICE_ALLOWLIST)).toThrow(/unknown tool: search_items/)
     // Part 12: create_note is a confirmed write, so the registry would admit it on a spoken
-    // channel; the worker's allowlist still names no write (Part 13 decides the first). A plain
-    // write without the protocol is refused at load, on either spoken channel.
+    // channel; the worker's allowlist does not name it (the mail writes, Part 13c, are the
+    // spoken writes). A plain write without the protocol is refused at load, on either channel.
     expect(() => new ToolRegistry([demoPack], { voice: ['create_note'] })).not.toThrow()
     expect(VOICE_ALLOWLIST.voice).not.toContain('create_note')
     const plainWrite = defineTool({

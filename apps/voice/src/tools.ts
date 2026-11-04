@@ -17,6 +17,10 @@ import { mailTokenProvider } from './mail.js'
 // the subject, the time and a 120-character preview; read_mail the new text clipped to 600
 // characters with names only; list_calendar at most five live events, times only. They carry
 // short refs (m1 …) for chaining, which the pack's prompt rules say are never spoken.
+// The two mail writes (Part 13c), each `confirmation: 'required'`: nothing is sent or flagged
+// until the caller's "da", decided in code from a closed set (answers.ts); the preview is read
+// out verbatim before the model asks (VOICE-19); a reply goes only to the message's sender, never
+// a Reply-To, and no address is spoken.
 const SPOKEN_TOOLS = [
   'search_items',
   'get_item',
@@ -24,6 +28,8 @@ const SPOKEN_TOOLS = [
   'read_mail',
   'search_mail',
   'list_calendar',
+  'reply_mail',
+  'flag_mail',
 ] as const
 
 /** One list for the two spoken channels: the phone (Part 11) hears exactly what the in-app
