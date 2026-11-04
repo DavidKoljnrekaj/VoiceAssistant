@@ -28,15 +28,14 @@ const CONNECTED = {
 }
 
 let backend: FakeBackend
-let search = ''
 
 function integrations(body: unknown) {
   backend.route('GET', API_ORIGIN, '/integrations', () => json(body))
 }
 
+/** The router's current query, rendered so the test reads it from the page. */
 function Where() {
-  search = useLocation().search
-  return null
+  return <output data-testid="search">{useLocation().search}</output>
 }
 
 function renderPage(path = '/settings') {
@@ -61,7 +60,7 @@ function renderPage(path = '/settings') {
   return redirect
 }
 
-const t = (key: string, options?: Record<string, string>) => i18n.t(key, options)
+const t = (key: string, options: Record<string, string> = {}) => i18n.t(key, options)
 
 beforeAll(async () => {
   backend = installFakeBackend()
@@ -138,7 +137,7 @@ describe('Settings → Outlook', () => {
     integrations({ available: { microsoft: true }, integrations: [CONNECTED] })
     renderPage('/settings?connected=1')
     expect(await screen.findByText(t('settings.outlook.connected_toast'))).toBeTruthy()
-    await waitFor(() => expect(search).toBe(''))
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
     cleanup()
     renderPage('/settings?connect_error=account_mismatch')
     expect(await screen.findByText(t('settings.outlook.errors.account_mismatch'))).toBeTruthy()
