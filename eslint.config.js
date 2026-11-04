@@ -39,6 +39,28 @@ export default tseslint.config(
     },
   },
   {
+    // Packs depend on core only (decision 0016): the app builds the token store and hands a pack
+    // a token function, so no pack holds a refresh token or the key.
+    files: ['packages/tools-*/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@va/*/src/*'],
+              message: 'Import from the package root (@va/<name>), never from its src/ internals.',
+            },
+            {
+              group: ['@va/integrations', '@va/integrations/*'],
+              message: 'A tool pack never imports @va/integrations: take a token function from the app.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The PWA: React rules, browser globals, and the confirm() ban (web.md: shared dialog only).
     files: ['apps/web/**/*.{ts,tsx}'],
     languageOptions: {
