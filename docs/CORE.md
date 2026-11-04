@@ -368,8 +368,8 @@ when the registry is built (`T02`, `W20`).
 
 | Tool            | Pack | Roles         | readOnly      | Channels           | What                                                                                                                                                  |
 | --------------- | ---- | ------------- | ------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_items`  | demo | admin, member | yes           | chat, voice        | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids                                   |
-| `get_item`      | demo | admin, member | yes           | chat, voice        | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                                                                |
+| `search_items`  | demo | admin, member | yes           | chat, voice, phone | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids                                   |
+| `get_item`      | demo | admin, member | yes           | chat, voice, phone | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                                                                |
 | `create_note`   | demo | admin, member | no, confirmed | chat               | attaches a user-written note to an item (`demo_notes`) after the user confirmed the preview (Part 12)                                                 |
 | `list_mail`     | mail | admin, member | yes           | chat, voice, phone | the user's own inbox, unread by default, newest first, with the inbox unread count; ≤ 20 (default 10); voice: ≤ 5, names only, 120-character previews |
 | `read_mail`     | mail | admin, member | yes           | chat, voice, phone | one message by ref (`m1` …): the new text, signature and disclaimer cut, clipped to 3000 (voice 600) characters; does not mark it read                |

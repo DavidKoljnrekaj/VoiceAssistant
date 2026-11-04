@@ -31,7 +31,8 @@ apps/voice/
 │   ├── call.ts             CallIdentity: token → voice_calls → authenticateToken; 60 s cache; touch(); end()
 │   ├── config.ts           VoiceDeps, voiceLoopConfig(deps, ctx): the LoopConfig of one caller; dateLine
 │   ├── messages.ts         userTurnOf (the new user turn from LiveKit's context), callHistory (the call's own rows → messages)
-│   ├── tools.ts            createRegistry(): the demo pack with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
+│   ├── tools.ts            createRegistry(tokens): the demo and mail packs with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
+│   ├── mail.ts             createVoiceTokenStore(env) (refresh-only), mailTokenProvider (docs/MAIL.md)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
 │   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, turns one after another, the timing line, settle()
 │   ├── deadline.ts         withDeadline: the identity read's 5 s deadline (the API's helper, same shape)
@@ -55,7 +56,8 @@ apps/voice/
 Dependencies: `@livekit/agents` and the Soniox, ElevenLabs and Silero plugins, all `1.9.2`
 (pinned exactly, move together, Dependabot groups them); `@livekit/rtc-node` 1.1.0;
 `onnxruntime-node` 1.24.3 (Silero, and the bench's offline speech span); `@anthropic-ai/sdk`;
-`zod`; `@va/core`, `@va/db`, `@va/tools-demo` (the registered pack). The root `package.json`
+`zod`; `@va/core`, `@va/db`, `@va/tools-demo` and `@va/tools-mail` (the registered packs),
+`@va/integrations` (the Microsoft env and the token store). The root `package.json`
 overrides `sharp` to 0.35.5 and `adm-zip` to 0.6.1 for the production audit (`OPS-2`).
 
 ## The engine as the LLM: the two designs, and which was built
@@ -210,7 +212,7 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 
 **Owed: Part 13b, the mail rules in the voice prompt** (`MAIL_RULES_HR` appended to the static
 voice prompt, plus four tools in the voice tools array; both change the cache key). Run by the
-operator, who holds the keys: the "before" on `main` before 13b, the "after" on `feat/email-read`,
+operator, who holds the keys: the "before" on `main` before 13b, the "after" on the commit that adds the mail pack to the worker,
 same stack, three repeats each (`docs/MAIL.md` → The rules in the prompt). The two rows go here
 with the commits; a p50 that moves the wrong way stops the merge.
 

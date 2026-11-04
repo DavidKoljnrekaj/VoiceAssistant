@@ -14,7 +14,8 @@ apps/api/src/
 ├── index.ts            env → deps → serve() on PORT; SIGINT/SIGTERM close the server
 ├── app.ts              createApp(deps): middleware order, routes, 405 / 404 / error handlers
 ├── deps.ts             AppDeps (anthropic, registry, env, livekit | null, clock) and the request variables
-├── tools.ts            createRegistry(): the demo pack with API_ALLOWLIST ({ chat: 'all' }; voice is the worker's)
+├── tools.ts            createRegistry(tokens): the demo and mail packs with API_ALLOWLIST ({ chat: 'all' }; voice is the worker's)
+├── mail.ts             mailTokenProvider(tokens): the mail pack's token over tokenFor (docs/MAIL.md)
 ├── env.ts              zod env (see env.example)
 ├── errors.ts           the flat envelope and the status table
 ├── deadline.ts         PRE_STREAM_TIMEOUT_MS (10 s over auth and the /chat pipeline) and withDeadline()
