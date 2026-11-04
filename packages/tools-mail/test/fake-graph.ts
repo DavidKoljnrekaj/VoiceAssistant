@@ -111,3 +111,191 @@ function graphError(status: number, code: string, headers: Record<string, string
     headers: { 'content-type': 'application/json', 'request-id': 'req-error', ...headers },
   })
 }
+
+// ---------------------------------------------------------------------------------------------
+// A mailbox: the routes the read tools use, over seeded messages and events, with Graph's own
+// constraints where they matter (InefficientFilter, HTML bodies unless Prefer asks for text,
+// calendar times in the zone the Prefer header names, 404 for an unknown id).
+// ---------------------------------------------------------------------------------------------
+
+export interface FakeMessage {
+  id: string
+  subject: string
+  from: { name: string; address: string }
+  to?: { name: string; address: string }[]
+  cc?: { name: string; address: string }[]
+  /** UTC ISO. */
+  received: string
+  isRead?: boolean
+  importance?: 'low' | 'normal' | 'high'
+  hasAttachments?: boolean
+  /** The new part of the message (Graph's uniqueBody), plain text. */
+  body: string
+  folder?: 'inbox' | 'archive'
+}
+
+export interface FakeEvent {
+  subject: string
+  /** UTC ISO. */
+  start: string
+  end: string
+  isAllDay?: boolean
+  isCancelled?: boolean
+  location?: string
+  organizer?: { name: string; address: string }
+}
+
+const ZAGREB = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Zagreb',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
+function zagrebLocal(utc: string): string {
+  const p = Object.fromEntries(ZAGREB.formatToParts(new Date(utc)).map((x) => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}.0000000`
+}
+
+const address = (a: { name: string; address: string }) => ({
+  emailAddress: { name: a.name, address: a.address },
+})
+
+function project(row: Record<string, unknown>, select: string | null): Record<string, unknown> {
+  if (!select) return row
+  const keep = new Set(['id', ...select.split(',')])
+  return Object.fromEntries(Object.entries(row).filter(([k]) => keep.has(k)))
+}
+
+function messageJson(m: FakeMessage, textBody: boolean): Record<string, unknown> {
+  return {
+    id: m.id,
+    subject: m.subject,
+    from: address(m.from),
+    toRecipients: (m.to ?? []).map(address),
+    ccRecipients: (m.cc ?? []).map(address),
+    receivedDateTime: m.received,
+    isRead: m.isRead ?? false,
+    importance: m.importance ?? 'normal',
+    hasAttachments: m.hasAttachments ?? false,
+    bodyPreview: m.body.replace(/\s+/g, ' ').slice(0, 255),
+    uniqueBody: textBody
+      ? { contentType: 'text', content: m.body }
+      : { contentType: 'html', content: `<html><body><p>${m.body}</p></body></html>` },
+  }
+}
+
+/** The `$search` value Graph gets: one quoted phrase, `\"` and `\\` escaped. */
+function searchPhrase(raw: string): string | null {
+  const m = raw.match(/^"((?:[^"\\]|\\.)*)"$/)
+  return m ? m[1]!.replace(/\\(.)/g, '$1') : null
+}
+
+export function installMailbox(
+  graph: FakeGraph,
+  box: { messages?: FakeMessage[]; events?: FakeEvent[] },
+): void {
+  const messages = box.messages ?? []
+  const events = box.events ?? []
+  const byNewest = (list: FakeMessage[]) => [...list].sort((a, b) => b.received.localeCompare(a.received))
+  const top = (c: GraphCall) => Number(c.query.get('$top') ?? 10)
+  const textBody = (c: GraphCall) =>
+    (c.headers.get('Prefer') ?? '').includes('outlook.body-content-type="text"')
+
+  graph.route('GET', '/me/mailFolders/inbox/messages', (c) => {
+    const filter = c.query.get('$filter')
+    const orderby = c.query.get('$orderby')
+    if (filter && orderby && !filter.startsWith(orderby.split(' ')[0]!))
+      return {
+        status: 400,
+        body: {
+          error: { code: 'InefficientFilter', message: 'The restriction or sort order is too complex.' },
+        },
+      }
+    let list = messages.filter((m) => (m.folder ?? 'inbox') === 'inbox')
+    if (filter?.includes('isRead eq false')) list = list.filter((m) => !m.isRead)
+    const value = byNewest(list)
+      .slice(0, top(c))
+      .map((m) => project(messageJson(m, textBody(c)), c.query.get('$select')))
+    return { body: { value } }
+  })
+
+  graph.route('GET', '/me/mailFolders/inbox', () => ({
+    body: {
+      unreadItemCount: messages.filter((m) => (m.folder ?? 'inbox') === 'inbox' && !m.isRead).length,
+    },
+  }))
+
+  graph.route('GET', '/me/messages', (c) => {
+    const raw = c.query.get('$search')
+    const phrase = raw === null ? null : searchPhrase(raw)
+    if (raw !== null && phrase === null)
+      return { status: 400, body: { error: { code: 'BadRequest', message: 'Syntax error in $search.' } } }
+    if (c.query.get('$orderby') && raw !== null)
+      return {
+        status: 400,
+        body: { error: { code: 'BadRequest', message: '$orderby is not supported with $search.' } },
+      }
+    const needle = (phrase ?? '').toLowerCase()
+    const value = byNewest(messages)
+      .filter((m) => `${m.subject} ${m.body} ${m.from.name} ${m.from.address}`.toLowerCase().includes(needle))
+      .slice(0, top(c))
+      .map((m) => project(messageJson(m, textBody(c)), c.query.get('$select')))
+    return { body: { value } }
+  })
+
+  graph.route('GET', /^\/me\/messages\/[^/]+$/, (c) => {
+    const id = decodeURIComponent(c.path.slice('/me/messages/'.length))
+    const m = messages.find((x) => x.id === id)
+    if (!m)
+      return {
+        status: 404,
+        body: {
+          error: { code: 'ErrorItemNotFound', message: 'The specified object was not found in the store.' },
+        },
+      }
+    return { body: project(messageJson(m, textBody(c)), c.query.get('$select')) }
+  })
+
+  graph.route('GET', '/me/calendarView', (c) => {
+    const from = c.query.get('startDateTime')
+    const to = c.query.get('endDateTime')
+    if (!from || !to)
+      return {
+        status: 400,
+        body: {
+          error: { code: 'ErrorInvalidParameter', message: 'startDateTime and endDateTime are required.' },
+        },
+      }
+    const zagreb = (c.headers.get('Prefer') ?? '').includes(
+      'outlook.timezone="Central European Standard Time"',
+    )
+    const at = (utc: string) =>
+      zagreb
+        ? { dateTime: zagrebLocal(utc), timeZone: 'Central European Standard Time' }
+        : { dateTime: `${utc.slice(0, 19)}.0000000`, timeZone: 'UTC' }
+    const value = events
+      .filter((e) => Date.parse(e.start) < Date.parse(to) && Date.parse(e.end) > Date.parse(from))
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .slice(0, top(c))
+      .map((e) =>
+        project(
+          {
+            subject: e.subject,
+            start: at(e.start),
+            end: at(e.end),
+            isAllDay: e.isAllDay ?? false,
+            isCancelled: e.isCancelled ?? false,
+            location: { displayName: e.location ?? '' },
+            organizer: e.organizer ? address(e.organizer) : null,
+          },
+          c.query.get('$select'),
+        ),
+      )
+    return { body: { value } }
+  })
+}
