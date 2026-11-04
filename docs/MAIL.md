@@ -136,7 +136,7 @@ or a body; the field names are on the denylist of `packages/core/src/log-fields.
 | Q01–Q07 | `packages/tools-mail/src/graph.test.ts`                  | the Graph client                                                                  |
 | B01–B16 | `apps/api/test/integrations.test.ts`                     | the connect routes and the env group                                              |
 | W40     | `apps/voice/test/env.test.ts`                            | the worker's env group                                                            |
-| Y01–Y06 | `apps/web/src/components/Settings/SettingsPage.test.tsx` | Settings → Outlook                                                                |
+| Y01–Y07 | `apps/web/src/components/Settings/SettingsPage.test.tsx` | Settings → Outlook                                                                |
 | pgTAP   | `supabase/tests/database/user_integrations.test.sql`     | the grants, the policy, the constraints                                           |
 
 The fakes answer the services over `fetch` (`FakeMicrosoft`, `FakeGraph`); the API harness also

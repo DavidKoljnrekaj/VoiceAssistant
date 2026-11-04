@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -22,14 +22,20 @@ export default function SettingsPage({ redirect = leavePage }: { redirect?: (url
 
   const connected = params.get('connected')
   const error = params.get('connect_error')
+  // StrictMode runs the effect twice on mount, before the query is gone: say each result once.
+  const said = useRef<string | null>(null)
   useEffect(() => {
     if (connected === null && error === null) return
-    if (connected === '1') toast.success(t('settings.outlook.connected_toast'))
-    else if (error !== null) {
-      const known = (CONNECT_ERRORS as readonly string[]).includes(error)
-        ? (error as ConnectError)
-        : 'unknown'
-      toast.error(t(`settings.outlook.errors.${known}`))
+    const key = `${connected}|${error}`
+    if (said.current !== key) {
+      said.current = key
+      if (connected === '1') toast.success(t('settings.outlook.connected_toast'))
+      else if (error !== null) {
+        const known = (CONNECT_ERRORS as readonly string[]).includes(error)
+          ? (error as ConnectError)
+          : 'unknown'
+        toast.error(t(`settings.outlook.errors.${known}`))
+      }
     }
     setParams({}, { replace: true })
   }, [connected, error, setParams, t, toast])

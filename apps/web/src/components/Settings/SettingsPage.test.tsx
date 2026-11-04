@@ -3,6 +3,7 @@
 // real supabase-js and lib/api.ts run). Assertions: the requests sent, where the browser would be
 // sent, and what the page shows for each state of the connection.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -38,9 +39,9 @@ function Where() {
   return <output data-testid="search">{useLocation().search}</output>
 }
 
-function renderPage(path = '/settings') {
+function renderPage(path = '/settings', strict = false) {
   const redirect = vi.fn()
-  render(
+  const page = (
     <ToastProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
@@ -55,8 +56,9 @@ function renderPage(path = '/settings') {
           />
         </Routes>
       </MemoryRouter>
-    </ToastProvider>,
+    </ToastProvider>
   )
+  render(strict ? <StrictMode>{page}</StrictMode> : page)
   return redirect
 }
 
@@ -155,5 +157,13 @@ describe('Settings → Outlook', () => {
     fireEvent.click(await screen.findByRole('button', { name: t('settings.outlook.connect') }))
     expect(await screen.findByText(t('settings.outlook.action_failed'))).toBeTruthy()
     expect(redirect).not.toHaveBeenCalled()
+  })
+
+  it('Y07 under StrictMode (as in main.tsx) the result of a connect is said once', async () => {
+    integrations({ available: { microsoft: true }, integrations: [CONNECTED] })
+    renderPage('/settings?connected=1', true)
+    await screen.findByText(t('settings.outlook.connected_toast'))
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    expect(screen.getAllByText(t('settings.outlook.connected_toast'))).toHaveLength(1)
   })
 })

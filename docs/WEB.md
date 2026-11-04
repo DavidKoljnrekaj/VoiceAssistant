@@ -43,7 +43,7 @@ apps/web/
 │   │   ├── lib/sse.ts                   the frame parser (pure) and the stall clock; lib/normalizeMessages.ts (rows / events → RenderMessage[]); lib/labels.ts
 │   │   ├── ChatPanel.tsx  MessageList.tsx  Message.tsx  ToolChip.tsx  Composer.tsx  SessionList.tsx
 │   │   └── components/VoiceCallButton.tsx  hooks/useVoiceCall.ts (tests V01–V02, WEB-10)  services/voiceCallService.ts
-│   ├── components/Settings/    SettingsPage.tsx (Y01–Y06)  OutlookConnection.tsx  hooks/useOutlookConnection.ts  services/integrationsService.ts
+│   ├── components/Settings/    SettingsPage.tsx (Y01–Y07)  OutlookConnection.tsx  hooks/useOutlookConnection.ts  services/integrationsService.ts
 │   ├── locales/hr/translation.json  locales/en/translation.json  locales.test.ts (I01, WEB-8)
 │   └── types/api.ts (the SSE events, isChatEvent, ApiHttpError; tests T01–T02, WEB-15)  types/database.ts (re-exported from @va/db)
 └── src/**/*.test.ts            sse (S01–S07, WEB-11), normalizeMessages (N01–N07), labels (L01–L02), env matrix (X03), and the above
