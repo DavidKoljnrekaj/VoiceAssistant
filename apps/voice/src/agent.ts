@@ -40,6 +40,7 @@ import { loadVad } from './providers/vad.js'
 import { installStdoutRedaction } from './redact.js'
 import { CallSession } from './session.js'
 import { startOptions, turnHandlingOptions, vadFor } from './session-options.js'
+import { createVoiceTokenStore } from './mail.js'
 import { createRegistry } from './tools.js'
 import { warm } from './warm.js'
 
@@ -54,7 +55,7 @@ const deps: VoiceDeps = {
     apiKey: env.ANTHROPIC_API_KEY,
     ...(env.ANTHROPIC_BASE_URL ? { baseURL: env.ANTHROPIC_BASE_URL } : {}),
   }),
-  registry: createRegistry(),
+  registry: createRegistry(createVoiceTokenStore(env, () => new Date())),
   channel: 'voice',
   settings: channelSettings('voice', {
     AI_VOICE_MODEL: env.AI_VOICE_MODEL,
