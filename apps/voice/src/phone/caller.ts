@@ -9,7 +9,7 @@ import type { DbClient } from '@va/db'
 import { log, type Role } from '@va/core'
 
 import { LOG_TAG } from '../config.js'
-import { type CallerIdentityRow, phoneDb } from './db.js'
+import type { CallerIdentityRow } from './db.js'
 import { normalizeE164 } from './e164.js'
 
 export interface KnownCaller {
@@ -53,7 +53,7 @@ export async function resolveCaller(
     return { kind: 'refused', reason: 'withheld' }
   }
   const hash = numberHash(e164)
-  const { data, error } = await phoneDb(service)
+  const { data, error } = await service
     .from('voice_caller_identities')
     .select(
       'id, user_id, phone_e164, label, pin_hash, pin_failed_attempts, pin_locked_until, active, created_at, created_by, user:users!voice_caller_identities_user_id_fkey(id, auth_user_id, email, role)',

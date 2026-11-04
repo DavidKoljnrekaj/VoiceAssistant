@@ -13,7 +13,6 @@ import { checkCallLimits, type ErrorCode, log } from '@va/core'
 import { sha256Hex } from '../call.js'
 import { LOG_TAG } from '../config.js'
 import type { KnownCaller } from './caller.js'
-import { phoneDb } from './db.js'
 import { createCallerSession, revokeCallerSession } from './session.js'
 
 /** <!-- needs native review --> */
@@ -97,7 +96,7 @@ export async function startPhoneCall(
     return { ok: false, code: 'internal_error' }
   }
 
-  const { data: row, error: sessionError } = await phoneDb(service)
+  const { data: row, error: sessionError } = await service
     .from('ai_sessions')
     .insert({
       user_id: userId,

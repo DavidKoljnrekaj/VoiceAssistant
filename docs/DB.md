@@ -120,8 +120,7 @@ a signed-in user must not learn which numbers are enrolled or their lock state; 
 admin step in `docs/RELEASE-RUNBOOK.md` → Enrolling a caller until the companion app adds narrow
 policies. `ai_sessions.caller_identity_id` (same migration) points a phone session at the
 identity it came from and goes null when the identity is deleted; the number itself never sits
-next to a transcript. The worker types the table by hand (`apps/voice/src/phone/db.ts`) until
-the migration is on the dev project and `/db-types` runs (`REL-10`).
+next to a transcript. The migration is on the dev project and the types are generated (`REL-10`, 2026-11-03).
 
 ### `tool_confirmations` (`20261103150000_tool_confirmations.sql`, Part 12)
 
@@ -134,9 +133,8 @@ the user saw or heard), `outcome` (`pending` → `executed` | `failed` | `declin
 the service role, by `session_id` and `user_id`; the consume is one conditional UPDATE that
 sets `confirmed_at` where it is still null (`outcome = 'pending' AND confirmed_at IS NULL AND
 expires_at > now()` plus the four match columns), so it wins once, before any settle.
-The voice worker keeps its confirmations in memory for a call and writes nothing here. The API
-types the table by hand (`apps/api/src/chat/confirmations.ts`) until `/db-types` runs
-(`REL-11`).
+The voice worker keeps its confirmations in memory for a call and writes nothing here. The migration is
+on the dev project and the types are generated (`REL-11`, 2026-11-03).
 
 ### `demo_items`, `demo_notes` (the example tool pack, `20261029100000_demo_tables.sql`)
 

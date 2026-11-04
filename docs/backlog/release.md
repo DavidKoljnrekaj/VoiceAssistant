@@ -32,7 +32,7 @@ three sets of checks) and says how to paste the results back.
       and Vercel noted in `OPS-5`. Done when a call from the PWA reaches the hosted worker with
       every developer machine off.
 
-- [ ] REL-10 · Part 11a: apply `20261103120000_phone_channel.sql` to the dev project (after
+- [x] REL-10 · Part 11a: apply `20261103120000_phone_channel.sql` to the dev project (after
       `REL-1`, by the operator: `supabase db push` as in `docs/RELEASE-RUNBOOK.md`). Check after
       applying: as the service role `select count(*) from voice_caller_identities` is 0 and
       `select caller_identity_id from ai_sessions limit 1` works; as a signed-in user the first
@@ -40,7 +40,7 @@ three sets of checks) and says how to paste the results back.
       drop the hand-written types in `apps/voice/src/phone/db.ts` for the generated ones. Then
       enrol the pilot caller (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller).
 
-- [ ] REL-11 · Part 12a: apply `20261103150000_tool_confirmations.sql` to the dev project (by the
+- [x] REL-11 · Part 12a: apply `20261103150000_tool_confirmations.sql` to the dev project (by the
       operator, `supabase db push`). Check after applying: as a signed-in user
       `select count(*) from tool_confirmations` is 0 and an insert is refused with `42501`; as the
       service role an insert with `outcome = 'maybe'` is refused with `23514`. Then `/db-types`,

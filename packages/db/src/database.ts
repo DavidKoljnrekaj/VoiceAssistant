@@ -73,6 +73,7 @@ export type Database = {
       }
       ai_sessions: {
         Row: {
+          caller_identity_id: string | null
           channel: string
           context_summary: string | null
           created_at: string
@@ -84,6 +85,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          caller_identity_id?: string | null
           channel?: string
           context_summary?: string | null
           created_at?: string
@@ -95,6 +97,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          caller_identity_id?: string | null
           channel?: string
           context_summary?: string | null
           created_at?: string
@@ -106,6 +109,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: 'ai_sessions_caller_identity_id_fkey'
+            columns: ['caller_identity_id']
+            isOneToOne: false
+            referencedRelation: 'voice_caller_identities'
+            referencedColumns: ['id']
+          },
           {
             foreignKeyName: 'ai_sessions_summary_fk'
             columns: ['summary_through_message_id']
@@ -191,6 +201,66 @@ export type Database = {
           },
         ]
       }
+      tool_confirmations: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          error_code: string | null
+          expires_at: string
+          id: string
+          input_hash: string
+          outcome: string
+          session_id: string
+          settled_at: string | null
+          summary: string
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          expires_at: string
+          id?: string
+          input_hash: string
+          outcome?: string
+          session_id: string
+          settled_at?: string | null
+          summary: string
+          tool: string
+          user_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          expires_at?: string
+          id?: string
+          input_hash?: string
+          outcome?: string
+          session_id?: string
+          settled_at?: string | null
+          summary?: string
+          tool?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tool_confirmations_session_id_fkey'
+            columns: ['session_id']
+            isOneToOne: false
+            referencedRelation: 'ai_sessions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tool_confirmations_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       users: {
         Row: {
           auth_user_id: string
@@ -226,6 +296,60 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      voice_caller_identities: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          phone_e164: string
+          pin_failed_attempts: number
+          pin_hash: string | null
+          pin_locked_until: string | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          phone_e164: string
+          pin_failed_attempts?: number
+          pin_hash?: string | null
+          pin_locked_until?: string | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          phone_e164?: string
+          pin_failed_attempts?: number
+          pin_hash?: string | null
+          pin_locked_until?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'voice_caller_identities_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'voice_caller_identities_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
       }
       voice_calls: {
         Row: {

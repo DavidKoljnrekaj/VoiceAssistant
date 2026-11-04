@@ -1,9 +1,7 @@
 // The chat channel's confirmation store: `tool_confirmations` through the service client, every
 // query by `session_id` and `user_id` (invariant 6). The engine issues, consumes and settles
 // through the port; `prepareChat` checks a confirm and settles a decline before the stream.
-// The table is typed by hand until `/db-types` runs with the migration applied (`REL-11`).
-import type { SupabaseClient } from '@supabase/supabase-js'
-
+// The table's types are the generated ones (`/db-types` run 2026-11-03, `REL-11`).
 import type {
   AuthContext,
   ConfirmationStore,
@@ -13,46 +11,8 @@ import type {
 } from '@va/core'
 import { log } from '@va/core'
 
-type Outcome = 'pending' | 'executed' | 'failed' | 'declined' | 'expired'
-
-type ConfirmationRow = {
-  id: string
-  session_id: string
-  user_id: string
-  tool: string
-  input_hash: string
-  summary: string
-  outcome: Outcome
-  error_code: string | null
-  created_at: string
-  expires_at: string
-  confirmed_at: string | null
-  settled_at: string | null
-}
-
-type ConfirmationsDatabase = {
-  public: {
-    Tables: {
-      tool_confirmations: {
-        Row: ConfirmationRow
-        Insert: Pick<
-          ConfirmationRow,
-          'session_id' | 'user_id' | 'tool' | 'input_hash' | 'summary' | 'expires_at'
-        > &
-          Partial<ConfirmationRow>
-        Update: Partial<ConfirmationRow>
-        Relationships: []
-      }
-    }
-    Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
-    Enums: { [_ in never]: never }
-    CompositeTypes: { [_ in never]: never }
-  }
-}
-
 function table(ctx: AuthContext) {
-  return (ctx.serviceClient as unknown as SupabaseClient<ConfirmationsDatabase>).from('tool_confirmations')
+  return ctx.serviceClient.from('tool_confirmations')
 }
 
 export function dbConfirmationStore(
