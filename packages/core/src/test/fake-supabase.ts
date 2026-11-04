@@ -10,7 +10,9 @@
 // or FK hint, with `!inner`; filters eq/neq/gt/gte/lt/lte/like/ilike/is/in, `not.` negation,
 // embedded filters (`alias.col`) and `or=(...)`; order with nulls first/last; limit/offset;
 // `Prefer: count=exact` (+ HEAD); `vnd.pgrst.object+json` (single); insert / update / delete
-// with `return=representation` (delete returns the removed rows); and RPCs registered by the test.
+// with `return=representation` (delete returns the removed rows); upsert (`on_conflict` with
+// `resolution=merge-duplicates` or `ignore-duplicates`) on the unique keys below, and `23505` for
+// a plain insert that breaks one; and RPCs registered by the test.
 
 export type Row = Record<string, unknown>
 
@@ -26,6 +28,12 @@ const FKS: Record<string, Record<string, string>> = {
   voice_caller_identities: { user_id: 'users', created_by: 'users' },
   tool_confirmations: { session_id: 'ai_sessions', user_id: 'users' },
   demo_notes: { user_id: 'users' },
+  user_integrations: { user_id: 'users' },
+}
+
+// Unique keys besides `id`, from the DDL: an insert that repeats one is `23505`, an upsert merges on it.
+const UNIQUE: Record<string, string[][]> = {
+  user_integrations: [['user_id', 'provider']],
 }
 
 // Column defaults applied on insert, mirroring the DDL.
@@ -48,6 +56,12 @@ const DEFAULTS: Record<string, Row> = {
     active: true,
     created_by: null,
   },
+  user_integrations: {
+    access_token_enc: null,
+    access_expires_at: null,
+    status: 'active',
+    last_error_code: null,
+  },
   ai_messages: {
     model: null,
     input_tokens: null,
@@ -58,7 +72,7 @@ const DEFAULTS: Record<string, Row> = {
     parent_id: null,
   },
 }
-const HAS_UPDATED_AT = new Set(['users', 'ai_sessions'])
+const HAS_UPDATED_AT = new Set(['users', 'ai_sessions', 'user_integrations'])
 
 export interface RecordedRequest {
   method: string
@@ -294,6 +308,7 @@ export class FakeSupabase {
     const row: Row = { ...(DEFAULTS[table] ?? {}), id: crypto.randomUUID(), created_at: createdAt }
     if (HAS_UPDATED_AT.has(table)) row.updated_at = createdAt
     if (table === 'voice_calls') row.last_seen_at = createdAt // DDL: `DEFAULT now()`
+    if (table === 'user_integrations') row.connected_at = createdAt // DDL: `DEFAULT now()`
     return { ...row, ...raw }
   }
 
@@ -337,13 +352,31 @@ export class FakeSupabase {
         }
         case 'POST': {
           const input = Array.isArray(body) ? body : [body]
+          const onConflict = params.get('on_conflict')?.split(',')
+          const merge = /resolution=merge-duplicates/.test(prefer)
+          const ignore = /resolution=ignore-duplicates/.test(prefer)
           const inserted: Row[] = []
           for (const raw of input as Row[]) {
+            if (onConflict && (merge || ignore)) {
+              const existing = rows.find((r) => onConflict.every((c) => r[c] === raw[c]))
+              if (existing) {
+                if (merge) {
+                  Object.assign(existing, raw, HAS_UPDATED_AT.has(table) ? { updated_at: this.now() } : {})
+                  inserted.push(existing)
+                }
+                continue
+              }
+            }
             const row = this.newRow(table, raw)
-            if (rows.some((r) => r.id === row.id)) {
+            const broken = rows.some((r) => r.id === row.id)
+              ? `${table}_pkey`
+              : (UNIQUE[table] ?? [])
+                  .filter((key) => rows.some((r) => key.every((c) => r[c] === row[c])))
+                  .map((key) => `${table}_${key.join('_')}_key`)[0]
+            if (broken) {
               return json(409, {
                 code: '23505',
-                message: `duplicate key value violates unique constraint "${table}_pkey"`,
+                message: `duplicate key value violates unique constraint "${broken}"`,
                 details: null,
                 hint: null,
               })
