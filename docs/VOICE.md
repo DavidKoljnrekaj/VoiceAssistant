@@ -213,6 +213,7 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | 2026-11-04 | `021b455` | before Part 13b (`main`, 13a merged)                     | `claude-sonnet-5-5`, `low` | 1.74 s / 3.66 s      | 4.09 s / 9.23 s        | 2.03   | 36  |
 | 2026-11-04 | `c3d2f81` | 13b: the mail pack on voice (four tools, the rules)      | `claude-sonnet-5-5`, `low` | 1.94 s / 5.24 s      | 4.70 s / 10.80 s       | 2.03   | 36  |
 | 2026-11-04 | `91b06fe` | 13b trimmed: shorter mail descriptions and rules         | `claude-sonnet-5-5`, `low` | 1.82 s / 2.98 s      | 4.34 s / 9.07 s        | 2.03   | 36  |
+| 2026-11-04 | `3edafe7` | 13c: the mail writes, the confirmation rule (VOICE-18)   | `claude-sonnet-5-5`, `low` | 1.87 s / 3.33 s      | 4.84 s / 8.30 s        | 2.08   | 36  |
 
 **Part 13b, the mail pack on voice.** Both runs on the local stack with the seed member, three
 repeats each, one shell (`~/.config/va/voice.local.env` sourced after `voice.env`). The bench
@@ -227,10 +228,12 @@ cached read is 3,819 tokens (+1,385 over `main` instead of +2,219), first text p
 rounds. The whole-answer p50 is at the top of the range earlier baselines spread over
 (4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost. Accepted by the user on 2026-11-04: kept.
 
-**Owed: Part 13c on voice.** The confirmation rule in `VOICE_INTRO_HR` (VOICE-18), the
-`write_outcome_unknown` line in `MAIL_RULES_HR` and the two write tools change the fixed prefix
-again. "Before" is the `91b06fe` row (the code `main` had before 13c); the "after" runs on the 13c
-branch head with the same commands; its row goes here.
+**Part 13c on voice** (`3edafe7`): the confirmation rule in `VOICE_INTRO_HR` (VOICE-18), the
+`write_outcome_unknown` line in `MAIL_RULES_HR` and the two write tools add about 700 tokens to
+the fixed prefix (the first call's cached read 3,819 → 4,535). Against `91b06fe`: first text p50
+1.87 s (+0.05 s), whole answer p50 4.84 s (+0.50 s), p95 lower on both, rounds 2.08 (q08, "detalje
+o radnom stolu", took the third round — search, details, answer — in all three repeats, two of
+three before).
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
