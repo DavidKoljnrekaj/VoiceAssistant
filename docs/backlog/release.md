@@ -61,11 +61,13 @@ three sets of checks) and says how to paste the results back.
       gets the six variables (the voice host the four) in its env file. Before the first real
       mailbox: `OPS-4` and `OPS-5`.
 
-- [ ] REL-14 · Part 13a: public sign-up off on every Supabase project the assistant uses
-      (Dashboard → Authentication → Sign In / Providers → "Allow new users to sign up" off;
-      users are invited), and email confirmation stays on. The Outlook callback requires the
-      user's confirmed email to equal the mailbox's UPN; with sign-up open and confirmation off,
-      anyone could register a colleague's address first. Check: a `POST` to
+- [ ] REL-14 · Part 13a, and a precondition of Part 14: public sign-up off on every Supabase
+      project the assistant uses (Dashboard → Authentication → Sign In / Providers → "Allow new
+      users to sign up" off; users are invited), and email confirmation stays on. The Outlook
+      callback requires the user's confirmed email to equal the mailbox's UPN, and Landmark's
+      `assistant-api` maps our signed `sub` (the user's email) to a Landmark user; with sign-up
+      open and confirmation off, anyone could register a colleague's address first and reach
+      their mailbox or their Landmark data. Check: a `POST` to
       `$SUPABASE_URL/auth/v1/signup` with the anon key as `apikey` and any email and password
       answers `422` with `signup_disabled` (`docs/RELEASE-RUNBOOK.md` → Connecting Outlook, B).
 

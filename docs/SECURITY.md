@@ -110,7 +110,9 @@ the single-use state issued to a signed-in user, and the mailbox's UPN must equa
 email as GoTrue confirmed it, so nobody can bind a colleague's mailbox to their own account by
 sending them a sign-in link. That check is only as good as the addresses in Supabase Auth: with
 public sign-up open and email confirmation off, anyone could register a colleague's address
-before the colleague does, so sign-up stays off and users are invited (`REL-14`). Tokens are
+before the colleague does, so sign-up stays off and users are invited (`REL-14`). The same
+address is what the Landmark pack (Part 14) signs as `sub`, so the same setting protects the
+company's Landmark data. Tokens are
 AES-256-GCM ciphertext under `INTEGRATIONS_KEY` on the two hosts only; a database dump alone
 opens nothing, but a token and the key together can read and send mail as the user, which is
 why both stay out of logs, responses and the browser. Disconnecting deletes our copy; Microsoft's
