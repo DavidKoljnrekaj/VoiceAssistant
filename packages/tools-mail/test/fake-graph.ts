@@ -126,6 +126,8 @@ export interface FakeMessage {
   from: { name: string; address: string }
   to?: { name: string; address: string }[]
   cc?: { name: string; address: string }[]
+  /** Where the sender asks replies to go; the pack's reply ignores it. */
+  replyTo?: { name: string; address: string }[]
   /** UTC ISO. */
   received: string
   isRead?: boolean
@@ -134,6 +136,8 @@ export interface FakeMessage {
   /** The new part of the message (Graph's uniqueBody), plain text. */
   body: string
   folder?: 'inbox' | 'archive'
+  /** Set by PATCH { flag }. */
+  flag?: 'notFlagged' | 'flagged' | 'complete'
 }
 
 export interface FakeEvent {
@@ -180,6 +184,8 @@ function messageJson(m: FakeMessage, textBody: boolean): Record<string, unknown>
     from: address(m.from),
     toRecipients: (m.to ?? []).map(address),
     ccRecipients: (m.cc ?? []).map(address),
+    replyTo: (m.replyTo ?? []).map(address),
+    flag: { flagStatus: m.flag ?? 'notFlagged' },
     receivedDateTime: m.received,
     isRead: m.isRead ?? false,
     importance: m.importance ?? 'normal',
@@ -201,7 +207,8 @@ export function installMailbox(
   graph: FakeGraph,
   box: { messages?: FakeMessage[]; events?: FakeEvent[] },
 ): void {
-  const messages = box.messages ?? []
+  // Copies: a PATCH changes the mailbox of this install only, never the test's fixtures.
+  const messages = (box.messages ?? []).map((m) => ({ ...m }))
   const events = box.events ?? []
   const byNewest = (list: FakeMessage[]) => [...list].sort((a, b) => b.received.localeCompare(a.received))
   const top = (c: GraphCall) => Number(c.query.get('$top') ?? 10)
@@ -261,6 +268,30 @@ export function installMailbox(
         },
       }
     return { body: project(messageJson(m, textBody(c)), c.query.get('$select')) }
+  })
+
+  const notFound = {
+    status: 404,
+    body: {
+      error: { code: 'ErrorItemNotFound', message: 'The specified object was not found in the store.' },
+    },
+  }
+  const byPath = (c: GraphCall, suffix = '') =>
+    messages.find(
+      (x) => x.id === decodeURIComponent(c.path.slice('/me/messages/'.length, c.path.length - suffix.length)),
+    )
+
+  // A reply is accepted with 202 and no body; the test reads what was sent from `graph.calls`.
+  graph.route('POST', /^\/me\/messages\/[^/]+\/reply$/, (c) =>
+    byPath(c, '/reply') ? { status: 202 } : notFound,
+  )
+
+  graph.route('PATCH', /^\/me\/messages\/[^/]+$/, (c) => {
+    const m = byPath(c)
+    if (!m) return notFound
+    const flag = (c.body as { flag?: { flagStatus?: FakeMessage['flag'] } } | undefined)?.flag?.flagStatus
+    if (flag) m.flag = flag
+    return { body: messageJson(m, true) }
   })
 
   graph.route('GET', '/me/calendarView', (c) => {
