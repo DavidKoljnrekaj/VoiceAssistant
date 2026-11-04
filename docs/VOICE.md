@@ -227,7 +227,7 @@ rounds. The whole-answer p50 is at the top of the range earlier baselines spread
 (4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost. Accepted by the user on 2026-11-04: kept.
 
 **Owed: Part 13c on voice.** The confirmation rule in `VOICE_INTRO_HR` (VOICE-18), the
-`reply_outcome_unknown` line in `MAIL_RULES_HR` and the two write tools change the fixed prefix
+`write_outcome_unknown` line in `MAIL_RULES_HR` and the two write tools change the fixed prefix
 again. "Before" is the `91b06fe` row (the code `main` had before 13c); the "after" runs on the 13c
 branch head with the same commands; its row goes here.
 

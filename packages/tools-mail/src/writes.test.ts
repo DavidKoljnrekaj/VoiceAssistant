@@ -231,7 +231,7 @@ describe('mail writes', () => {
       })
       expect(run.sink.toolResults[0]).toMatchObject({
         isError: true,
-        output: { error: 'reply_outcome_unknown' },
+        output: { error: 'write_outcome_unknown' },
       })
       // Sent once, never retried.
       expect(replies()).toHaveLength(1)

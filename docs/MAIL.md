@@ -91,10 +91,10 @@ partner.hr`), since a display name is the sender's to choose. Quotation marks in
   refused (`reply_too_long`): the whole preview is read out before the caller answers.
 - **Once confirmed, the write runs to its real outcome** (`docs/CORE.md` → the write protocol): a
   barge-in or the 6 s voice tool timeout does not cut it off. A send whose outcome cannot be known
-  (a timeout, a lost answer, a 5xx after it left) is `reply_outcome_unknown`; the rules tell the
+  (a timeout, a lost answer, a 5xx after it left) is `write_outcome_unknown`; the rules tell the
   model to say so and to suggest checking Sent Items, never to send again.
 - **Errors** as the reads, plus `no_sender` (a reply to a message without a From address),
-  `reply_too_long`, `reply_outcome_unknown`; a preview's failure reaches the model as an is_error
+  `reply_too_long`, `write_outcome_unknown`; a preview's failure reaches the model as an is_error
   result naming the code. A 404 on the write is `message_not_found`.
 - **No daily cap** (`API-16`). Whether Graph replaces or adds recipients with `toRecipients` is
   the first live check's (`REL-13`).

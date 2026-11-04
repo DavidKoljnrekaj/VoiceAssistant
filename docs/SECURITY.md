@@ -110,7 +110,7 @@ on a call with the domain when it is not the user's own, since a display name is
 choose) and on a call is read out verbatim before the caller answers; quotation marks in a
 subject or name are made plain so they cannot imitate the summary; the reply is a plain-text body
 with no invisible character; once confirmed, a write runs to its real outcome and a send whose
-outcome is unknown is never retried (`reply_outcome_unknown`). There is no daily send cap yet
+outcome is unknown is never retried (`write_outcome_unknown`). There is no daily send cap yet
 (`API-16`).
 
 **Outlook (Part 13a, decision 0016).** The assistant reaches a mailbox with delegated

@@ -11,9 +11,9 @@ import { isTargetFailure, loadTarget, previewFailure } from './target.js'
 export const REPLY_MAX = 2000
 /** On a call the whole preview is read out before the caller answers: about half a minute. */
 export const SPOKEN_REPLY_MAX = 500
-/** The send's own ceiling, inside the dispatch's confirmed-write ceiling (20 s), so this tool
- * reports an unknown outcome itself rather than being timed out. */
-const SEND_TIMEOUT_MS = 15_000
+/** The confirmed run's own deadline, from the handler's start (the lookup and the send), inside
+ * the dispatch's confirmed-write ceiling (20 s), so this tool reports the outcome itself. */
+const RUN_TIMEOUT_MS = 15_000
 
 /** The send was attempted and nobody can say whether Graph took it: not retried. */
 class OutcomeUnknown extends Error {}
@@ -49,11 +49,11 @@ export function replyMail(deps: MailDeps) {
       return `Odgovorit ću na poruku „${target.subject}“. Primatelj je ${target.sender}, a tekst glasi: „${input.text}“`
     },
     async handler(input, ctx, extras, signal) {
-      const target = await loadTarget(deps, ctx, input.ref, isSpoken(extras.channel), signal, {
+      const send = AbortSignal.any([signal, AbortSignal.timeout(RUN_TIMEOUT_MS)])
+      const target = await loadTarget(deps, ctx, input.ref, isSpoken(extras.channel), send, {
         requireSender: true,
       })
       if (isTargetFailure(target)) return target
-      const send = AbortSignal.any([signal, AbortSignal.timeout(SEND_TIMEOUT_MS)])
       let sent
       try {
         sent = await withGraph(deps, ctx, send, async (graph) => {
@@ -78,7 +78,8 @@ export function replyMail(deps: MailDeps) {
           }
         })
       } catch (e) {
-        if (e instanceof OutcomeUnknown) return { error: 'reply_outcome_unknown' }
+        // The same code dispatch gives a confirmed write past its ceiling: one rule for the model.
+        if (e instanceof OutcomeUnknown) return { error: 'write_outcome_unknown' }
         if (e instanceof GraphError && e.kind === 'not_found') return { error: 'message_not_found' }
         throw e
       }
