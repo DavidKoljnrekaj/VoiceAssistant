@@ -24,8 +24,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <LanguageSwitcher />
           <Link
             to="/settings"
-            aria-label={t('settings.title')}
-            title={t('settings.title')}
+            aria-label={t('common.settings')}
+            title={t('common.settings')}
             className="rounded-lg p-2 text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
           >
             <Settings className="h-4 w-4" aria-hidden="true" />

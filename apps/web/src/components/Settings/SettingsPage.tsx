@@ -45,7 +45,7 @@ export default function SettingsPage({ redirect = leavePage }: { redirect?: (url
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </Link>
-        <h1 className="text-lg font-semibold">{t('settings.title')}</h1>
+        <h1 className="text-lg font-semibold">{t('common.settings')}</h1>
       </div>
       <OutlookConnection outlook={outlook} />
     </div>

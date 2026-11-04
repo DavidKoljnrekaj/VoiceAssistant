@@ -244,7 +244,7 @@ strings; keys are added to `hr` and `en` together; domain terms stay untranslate
 client-side error labels in `labels.ts` are Croatian only, like the model's answers and the
 API's error messages (`WEB-3`). The Croatian locale and `labels.ts` are placeholders until a
 native speaker reads them (`CORE-1`). The `settings.*` keys (Part 13a) are new Croatian text in
-the same state: `settings.title`, `settings.back` and every `settings.outlook.*` key, including
+the same state: `common.settings`, `settings.back` and every `settings.outlook.*` key, including
 the six `settings.outlook.errors.*`. <!-- needs native review -->
 
 ## Accessibility

@@ -16,7 +16,8 @@
     "language": "Language",
     "language_save_failed": "The language could not be saved. Try again.",
     "menu": "Menu",
-    "dismiss": "Dismiss notification"
+    "dismiss": "Dismiss notification",
+    "settings": "Settings"
   },
   "auth": {
     "title": "Sign in",
@@ -76,7 +77,6 @@
     "en": "English"
   },
   "settings": {
-    "title": "Settings",
     "back": "Back to the conversation",
     "outlook": {
       "title": "Outlook",
