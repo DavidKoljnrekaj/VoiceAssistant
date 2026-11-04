@@ -94,7 +94,9 @@ export class FakeGraph {
     }
     const reply = r.handler(call)
     const status = reply.status ?? 200
-    return new Response(status === 204 ? null : JSON.stringify(reply.body ?? {}), {
+    // Graph sends no body with a 204, nor with the 202 of an accepted reply.
+    const empty = status === 204 || (status === 202 && reply.body === undefined)
+    return new Response(empty ? null : JSON.stringify(reply.body ?? {}), {
       status,
       headers: {
         'content-type': 'application/json',
