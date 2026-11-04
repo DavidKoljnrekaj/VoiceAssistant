@@ -144,11 +144,25 @@ export async function dispatchTool(
   return { kind: 'pending', id: issued.id, summary, expiresAt }
 }
 
+/** The ceiling of a confirmed write: once the user said yes, the write runs to its real outcome
+ * rather than to the channel's tool timeout (6 s on a call). */
+export const CONFIRMED_WRITE_TIMEOUT_MS = 20_000
+
+/** This request carries the user's yes and the tool is one that waits for it: a write that, once
+ * started, must not be cut off halfway (an email accepted by the provider but reported as failed
+ * invites a second send). */
+export function isConfirmedWrite(dc: DispatchContext, name: string): boolean {
+  if (!dc.extras.confirmation) return false
+  return dc.registry.find(dc.ctx, name, dc.channel)?.confirmation === 'required'
+}
+
 /**
  * `dispatchTool` raced against `timeoutMs`. The handler gets a child signal that fires on the
  * timeout and on the loop's own abort; the timer is cleared however the race ends, including
  * the loop's abort while a handler that ignores its signal is still running, and a late result
- * from a timed-out or aborted handler is discarded.
+ * from a timed-out or aborted handler is discarded. A confirmed write is the exception: its
+ * signal fires only on its own ceiling (`CONFIRMED_WRITE_TIMEOUT_MS`), the loop's abort neither
+ * cancels it nor ends the race, and its real outcome is returned.
  */
 export async function dispatchToolWithTimeout(
   dc: DispatchContext,
@@ -157,15 +171,18 @@ export async function dispatchToolWithTimeout(
   timeoutMs: number,
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
+  const write = isConfirmedWrite(dc, name)
+  const limit = write ? Math.max(timeoutMs, CONFIRMED_WRITE_TIMEOUT_MS) : timeoutMs
   const timeout = new AbortController()
-  const child = AbortSignal.any([signal, timeout.signal])
+  const child = write ? timeout.signal : AbortSignal.any([signal, timeout.signal])
   let timer: ReturnType<typeof setTimeout> | undefined
   let onAbort: (() => void) | undefined
   const expired = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       timeout.abort(new Error('tool_timeout'))
       reject(new Error('tool_timeout'))
-    }, timeoutMs)
+    }, limit)
+    if (write) return
     // The loop gave up on this round: the timer has nothing left to guard.
     onAbort = () => {
       clearTimeout(timer)
@@ -187,7 +204,7 @@ export async function dispatchToolWithTimeout(
       log('warn', dc.logTag, 'tool timeout', {
         userId: dc.ctx.userId,
         tool: name,
-        timeoutMs,
+        timeoutMs: limit,
         requestId: dc.extras.requestId,
       })
     }

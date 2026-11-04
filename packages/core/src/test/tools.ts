@@ -199,9 +199,16 @@ export const confirmedWrite = defineTool({
     if (input.text === 'preview-boom') throw new Error('preview failed')
     return `Zapisat ću: "${input.text}"`
   },
-  async handler(input) {
+  async handler(input, _ctx, _extras, signal) {
     if (input.text === 'boom') throw new Error('kaboom')
     if (input.text === 'envelope') return { error: 'the system said no' }
+    // `slow`: waits for `openGate('write')`, recording start, end and any abort it sees.
+    if (input.text === 'slow') {
+      record('start:write')
+      signal.addEventListener('abort', () => record('aborted:write'), { once: true })
+      await gate('write').promise
+      record('end:write')
+    }
     executions.push(input.text)
     return { written: input.text }
   },

@@ -7,7 +7,7 @@ import type { Json } from '@va/db'
 import type { AuthContext } from '../auth.js'
 import { log } from '../log.js'
 import type { ToolHandlerExtras } from '../tools/define.js'
-import { dispatchToolWithTimeout, type ToolOutcome } from './dispatch.js'
+import { dispatchToolWithTimeout, isConfirmedWrite, type ToolOutcome } from './dispatch.js'
 import type {
   EventSink,
   LoopConfig,
@@ -64,6 +64,8 @@ export async function runToolRound(
         (tu) => () => dispatchToolWithTimeout(dc, tu.name, tu.input, config.settings.toolTimeoutMs, signal),
       ),
       signal,
+      // A confirmed write keeps its real outcome through an abort: the row says what happened.
+      toolUses.map((tu) => isConfirmedWrite(dc, tu.name)),
     )
     hooks.mark?.('tools_done')
   }
@@ -136,14 +138,20 @@ export function toolResultBlocks(
 export async function dispatchAll(
   dispatches: ReadonlyArray<() => Promise<ToolOutcome>>,
   signal: AbortSignal,
+  /** Per dispatch: true for one whose outcome is awaited even after an abort (a confirmed write,
+   * bounded by its own ceiling). */
+  holds: readonly boolean[] = [],
 ): Promise<ToolOutcome[]> {
   const settled: Array<ToolOutcome | undefined> = new Array<ToolOutcome | undefined>(dispatches.length)
+  const held: Promise<void>[] = []
   const all = Promise.all(
-    dispatches.map((run, i) =>
-      run().then((r) => {
-        if (!signal.aborted) settled[i] = r
-      }),
-    ),
+    dispatches.map((run, i) => {
+      const p = run().then((r) => {
+        if (!signal.aborted || holds[i]) settled[i] = r
+      })
+      if (holds[i]) held.push(p)
+      return p
+    }),
   )
   let onAbort: (() => void) | undefined
   const aborted = new Promise<void>((resolve) => {
@@ -152,6 +160,7 @@ export async function dispatchAll(
   })
   try {
     await Promise.race([all, aborted])
+    if (signal.aborted) await Promise.all(held)
   } finally {
     if (onAbort) signal.removeEventListener('abort', onAbort)
   }

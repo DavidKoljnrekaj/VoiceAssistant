@@ -1,11 +1,19 @@
-// E40–E45: the write protocol. A tool with `confirmation: 'required'` previews, the sink gets
+// E40–E47: the write protocol. A tool with `confirmation: 'required'` previews, the sink gets
 // the id after the row, the model never sees it, and the handler runs once on a confirmed
 // request with the same input.
 import { describe, expect, it } from 'vitest'
 
 import { answer, callTools, toolUse } from '../test/fake-anthropic.js'
 import { anthropic, authAs, blocksOf, logs, runChat, scenario } from '../test/harness.js'
-import { CONFIRM_PACK, confirmedWrite, executions, TEST_PACK } from '../test/tools.js'
+import {
+  awaitHandlerEvent,
+  CONFIRM_PACK,
+  confirmedWrite,
+  executions,
+  handlerEvents,
+  openGate,
+  TEST_PACK,
+} from '../test/tools.js'
 import { defineTool } from '../tools/define.js'
 import { ToolRegistry } from '../tools/registry.js'
 import { CONFIRMATION_TTL_MS, inputHash, MemoryConfirmationStore, stableStringify } from './confirmations.js'
@@ -251,4 +259,62 @@ describe('the write protocol', () => {
     expect(stableStringify({ b: [{ z: 1, a: 2 }], a: null })).toBe('{"a":null,"b":[{"a":2,"z":1}]}')
     expect(inputHash({ a: 1, b: 2 })).toBe(inputHash({ b: 2, a: 1 }))
   })
+
+  /** A pending `slow` write, then the confirmed request (a long run the test opens with the gate). */
+  async function confirmedSlow(opts: { settings?: { toolTimeoutMs: number }; controller?: AbortController }) {
+    const store = new MemoryConfirmationStore()
+    anthropic.script(callTools(toolUse('confirmed_write', { text: 'slow' })), answer('Da?'))
+    const ctx = await authAs('member')
+    const first = await runChat(ctx, 'Zapiši sporo.', { ...PACKS, confirmations: store })
+    const id = first.sink.confirms[0]!.id
+    anthropic.script(callTools(toolUse('confirmed_write', { text: 'slow' })), answer('Zapisano.'))
+    const run = runChat(ctx, 'Da.', {
+      ...PACKS,
+      confirmations: store,
+      sessionId: first.sessionId,
+      parentId: first.rows().at(-1)!.id as string,
+      extras: { confirmation: { id } },
+      ...(opts.settings ? { settings: opts.settings } : {}),
+      ...(opts.controller ? { controller: opts.controller } : {}),
+    })
+    return { store, id, run }
+  }
+
+  scenario(
+    "E46 a confirmed write is not cut off by the channel's tool timeout: it runs to its outcome and the model gets it",
+    async () => {
+      const { store, id, run } = await confirmedSlow({ settings: { toolTimeoutMs: 30 } })
+      await awaitHandlerEvent('start:write')
+      await new Promise((r) => setTimeout(r, 80))
+      openGate('write')
+      const done = await run
+      expect(executions).toEqual(['slow'])
+      expect(done.sink.toolResults[0]).toMatchObject({ isError: false, output: { written: 'slow' } })
+      expect(store.rows.find((r) => r.id === id)).toMatchObject({ outcome: 'executed' })
+      expect(handlerEvents).not.toContain('aborted:write')
+    },
+  )
+
+  scenario(
+    'E47 an abort while a confirmed write runs (a barge-in) does not cancel it; the tool_result row holds its real outcome',
+    async () => {
+      const controller = new AbortController()
+      const { store, id, run } = await confirmedSlow({ controller })
+      await awaitHandlerEvent('start:write')
+      controller.abort()
+      setTimeout(() => openGate('write'), 20)
+      const done = await run
+      expect(handlerEvents).toContain('end:write')
+      expect(handlerEvents).not.toContain('aborted:write')
+      expect(store.rows.find((r) => r.id === id)).toMatchObject({ outcome: 'executed' })
+      const resultRow = done
+        .rows()
+        .filter((r) => r.turn_kind === 'tool_result')
+        .at(-1)!
+      const block = blocksOf(resultRow.content, 'tool_result')[0]!
+      expect(JSON.parse(block.content as string)).toEqual({ written: 'slow' })
+    },
+    // The loop ends after the abort: the answer turn scripted for the confirmed request is never asked for.
+    { allowLeftoverTurns: true },
+  )
 })
