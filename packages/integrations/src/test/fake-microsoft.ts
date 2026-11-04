@@ -56,6 +56,10 @@ export class FakeMicrosoft {
   private issued = 0
 
   reset(): void {
+    this.tenantId = FAKE_TENANT_ID
+    this.clientId = FAKE_CLIENT_ID
+    this.clientSecret = FAKE_CLIENT_SECRET
+    this.redirectUri = FAKE_REDIRECT_URI
     this.expiresIn = 3600
     this.rotateRefreshTokens = true
     this.calls = []
