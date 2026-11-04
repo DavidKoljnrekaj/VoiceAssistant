@@ -16,10 +16,12 @@ describe('api tools', () => {
     const registry = createRegistry()
     expect(registry.anthropicTools({ role: 'member' }, 'chat').map((t) => t.name)).toEqual([
       'create_note',
+      'flag_mail',
       'get_item',
       'list_calendar',
       'list_mail',
       'read_mail',
+      'reply_mail',
       'search_items',
       'search_mail',
     ])

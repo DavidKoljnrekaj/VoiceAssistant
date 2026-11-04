@@ -456,6 +456,53 @@ scenario(
   },
 )
 
+scenario(
+  'B30 chat: a reply is previewed with a confirm event, and sent once to the sender when the next turn confirms it',
+  async () => {
+    const { url, state } = await start()
+    await callback({ code: ms.authorize(url, { upn: M.email }), state })
+    installMailbox(graphFake, {
+      messages: [
+        {
+          id: 'AAMkAD-1',
+          subject: 'Sastanak u petak',
+          from: { name: 'Marko Horvat', address: 'marko@partner.hr' },
+          replyTo: [{ name: 'Marko Horvat', address: 'thief@evil.test' }],
+          received: '2026-11-04T08:15:00Z',
+          body: 'Stižeš li?',
+        },
+      ],
+    })
+    const reply = { ref: 'm1', text: 'Stižem u deset.' }
+    anthropic.script(
+      callTools(toolUse('list_mail', {})),
+      callTools(toolUse('reply_mail', reply)),
+      answer('Da pošaljem?'),
+    )
+    const first = await chat({ session_id: null, message: 'Odgovori Marku da stižem u deset.' })
+    const confirm = first.events.find((e) => e.data.type === 'confirm')!.data as Record<string, string>
+    expect(confirm.summary).toBe(
+      'Odgovorit ću na poruku „Sastanak u petak“. Primatelj je Marko Horvat (marko@partner.hr), a tekst glasi: „Stižem u deset.“',
+    )
+    const sessionId = (first.events[0]!.data as unknown as { session_id: string }).session_id
+    expect(graphFake.calls.filter((c) => c.method === 'POST')).toHaveLength(0)
+
+    anthropic.script(callTools(toolUse('reply_mail', reply)), answer('Poslano.'))
+    await chat({ session_id: sessionId, message: 'Da.', confirm: confirm.confirmation_id })
+    const sent = graphFake.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/reply'))
+    expect(sent).toHaveLength(1)
+    expect(sent[0]!.body).toEqual({
+      message: {
+        toRecipients: [{ emailAddress: { name: 'Marko Horvat', address: 'marko@partner.hr' } }],
+        body: { contentType: 'text', content: 'Stižem u deset.' },
+      },
+    })
+    expect(db.rows('tool_confirmations')).toMatchObject([
+      { id: confirm.confirmation_id, tool: 'reply_mail', user_id: M.id, outcome: 'executed' },
+    ])
+  },
+)
+
 it('B16 the Microsoft env is all or none, the tenant a GUID, the redirect the callback path; errors name no value', () => {
   const base = { ...process.env, ANTHROPIC_API_KEY: 'k' }
   const group = {
