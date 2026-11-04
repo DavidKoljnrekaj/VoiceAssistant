@@ -14,7 +14,8 @@
     sees a token in the clear. The additional data binds each value to its user, provider and
     column, so a ciphertext copied to another row does not open.
   - status: active → reauth_required (Microsoft refused the refresh; the user reconnects) or
-    revoked (the user disconnected; both tokens are deleted and the row stays for its state).
+    revoked (the user disconnected; our copy of both tokens is deleted and the row stays for its
+    state; Microsoft's own sessions end only when the app is revoked in My Apps).
     The CHECKs tie the token columns to the status.
   - last_error_code is Microsoft's error code (AADSTS…) of the last failed refresh, never its
     description.

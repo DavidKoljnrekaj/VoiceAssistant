@@ -20,11 +20,13 @@ VoiceAssistant/
 ├── packages/
 │   ├── core/                     # @va/core — the engine: loop, tools registry, prompts, history, sinks, fakes
 │   ├── db/                       # @va/db   — generated Supabase types, client factories, env
-│   └── tools-demo/               # @va/tools-demo — one example tool pack (the contract for real packs)
+│   ├── integrations/             # @va/integrations — sealed tokens, the Microsoft OAuth, the token store (docs/MAIL.md)
+│   ├── tools-demo/               # @va/tools-demo — one example tool pack (the contract for real packs)
+│   └── tools-mail/               # @va/tools-mail — the email pack: the Graph client (13a); tools in 13b, 13c
 ├── apps/
-│   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /health; Dockerfile
+│   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /integrations, /health; Dockerfile
 │   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile
-│   └── web/                      # @va/web   — React PWA: auth, chat panel, call button; Dockerfile (nginx), e2e/ smoke
+│   └── web/                      # @va/web   — React PWA: auth, chat panel, call button, settings; Dockerfile (nginx), e2e/ smoke
 ├── supabase/                     # config.toml, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
 ├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/, research/, requests/ (asks to people outside this repo)
 └── tools/                        # repo-level scripts only (no app code)
@@ -37,7 +39,12 @@ web ──HTTP──▶ api ──▶ core ──▶ db
               voice ─▶ core ──▶ db
               tools-* ─▶ core (defineTool and types)
               api, voice ─▶ tools-* (an app composes the packs it registers; a pack never imports an app)
+              api, voice ─▶ integrations ─▶ db, core (log)   (decision 0016)
 ```
+
+`@va/integrations` holds what both processes need to act on a user's outside account: the
+sealed tokens, the Microsoft OAuth and `tokenFor`. A pack never imports it; the app builds the
+token store and hands a pack a token function, so `tools-* → core` stays the packs' only edge.
 
 `core` never imports an app, never does HTTP, never imports LiveKit or React. Packages are
 imported through their root (`@va/core`), never through `src/` (ESLint). Inside an app the layers

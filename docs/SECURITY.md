@@ -64,6 +64,12 @@ item says so in its description.
 - [ ] **CORS limited to the PWA origin(s).** `CORS_ORIGINS` on the API (`*` is the local default
       only; the deploy sets the exact origins, and an unlisted origin gets no
       `access-control-allow-origin`). Tests: `P01`, `P22`.
+- [ ] **A mailbox is connected only by its owner, and its tokens never leave our side.**
+      Tenant-pinned authorize URL (never `common`), PKCE S256, a single-use state of ten
+      minutes, the UPN equal to the user's confirmed email (`apps/api/src/integrations/identity.ts`),
+      tokens sealed with AES-256-GCM bound to their row and column, readable by the service role
+      only (column grant), never in a log or a response. Public sign-up off on the project
+      (`REL-14`). Tests: `B01`–`B27`, `U01`–`U18`, `J01`–`J06`, `O01`–`O10`, pgTAP `user_integrations`.
 - [ ] **Prompt text that users hear or read reviewed by a native speaker before release.** Every
       Croatian string is marked `<!-- needs native review -->` until then (`CORE-1`, `VOICE-2`).
 
@@ -93,6 +99,21 @@ result or an email body saying "the user already agreed" cannot confirm anything
 model has nothing to confirm with. Every executed, failed, declined or expired write is a row in
 `tool_confirmations`.
 
+**Outlook (Part 13a, decision 0016).** The assistant reaches a mailbox with delegated
+permissions only, as the user who connected it, through a separate Entra app restricted to
+assigned users. The connect flow runs between the API and Microsoft: the browser carries a
+state and a code, never a token. The callback is the one unauthenticated route; who connects is
+the single-use state issued to a signed-in user, and the mailbox's UPN must equal that user's
+email as GoTrue confirmed it, so nobody can bind a colleague's mailbox to their own account by
+sending them a sign-in link. That check is only as good as the addresses in Supabase Auth: with
+public sign-up open and email confirmation off, anyone could register a colleague's address
+before the colleague does, so sign-up stays off and users are invited (`REL-14`). Tokens are
+AES-256-GCM ciphertext under `INTEGRATIONS_KEY` on the two hosts only; a database dump alone
+opens nothing, but a token and the key together can read and send mail as the user, which is
+why both stay out of logs, responses and the browser. Disconnecting deletes our copy; Microsoft's
+sessions end only when the user or the admin revokes the app (My Apps). Email bodies are
+untrusted text (13b); a reply still needs the user's confirmation (decision 0015).
+
 **The service role.** The API and the worker hold the service-role key for persistence and
 identity lookups only. Nothing about those calls is protected by RLS, so the explicit
 `user_id` / `session_id` filter on every one of them is the authorisation. A new service-role
@@ -106,6 +127,9 @@ the reason it needs no user filter:
   room) before the user is known; the hash is the credential and the filter.
 - `packages/core/src/auth.ts`, the profile re-read: `public.users` by `auth_user_id` from GoTrue's
   answer; the identity it establishes is the filter for everything after it.
+- `apps/api/src/integrations/identity.ts`, the Outlook callback: `public.users` by the id the
+  single-use OAuth state holds, then the auth user by its `auth_user_id`; the state is the
+  credential, and every write after it is filtered by that user id.
 - the `voice-calls-sweep` pg_cron job: deletes expired and idle rows of every user, inside the
   database.
 
@@ -160,15 +184,16 @@ user hears or reads is reviewed by a native speaker before release; until then i
 
 What is stored, where, and for how long:
 
-| Data                                                                                                 | Where                                        | Lawful basis / note                                                                                         | Retention                                                                                |
-| ---------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| account: email, role, language                                                                       | Supabase Auth, `public.users`                | contract (the company's staff)                                                                              | the account's life                                                                       |
-| chat turns: typed text, answers, tool I/O                                                            | `ai_messages`, `ai_sessions`                 | contract; may contain what the user pasted                                                                  | open: proposal 12 months, then delete (`OPS-4`)                                          |
-| voice turns: transcripts, spoken answers                                                             | `ai_messages` with `channel = 'voice'`       | contract; no audio is recorded (LiveKit recording off, worker `record: false`)                              | open decision `OPS-4` (proposal 30 days: a transcript is more sensitive than typed text) |
-| the caller's JWT for a live call                                                                     | `voice_calls`, service role only             | needed for the worker to act as the caller                                                                  | ≤ 15 min, deleted on hang-up, swept                                                      |
-| enrolled phone numbers and PIN hashes (Part 11)                                                      | `voice_caller_identities`, service role only | contract; the number is the caller's identity on the phone channel; a hash of it, never the number, in logs | the enrolment's life, with the user's row; subject access by `user_id`                   |
-| sent to LiveKit: participant identity (`users.id`), room name, job metadata (call token, session id) | LiveKit Cloud (EU), sub-processor            | contract; the identity is pseudonymous: no name, so no email, reaches LiveKit (`V13`)                       | the call's life, plus LiveKit's own log retention under its DPA (`OPS-5`)                |
-| logs and metrics: ids, timings, counts                                                               | the host's log store, `apps/voice/logs`      | legitimate interest (operations)                                                                            | proposal 30 days                                                                         |
+| Data                                                                                                     | Where                                         | Lawful basis / note                                                                                         | Retention                                                                                |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| account: email, role, language                                                                           | Supabase Auth, `public.users`                 | contract (the company's staff)                                                                              | the account's life                                                                       |
+| chat turns: typed text, answers, tool I/O                                                                | `ai_messages`, `ai_sessions`                  | contract; may contain what the user pasted                                                                  | open: proposal 12 months, then delete (`OPS-4`)                                          |
+| voice turns: transcripts, spoken answers                                                                 | `ai_messages` with `channel = 'voice'`        | contract; no audio is recorded (LiveKit recording off, worker `record: false`)                              | open decision `OPS-4` (proposal 30 days: a transcript is more sensitive than typed text) |
+| the caller's JWT for a live call                                                                         | `voice_calls`, service role only              | needed for the worker to act as the caller                                                                  | ≤ 15 min, deleted on hang-up, swept                                                      |
+| enrolled phone numbers and PIN hashes (Part 11)                                                          | `voice_caller_identities`, service role only  | contract; the number is the caller's identity on the phone channel; a hash of it, never the number, in logs | the enrolment's life, with the user's row; subject access by `user_id`                   |
+| sent to LiveKit: participant identity (`users.id`), room name, job metadata (call token, session id)     | LiveKit Cloud (EU), sub-processor             | contract; the identity is pseudonymous: no name, so no email, reaches LiveKit (`V13`)                       | the call's life, plus LiveKit's own log retention under its DPA (`OPS-5`)                |
+| the Microsoft connection: the mailbox's UPN, granted scopes, sealed refresh and access tokens (Part 13a) | `user_integrations`, tokens service role only | contract; the user connects their own mailbox; disconnecting deletes the tokens, the row keeps the state    | the connection's life, with the user's row; the tokens until disconnect                  |
+| logs and metrics: ids, timings, counts                                                                   | the host's log store, `apps/voice/logs`       | legitimate interest (operations)                                                                            | proposal 30 days                                                                         |
 
 Sub-processors (Anthropic, LiveKit, Soniox, ElevenLabs, Supabase, the hosting provider) are
 listed with regions and transfer basis in `docs/OPS.md` → Deploy sketch; the DPAs, the entries in

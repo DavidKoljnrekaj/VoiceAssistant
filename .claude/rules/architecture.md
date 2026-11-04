@@ -7,8 +7,9 @@ paths:
 # Architecture
 
 - **Dependency direction** is strict: `web → api` (HTTP only); `api → core → db`; `voice → core → db`;
-  `tools-* → core` (types only). `core` never imports an app, never does HTTP, never imports LiveKit
-  or React. A new edge in any other direction is a design change: stop and ask.
+  `tools-* → core` (types only); `api, voice → integrations → db, core` (decision 0016; a pack
+  never imports `@va/integrations`, the app hands it a token function). `core` never imports an
+  app, never does HTTP, never imports LiveKit or React. A new edge in any other direction is a design change: stop and ask.
 - **Public surface.** `src/index.ts` is a package's public surface. Nothing imports another package's
   internals: `@va/core/src/...` is forbidden (ESLint); use the exports map and add a named export if
   something is missing. Export what the package's doc in `docs/` lists, not everything.

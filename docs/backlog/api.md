@@ -1,10 +1,20 @@
 # Backlog — api
 
-Ids: API-13 (next free)
+Ids: API-14 (next free)
 
 The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpoints.
 
 ## Open
+
+### API-13 · Low · The Outlook connect state lives in one process's memory
+
+- **Check:** By design (decision 0016, the user's choice on 2026-11-04)
+- **Where:** `apps/api/src/integrations/state.ts`
+- **What happens:** a restart between start and Microsoft's redirect loses the pending connect
+  (the user clicks again and gets `state_invalid` once); a second API instance behind a balancer
+  would refuse every callback that lands on the other one
+- **Fix direction:** before a second instance, a table `user_integration_states` (state hash,
+  user, sealed verifier, expiry) with a single-use conditional delete, and its pgTAP test
 
 ### API-1 · Low · OQ: the rate limiter has a check-then-act race
 

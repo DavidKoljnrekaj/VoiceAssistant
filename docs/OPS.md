@@ -100,12 +100,14 @@ is exposed to the one step that needs it. None of them may ever name a productio
 
 `log(level, tag, event, fields)` in `@va/core` (`packages/core/src/log.ts`) writes one JSON
 object per line, `{ ts, tag, event, ...fields }`, to stdout (`info`) or stderr (`warn`, `error`).
-Tags: `[api]`, `[core]`, `[core:auth]`, `[voice]`. Allowed fields are ids, codes, booleans,
+Tags: `[api]`, `[core]`, `[core:auth]`, `[voice]`, `[integrations]` and `[mail]` (the Outlook
+connection and the Graph client, `docs/MAIL.md` → Logs). Allowed fields are ids, codes, booleans,
 numbers, durations, token counts and lengths. Never message text, transcripts, audio, tokens or
 JWTs (invariant 9). `L04` in `packages/core/src/log-fields.test.ts` scans every `log(` call site
 under `apps/*` and `packages/*` for a field named `text`, `message`, `content`, `transcript`,
 `token`, `jwt` or a variant that carries the same content (`callToken`, `access_token`, `prompt`,
-`answer`, `body`, `email`, `input`) and fails the build on one. A third party's error message goes through
+`answer`, `body`, `email`, `input`, and for the Outlook connection `refresh_token`,
+`client_secret`, `code_verifier`, `verifier`, `upn`, `account`) and fails the build on one. A third party's error message goes through
 `errorReason(err)` (the class name and the message cut to 200 characters) before it is logged.
 The voice worker also strips LiveKit's own `lk.pii.*` keys from everything that reaches stdout
 (`docs/VOICE.md`).
@@ -122,7 +124,11 @@ Other events worth grepping for: `[api]` `listening`, `auth refused`, `pre-strea
 (`step`: `auth` or `prepare`), `rate limited`, `voice rate limited`, `call started`, `call
 ended`, `previous call cleanup failed`, `agent dispatch failed`, `join token failed`, `rollback
 failed` (`table`), `client disconnect` (`source`), `request timeout`, `stream worker error`,
-`unhandled error`; `[core]` `tool refused at dispatch`, `invalid
+`unhandled error`, `microsoft connect started`, `microsoft connect refused` (`reason`),
+`microsoft connected`, `microsoft disconnected`, `connect identity check failed`;
+`[integrations]` `token refreshed`, `refresh refused, reauth required` (`code`: AADSTS),
+`refresh failed`, `microsoft refused the client` (an expired secret: alert on it), `token
+unreadable`; `[core]` `tool refused at dispatch`, `invalid
 tool input`, `tool timeout`, `model call failed`, `assistant insert failed`, `tool_result insert
 failed`, `tool iteration limit reached`; `[core:auth]` `unauthorized`, `no_profile`,
 `internal_error`; `[voice]` `job refused`, `call accepted`, `warm`, `warm failed`, `turn limit
