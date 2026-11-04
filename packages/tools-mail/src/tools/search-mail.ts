@@ -26,12 +26,7 @@ export function searchMail(deps: MailDeps) {
   return defineTool({
     name: 'search_mail',
     description:
-      "Search all of the user's own Outlook mail (every folder) for words in the subject, body or sender, " +
-      'newest matches first as Graph ranks them. Returns, per message, a short ref (m1, m2 …), the sender name, ' +
-      'the subject, when it arrived (ISO, Europe/Zagreb) and a short preview. Call it when the user names a ' +
-      'topic, a project or a sender ("the mail from Marko about the contract"). For simply the newest or ' +
-      'unread messages use list_mail; for the full text of one result use read_mail with its ref. Wildcards ' +
-      '(*) are not supported.',
+      "Search all of the user's mail for words in the subject, body or sender; the fields of list_mail. For a topic or a sender ('Marko's mail about the contract'). No * wildcard.",
     input: z.object({
       query: z
         .string()
@@ -39,13 +34,8 @@ export function searchMail(deps: MailDeps) {
         .min(1)
         .max(200)
         .regex(/^[^*]*$/, 'must not contain *')
-        .describe('Words to find, e.g. a sender name or a topic. Plain words only; no * wildcard.'),
-      limit: z
-        .int()
-        .min(1)
-        .max(CHAT_MAX)
-        .default(CHAT_MAX)
-        .describe('Maximum number of messages to return (at most 5 on a call).'),
+        .describe('Words to find: a sender or a topic.'),
+      limit: z.int().min(1).max(CHAT_MAX).default(CHAT_MAX).describe('Most messages to return.'),
     }),
     requiredRoles: ['admin', 'member'],
     readOnly: true,

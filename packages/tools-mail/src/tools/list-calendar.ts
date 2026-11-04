@@ -33,18 +33,9 @@ export function listCalendar(deps: MailDeps) {
   return defineTool({
     name: 'list_calendar',
     description:
-      "List the events in the user's own Outlook calendar for one day (Europe/Zagreb), today when no date " +
-      'is given, in start order. Returns per event the subject, start and end (local time), whether it is ' +
-      'all-day, the location and the organizer name. Call it for "what do I have today", "am I free on ' +
-      'Friday" or before proposing a time. For one day only: call it again for another day. It does not ' +
-      "read anyone else's calendar and cannot create or change events.",
+      "The user's own calendar for one day (Europe/Zagreb, today by default): each event's subject, start, end, location and organizer. One day per call.",
     input: z.object({
-      date: z.iso
-        .date()
-        .optional()
-        .describe(
-          "The day as YYYY-MM-DD (Europe/Zagreb). Omit for today; work out other days from today's date.",
-        ),
+      date: z.iso.date().optional().describe('YYYY-MM-DD; omit for today.'),
     }),
     requiredRoles: ['admin', 'member'],
     readOnly: true,

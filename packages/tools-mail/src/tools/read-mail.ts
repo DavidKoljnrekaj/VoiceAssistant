@@ -44,17 +44,9 @@ export function readMail(deps: MailDeps) {
   return defineTool({
     name: 'read_mail',
     description:
-      "Read one message of the user's own mailbox by the ref list_mail or search_mail returned (m1, m2 …). " +
-      'Returns the sender and recipient names, the subject, when it arrived (ISO, Europe/Zagreb), whether it ' +
-      'has attachments, and the new text of the message (quoted earlier mail, signatures and disclaimers ' +
-      'removed), clipped; `truncated` says when there is more. Reading does not mark the message as read. ' +
-      'Call it when the user wants to hear or see what a message says. It needs a ref from a list in this ' +
-      'conversation: never guess one, and if the ref has expired, list or search again.',
+      'One message by a ref from list_mail or search_mail: names, subject, time and its new text, clipped (truncated says so). Does not mark it read. Never guess a ref; when it has expired, list again.',
     input: z.object({
-      ref: z
-        .string()
-        .regex(REF_PATTERN, 'a ref such as m1')
-        .describe('The message ref from list_mail or search_mail, e.g. "m2".'),
+      ref: z.string().regex(REF_PATTERN, 'a ref such as m1').describe('The ref, e.g. "m2".'),
     }),
     requiredRoles: ['admin', 'member'],
     readOnly: true,

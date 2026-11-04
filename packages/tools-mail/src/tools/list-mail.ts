@@ -15,23 +15,10 @@ export function listMail(deps: MailDeps) {
   return defineTool({
     name: 'list_mail',
     description:
-      "List the newest messages in the user's own Outlook inbox, unread only by default, newest first. " +
-      'Returns the inbox unread count and, per message, a short ref (m1, m2 …), the sender name, the subject, ' +
-      'when it arrived (ISO, Europe/Zagreb) and a short preview. Call it for "do I have new mail", a catch-up, ' +
-      'or to get the ref of a message the user describes by sender or recency. Use read_mail with a ref for ' +
-      'the full text, search_mail for a topic or a sender further back, list_calendar for meetings. Never call ' +
-      "it to read someone else's mailbox: it only reads the signed-in user's own.",
+      "The user's own Outlook inbox, newest first, unread only by default: the unread count and per message a ref (m1 …), sender, subject, time and a preview. For new mail and catch-ups; search_mail finds a topic or sender, read_mail gives the text.",
     input: z.object({
-      unread_only: z
-        .boolean()
-        .default(true)
-        .describe('Only unread messages (the default). False lists read and unread together.'),
-      limit: z
-        .int()
-        .min(1)
-        .max(CHAT_MAX)
-        .default(10)
-        .describe('Maximum number of messages to return (at most 5 on a call).'),
+      unread_only: z.boolean().default(true).describe('Unread only (default).'),
+      limit: z.int().min(1).max(CHAT_MAX).default(10).describe('Most messages to return.'),
     }),
     requiredRoles: ['admin', 'member'],
     readOnly: true,
