@@ -6,17 +6,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
 
 ## Open
 
-### VOICE-18 · Low · OQ: the voice prompt has no confirmation rule yet
-
-- **Check:** By design (Part 12b; the chat prompt has the rule, the voice prompt does not)
-- **Where:** `packages/core/src/prompts/voice.hr.ts`; the pending tool result's `instruction` is
-  what tells the model what to do on a call
-- **What happens:** nothing yet: no write tool is named for a spoken channel. When Part 13 names
-  the first, the model on a call relies on the result's English instruction alone
-- **Fix direction:** add the line with Part 13's first spoken write and run `/bench-voice` before
-  and after (a prompt change changes the cache key); the intro's "ne možete unositi promjene"
-  becomes "promjene radite samo uz potvrdu" in the same change
-
 ### VOICE-16 · Low · Unknown numbers have no attempt counter, so a scan of the phone number is invisible
 
 - **Check:** By design (Part 11 §9 lists it; 11b built the per-identity lock only)
@@ -126,6 +115,12 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   it
 
 ## Resolved
+
+### VOICE-18 · Low · The voice prompt had no confirmation rule (fixed 2026-11-04, Part 13c)
+
+- `VOICE_INTRO_HR` says changes happen only after the caller confirms and tells the model not to
+  repeat the summary the system reads out (`P06`); the bench before and after is in
+  `docs/VOICE.md` → Measurements.
 
 ### VOICE-19 · Low · On a call the caller confirms the model's paraphrase (fixed 2026-11-04, Part 13c)
 
