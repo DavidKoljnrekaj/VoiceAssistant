@@ -4,6 +4,7 @@
 // in-memory store (the voice worker's per-call store, and the reference the tests use).
 import { createHash } from 'node:crypto'
 
+import type { Channel } from '../channel.js'
 import type { ConfirmationStore, ConsumeMatch, ConsumeResult, PendingConfirmation } from './ports.js'
 
 /** How long a pending confirmation may be answered. */
@@ -11,7 +12,10 @@ export const CONFIRMATION_TTL_MS = 5 * 60_000
 
 /** What the model reads instead of the handler's output. English, like every tool result; the
  * model says it in Croatian. No id: the channel holds that. */
-export function pendingResult(summary: string): {
+export function pendingResult(
+  summary: string,
+  channel: Channel = 'chat',
+): {
   pending_confirmation: true
   summary: string
   instruction: string
@@ -19,9 +23,13 @@ export function pendingResult(summary: string): {
   return {
     pending_confirmation: true,
     summary,
+    // On a call the sink has already read the summary out (VOICE-19): the model only asks.
     instruction:
-      'Nothing was done yet. Tell the user, in your own words, what would happen and ask for their ' +
-      'confirmation. Do not call this tool again until the user has answered.',
+      channel === 'chat'
+        ? 'Nothing was done yet. Tell the user, in your own words, what would happen and ask for their ' +
+          'confirmation. Do not call this tool again until the user has answered.'
+        : 'Nothing was done yet. The user has just heard this summary read out: do not repeat it, only ask ' +
+          'briefly whether to go ahead. Do not call this tool again until the user has answered.',
   }
 }
 

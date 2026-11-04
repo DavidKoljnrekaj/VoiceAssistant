@@ -173,6 +173,8 @@ export interface RunChatOptions {
   store?: MessageStore
   /** The session's pending confirmations; a fresh in-memory store otherwise. */
   confirmations?: ConfirmationStore
+  /** A confirmed write's ceiling, short for the test that lets it run out. */
+  writeTimeoutMs?: number
 }
 
 export interface RunChatResult {
@@ -277,6 +279,7 @@ export async function runChat(
       registry,
       confirmations: opts.confirmations ?? new MemoryConfirmationStore(),
       logTag: '[test]',
+      ...(opts.writeTimeoutMs !== undefined ? { writeTimeoutMs: opts.writeTimeoutMs } : {}),
     },
     { sessionId, messages, lastInsertedId: userRow.id, extras },
     sink,

@@ -55,6 +55,9 @@ export async function dispatchTool(
   name: string,
   input: unknown,
   signal: AbortSignal,
+  /** Called once a confirmation is consumed, right before the confirmed handler runs: returns
+   * the signal the write runs under from then on (`dispatchToolWithTimeout`'s hold). */
+  hold?: () => AbortSignal,
 ): Promise<DispatchResult> {
   const { registry, ctx, extras, channel, logTag } = dc
   const tool = registry.find(ctx, name, channel)
@@ -95,6 +98,8 @@ export async function dispatchTool(
   const hash = inputHash(parsed.data)
   const confirmed = extras.confirmation
   if (confirmed) {
+    // The loop gave up before the write began: the id stays pending (it expires), nothing runs.
+    if (signal.aborted) return { kind: 'output', output: { error: 'cancelled before the write started' } }
     const verdict = await dc.confirmations.consume(confirmed.id, {
       sessionId: dc.sessionId,
       userId: ctx.userId,
@@ -102,9 +107,11 @@ export async function dispatchTool(
       inputHash: hash,
     })
     if (verdict === 'ok') {
+      // From here the user's yes is spent: the write runs to its real outcome (the hold).
+      const writeSignal = hold ? hold() : signal
       let output: unknown
       try {
-        output = await tool.handler(parsed.data, ctx, extras, signal)
+        output = await tool.handler(parsed.data, ctx, extras, writeSignal)
       } catch (err) {
         await dc.confirmations.settle(confirmed.id, 'failed', errorReason(err))
         throw err
@@ -144,25 +151,25 @@ export async function dispatchTool(
   return { kind: 'pending', id: issued.id, summary, expiresAt }
 }
 
-/** The ceiling of a confirmed write: once the user said yes, the write runs to its real outcome
- * rather than to the channel's tool timeout (6 s on a call). */
+/** The ceiling of a confirmed write: once the user's yes is consumed, the write runs to its
+ * real outcome rather than to the channel's tool timeout (6 s on a call). */
 export const CONFIRMED_WRITE_TIMEOUT_MS = 20_000
 
-/** This request carries the user's yes and the tool is one that waits for it: a write that, once
- * started, must not be cut off halfway (an email accepted by the provider but reported as failed
- * invites a second send). */
-export function isConfirmedWrite(dc: DispatchContext, name: string): boolean {
-  if (!dc.extras.confirmation) return false
-  return dc.registry.find(dc.ctx, name, dc.channel)?.confirmation === 'required'
+/** What `dispatchToolWithTimeout` tells the round about one dispatch: `held` once a confirmed
+ * write began, so `dispatchAll` awaits it even after an abort. */
+export interface DispatchHold {
+  held: boolean
 }
 
 /**
  * `dispatchTool` raced against `timeoutMs`. The handler gets a child signal that fires on the
  * timeout and on the loop's own abort; the timer is cleared however the race ends, including
  * the loop's abort while a handler that ignores its signal is still running, and a late result
- * from a timed-out or aborted handler is discarded. A confirmed write is the exception: its
- * signal fires only on its own ceiling (`CONFIRMED_WRITE_TIMEOUT_MS`), the loop's abort neither
- * cancels it nor ends the race, and its real outcome is returned.
+ * from a timed-out or aborted handler is discarded. A confirmed write is the exception, from the
+ * moment its confirmation is consumed: the loop's abort no longer cancels it nor ends the race,
+ * its own ceiling (`writeTimeoutMs`) replaces the tool timeout, `state.held` is set, and its real
+ * outcome is returned; past the ceiling the outcome is `write_outcome_unknown`, never a plain
+ * failure the model could offer to retry.
  */
 export async function dispatchToolWithTimeout(
   dc: DispatchContext,
@@ -170,19 +177,20 @@ export async function dispatchToolWithTimeout(
   input: unknown,
   timeoutMs: number,
   signal: AbortSignal,
+  state: DispatchHold = { held: false },
+  writeTimeoutMs: number = CONFIRMED_WRITE_TIMEOUT_MS,
 ): Promise<ToolOutcome> {
-  const write = isConfirmedWrite(dc, name)
-  const limit = write ? Math.max(timeoutMs, CONFIRMED_WRITE_TIMEOUT_MS) : timeoutMs
   const timeout = new AbortController()
-  const child = write ? timeout.signal : AbortSignal.any([signal, timeout.signal])
+  const child = AbortSignal.any([signal, timeout.signal])
   let timer: ReturnType<typeof setTimeout> | undefined
   let onAbort: (() => void) | undefined
+  let fail!: (err: Error) => void
   const expired = new Promise<never>((_, reject) => {
+    fail = reject
     timer = setTimeout(() => {
       timeout.abort(new Error('tool_timeout'))
       reject(new Error('tool_timeout'))
-    }, limit)
-    if (write) return
+    }, timeoutMs)
     // The loop gave up on this round: the timer has nothing left to guard.
     onAbort = () => {
       clearTimeout(timer)
@@ -191,20 +199,45 @@ export async function dispatchToolWithTimeout(
     if (signal.aborted) onAbort()
     else signal.addEventListener('abort', onAbort, { once: true })
   })
+  const hold = (): AbortSignal => {
+    clearTimeout(timer)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+    onAbort = undefined
+    state.held = true
+    const write = new AbortController()
+    timer = setTimeout(() => {
+      write.abort(new Error('write_timeout'))
+      fail(new Error('write_timeout'))
+    }, writeTimeoutMs)
+    return write.signal
+  }
   try {
-    const result = await Promise.race([dispatchTool(dc, name, input, child), expired])
+    const result = await Promise.race([dispatchTool(dc, name, input, child, hold), expired])
     if (result.kind === 'pending') {
       const { id, summary, expiresAt } = result
-      return { output: pendingResult(summary), isError: false, pending: { id, summary, expiresAt } }
+      return {
+        output: pendingResult(summary, dc.channel),
+        isError: false,
+        pending: { id, summary, expiresAt },
+      }
     }
     return serialisableOutcome(result.output, name, dc.ctx, dc.extras, dc.logTag)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    if (message === 'write_timeout') {
+      log('warn', dc.logTag, 'confirmed write timeout', {
+        userId: dc.ctx.userId,
+        tool: name,
+        timeoutMs: writeTimeoutMs,
+        requestId: dc.extras.requestId,
+      })
+      return { output: { error: 'write_outcome_unknown' }, isError: true }
+    }
     if (message === 'tool_timeout') {
       log('warn', dc.logTag, 'tool timeout', {
         userId: dc.ctx.userId,
         tool: name,
-        timeoutMs: limit,
+        timeoutMs,
         requestId: dc.extras.requestId,
       })
     }

@@ -7,7 +7,7 @@ import type { Json } from '@va/db'
 import type { AuthContext } from '../auth.js'
 import { log } from '../log.js'
 import type { ToolHandlerExtras } from '../tools/define.js'
-import { dispatchToolWithTimeout, isConfirmedWrite, type ToolOutcome } from './dispatch.js'
+import { type DispatchHold, dispatchToolWithTimeout, type ToolOutcome } from './dispatch.js'
 import type {
   EventSink,
   LoopConfig,
@@ -59,13 +59,23 @@ export async function runToolRound(
       confirmations: config.confirmations,
       logTag: config.logTag,
     }
+    // A confirmed write keeps its real outcome through an abort: the row says what happened.
+    const holds: DispatchHold[] = toolUses.map(() => ({ held: false }))
     results = await dispatchAll(
       toolUses.map(
-        (tu) => () => dispatchToolWithTimeout(dc, tu.name, tu.input, config.settings.toolTimeoutMs, signal),
+        (tu, i) => () =>
+          dispatchToolWithTimeout(
+            dc,
+            tu.name,
+            tu.input,
+            config.settings.toolTimeoutMs,
+            signal,
+            holds[i],
+            config.writeTimeoutMs,
+          ),
       ),
       signal,
-      // A confirmed write keeps its real outcome through an abort: the row says what happened.
-      toolUses.map((tu) => isConfirmedWrite(dc, tu.name)),
+      holds,
     )
     hooks.mark?.('tools_done')
   }
@@ -138,21 +148,17 @@ export function toolResultBlocks(
 export async function dispatchAll(
   dispatches: ReadonlyArray<() => Promise<ToolOutcome>>,
   signal: AbortSignal,
-  /** Per dispatch: true for one whose outcome is awaited even after an abort (a confirmed write,
-   * bounded by its own ceiling). */
-  holds: readonly boolean[] = [],
+  /** Per dispatch: held once a confirmed write began; its outcome is awaited even after an
+   * abort (bounded by the write's own ceiling). */
+  holds: readonly DispatchHold[] = [],
 ): Promise<ToolOutcome[]> {
   const settled: Array<ToolOutcome | undefined> = new Array<ToolOutcome | undefined>(dispatches.length)
-  const held: Promise<void>[] = []
-  const all = Promise.all(
-    dispatches.map((run, i) => {
-      const p = run().then((r) => {
-        if (!signal.aborted || holds[i]) settled[i] = r
-      })
-      if (holds[i]) held.push(p)
-      return p
+  const runs = dispatches.map((run, i) =>
+    run().then((r) => {
+      if (!signal.aborted || holds[i]?.held) settled[i] = r
     }),
   )
+  const all = Promise.all(runs)
   let onAbort: (() => void) | undefined
   const aborted = new Promise<void>((resolve) => {
     onAbort = () => resolve()
@@ -160,7 +166,7 @@ export async function dispatchAll(
   })
   try {
     await Promise.race([all, aborted])
-    if (signal.aborted) await Promise.all(held)
+    if (signal.aborted) await Promise.all(runs.filter((_, i) => holds[i]?.held))
   } finally {
     if (onAbort) signal.removeEventListener('abort', onAbort)
   }

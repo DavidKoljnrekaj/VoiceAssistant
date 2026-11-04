@@ -197,6 +197,11 @@ export const confirmedWrite = defineTool({
   confirmation: 'required',
   async preview(input) {
     if (input.text === 'preview-boom') throw new Error('preview failed')
+    // `slow-preview`: waits for `openGate('preview')`, so a test can abort while it runs.
+    if (input.text === 'slow-preview') {
+      record('start:preview')
+      await gate('preview').promise
+    }
     return `Zapisat ću: "${input.text}"`
   },
   async handler(input, _ctx, _extras, signal) {
