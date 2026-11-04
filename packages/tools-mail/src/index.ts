@@ -18,7 +18,7 @@ export interface MailPackConfig {
   clock?: () => Date
 }
 
-/** The read tools, the ones a spoken channel may name (each read-only and voice-shaped). */
+/** The pack's read tools. Which channel gets which is the app's allowlist, never this list. */
 export const MAIL_READ_TOOLS = ['list_mail', 'read_mail', 'search_mail', 'list_calendar'] as const
 
 /** One pack per process: its message refs live as long as it does. */

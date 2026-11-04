@@ -6,7 +6,7 @@
 import { type ChannelAllowlist, ToolRegistry } from '@va/core'
 import type { TokenStore } from '@va/integrations'
 import { demoPack } from '@va/tools-demo'
-import { createMailPack, MAIL_READ_TOOLS } from '@va/tools-mail'
+import { createMailPack } from '@va/tools-mail'
 
 import { mailTokenProvider } from './mail.js'
 
@@ -17,7 +17,14 @@ import { mailTokenProvider } from './mail.js'
 // the subject, the time and a 120-character preview; read_mail the new text clipped to 600
 // characters with names only; list_calendar at most five live events, times only. They carry
 // short refs (m1 …) for chaining, which the pack's prompt rules say are never spoken.
-const SPOKEN_TOOLS = ['search_items', 'get_item', ...MAIL_READ_TOOLS] as const
+const SPOKEN_TOOLS = [
+  'search_items',
+  'get_item',
+  'list_mail',
+  'read_mail',
+  'search_mail',
+  'list_calendar',
+] as const
 
 /** One list for the two spoken channels: the phone (Part 11) hears exactly what the in-app
  * call hears. The readOnly assertion at load covers both keys. */
