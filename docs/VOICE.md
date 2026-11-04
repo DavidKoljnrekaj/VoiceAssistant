@@ -211,6 +211,7 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | 2026-10-30 | `d5240fa` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
 | 2026-11-04 | `021b455` | before Part 13b (`main`, 13a merged)                     | `claude-sonnet-5-5`, `low` | 1.74 s / 3.66 s      | 4.09 s / 9.23 s        | 2.03   | 36  |
 | 2026-11-04 | `c3d2f81` | 13b: the mail pack on voice (four tools, the rules)      | `claude-sonnet-5-5`, `low` | 1.94 s / 5.24 s      | 4.70 s / 10.80 s       | 2.03   | 36  |
+| 2026-11-04 | `91b06fe` | 13b trimmed: shorter mail descriptions and rules         | `claude-sonnet-5-5`, `low` | 1.82 s / 2.98 s      | 4.34 s / 9.07 s        | 2.03   | 36  |
 
 **Part 13b, the mail pack on voice.** Both runs on the local stack with the seed member, three
 repeats each, one shell (`~/.config/va/voice.local.env` sourced after `voice.env`). The bench
@@ -219,7 +220,11 @@ called: the whole difference is the larger fixed prefix of every request. The ca
 first call grew from 2,434 to 4,653 tokens (the four tool definitions, about 3,600 characters,
 and `MAIL_RULES_HR`, about 1,400), and first text p50 moved +0.20 s, whole answer p50 +0.61 s,
 with the same rounds. Not kept as it was: the next commit trims the four descriptions, the field
-hints and the rules to about 2,750 characters together, and the bench runs again on it (owed).
+hints and the rules to about 2,750 characters together. On it (`91b06fe`) the first call's
+cached read is 3,819 tokens (+1,385 over `main` instead of +2,219), first text p50 1.82 s
+(+0.08 s, p95 better at 2.98 s) and whole answer p50 4.34 s (+0.25 s, p95 9.07 s), same
+rounds. The whole-answer p50 is at the top of the range earlier baselines spread over
+(4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost.
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
