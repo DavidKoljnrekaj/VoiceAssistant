@@ -17,7 +17,7 @@ describe('message refs', () => {
     }
   })
 
-  it('Q09 a ref lives 30 minutes after its last use; numbering restarts once all have expired', () => {
+  it('Q09 a ref lives 30 minutes after its last use; an expired number is never given to another message', () => {
     let now = 0
     const refs = new MessageRefs(() => new Date(now))
     refs.refFor('u1', 'a')
@@ -29,7 +29,9 @@ describe('message refs', () => {
     expect(refs.resolve('u1', 'm2')).toBeNull()
     now = 3 * REF_TTL_MS
     expect(refs.resolve('u1', 'm1')).toBeNull()
-    expect(refs.refFor('u1', 'c')).toBe('m1')
+    // A ref left in an old conversation stays expired: the next message gets a new number.
+    expect(refs.refFor('u1', 'c')).toBe('m3')
+    expect(refs.resolve('u1', 'm1')).toBeNull()
   })
 
   it('Q10 at most 200 refs per user: the least recently used goes first', () => {
