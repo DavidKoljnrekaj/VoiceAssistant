@@ -224,7 +224,7 @@ hints and the rules to about 2,750 characters together. On it (`91b06fe`) the fi
 cached read is 3,819 tokens (+1,385 over `main` instead of +2,219), first text p50 1.82 s
 (+0.08 s, p95 better at 2.98 s) and whole answer p50 4.34 s (+0.25 s, p95 9.07 s), same
 rounds. The whole-answer p50 is at the top of the range earlier baselines spread over
-(4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost.
+(4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost. Accepted by the user on 2026-11-04: kept.
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
