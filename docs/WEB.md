@@ -43,6 +43,7 @@ apps/web/
 │   │   ├── lib/sse.ts                   the frame parser (pure) and the stall clock; lib/normalizeMessages.ts (rows / events → RenderMessage[]); lib/labels.ts
 │   │   ├── ChatPanel.tsx  MessageList.tsx  Message.tsx  ToolChip.tsx  Composer.tsx  SessionList.tsx
 │   │   └── components/VoiceCallButton.tsx  hooks/useVoiceCall.ts (tests V01–V02, WEB-10)  services/voiceCallService.ts
+│   ├── components/Settings/    SettingsPage.tsx (Y01–Y06)  OutlookConnection.tsx  hooks/useOutlookConnection.ts  services/integrationsService.ts
 │   ├── locales/hr/translation.json  locales/en/translation.json  locales.test.ts (I01, WEB-8)
 │   └── types/api.ts (the SSE events, isChatEvent, ApiHttpError; tests T01–T02, WEB-15)  types/database.ts (re-exported from @va/db)
 └── src/**/*.test.ts            sse (S01–S07, WEB-11), normalizeMessages (N01–N07), labels (L01–L02), env matrix (X03), and the above
@@ -62,10 +63,10 @@ remark-gfm 4.0.1, lucide-react 1.57.0, livekit-client 2.22.4 (dynamic import), s
 
 ## Routes and the shell
 
-`/login` (the form; a signed-in visitor is sent on), `/` (a new conversation) and
-`/c/:sessionId` (one conversation), the last two behind `ProtectedRoute`, which waits for auth
-to resolve and redirects to `/login` otherwise. `AppShell` is the header (name, language,
-sign-out) and the main area; `ChatPanel` owns the rest: the session drawer (always visible from
+`/login` (the form; a signed-in visitor is sent on), `/` (a new conversation),
+`/c/:sessionId` (one conversation) and `/settings`, the last three behind `ProtectedRoute`, which
+waits for auth to resolve and redirects to `/login` otherwise. `AppShell` is the header (name,
+language, the Settings link, sign-out) and the main area; `ChatPanel` owns the rest: the session drawer (always visible from
 `md`, a slide-over below), the chat header (title, new conversation, the call button), the call
 banner, the message list and the composer. The slide-over is a modal `dialog`: focus moves in,
 Tab cycles inside, Escape closes it and focus returns to the menu button.
@@ -75,6 +76,20 @@ when a new conversation gets its id from the stream's `session` event it moves t
 `/c/:id` (replace, and only while that stream runs), so a refresh reopens the same conversation.
 Deleting the open conversation navigates to `/` first; the store catches up, never the other way
 round.
+
+## Settings: the Outlook connection
+
+`/settings` holds one section for now, Outlook (Part 13a, `docs/MAIL.md`). It reads
+`GET /integrations` and shows one of: loading; an error with retry (never "not connected" for a
+failed load); not available (the API has no MS_ variables); not connected with **Poveži
+Outlook**; expired (`reauth_required`) with **Ponovno poveži**; connected with the account and
+**Odspoji** behind the shared confirm dialog, and the note that access at Microsoft is revoked
+in My Apps. Connect calls `GET /integrations/microsoft/start` and, if the answer is
+`https://login.microsoftonline.com/…`, navigates there (`window.location.assign`); anything else
+is refused with a toast. Microsoft returns through the API's callback to
+`/settings?connected=1` or `?connect_error=<code>`: the page says which once (a toast; an unknown
+code is `errors.unknown`) and drops the query. The connection itself is always read from the
+API, never from the query. No token reaches the browser.
 
 ## Auth
 
@@ -228,7 +243,9 @@ the `common.language_save_failed` toast. Every visible string goes through `t()`
 strings; keys are added to `hr` and `en` together; domain terms stay untranslated. The chip and
 client-side error labels in `labels.ts` are Croatian only, like the model's answers and the
 API's error messages (`WEB-3`). The Croatian locale and `labels.ts` are placeholders until a
-native speaker reads them (`CORE-1`). <!-- needs native review -->
+native speaker reads them (`CORE-1`). The `settings.*` keys (Part 13a) are new Croatian text in
+the same state: `settings.title`, `settings.back` and every `settings.outlook.*` key, including
+the six `settings.outlook.errors.*`. <!-- needs native review -->
 
 ## Accessibility
 

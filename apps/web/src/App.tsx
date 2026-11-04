@@ -1,11 +1,13 @@
 // Providers above the router: the chat store (and its open stream) survives navigation, and auth
-// is known before any route renders. Routes: /login, / (a new conversation) and /c/:sessionId.
+// is known before any route renders. Routes: /login, / (a new conversation), /c/:sessionId and
+// /settings (the Outlook connection; the API's callback returns there).
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import ChatPanel from './components/Chat/ChatPanel'
 import ChatProvider from './components/Chat/ChatProvider'
 import AppShell from './components/Layout/AppShell'
 import ProtectedRoute from './components/Layout/ProtectedRoute'
+import SettingsPage from './components/Settings/SettingsPage'
 import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
 import LoginPage from './pages/LoginPage'
@@ -32,6 +34,14 @@ export default function App() {
                   element={
                     <AppShell>
                       <ChatPanel />
+                    </AppShell>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <AppShell>
+                      <SettingsPage />
                     </AppShell>
                   }
                 />

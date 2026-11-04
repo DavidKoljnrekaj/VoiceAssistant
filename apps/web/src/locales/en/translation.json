@@ -74,5 +74,33 @@
   "lang": {
     "hr": "Hrvatski",
     "en": "English"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back to the conversation",
+    "outlook": {
+      "title": "Outlook",
+      "description": "Connect your work mailbox so the assistant can read your mail and calendar. It always asks you before it replies to a message or flags one.",
+      "connect": "Connect Outlook",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connected_as": "Connected: {{account}}",
+      "not_connected": "Outlook is not connected.",
+      "reauth_required": "The Outlook connection has expired. Connect it again.",
+      "unavailable": "Connecting Outlook is not available right now.",
+      "disconnect_title": "Disconnect Outlook?",
+      "revoke_note": "Disconnecting deletes the access the assistant keeps. You revoke the app's access at Microsoft on My Apps (myapps.microsoft.com).",
+      "connected_toast": "Outlook is connected.",
+      "disconnected_toast": "Outlook is disconnected.",
+      "action_failed": "That did not work. Please try again.",
+      "errors": {
+        "state_invalid": "The connection attempt expired or was already used. Please try again.",
+        "denied": "Connecting was cancelled at Microsoft.",
+        "exchange_failed": "Microsoft did not complete the connection. Please try again.",
+        "account_mismatch": "You signed in with a different Microsoft account. Connect the mailbox with the address you use to sign in to the assistant.",
+        "failed": "The connection was not saved. Please try again.",
+        "unknown": "Connecting did not succeed."
+      }
+    }
   }
 }
