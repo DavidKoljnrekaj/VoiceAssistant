@@ -45,4 +45,13 @@ describe('prompts', () => {
     expect(member).toMatch(/^## Korisnik\nKorisnik: nepoznat korisnik, uloga: member\. /)
     expect(member.split('\n')).toHaveLength(2)
   })
+
+  it('P05: pack rules follow the core rules in pack order, before the presentation; none changes nothing', () => {
+    const packRules = ['## Prvi paket\n- pravilo', '## Drugi paket\n- pravilo']
+    expect(buildStaticSystemPrompt('voice', packRules)).toBe(
+      `${VOICE_INTRO_HR}\n\n${DOMAIN_RULES_HR}\n\n${packRules[0]}\n\n${packRules[1]}\n\n${VOICE_PRESENTATION_HR}`,
+    )
+    expect(buildStaticSystemPrompt('chat', [])).toBe(buildStaticSystemPrompt('chat'))
+    expect(buildStaticSystemPrompt('phone', packRules)).toBe(buildStaticSystemPrompt('voice', packRules))
+  })
 })

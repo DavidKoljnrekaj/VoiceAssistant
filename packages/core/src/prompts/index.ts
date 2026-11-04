@@ -1,4 +1,5 @@
-// The system prompt per channel: intro + the shared domain rules + presentation. Pure and
+// The system prompt per channel: intro + the shared domain rules (core's, then each registered
+// pack's, in pack order) + presentation. Pure and
 // deterministic given the channel and the context object: no clock, locale or env reads. The
 // static block is byte-identical per channel and carries the cache breakpoint; the per-user
 // block follows it uncached; the date line (`Danas je …`, Europe/Zagreb) is appended by the
@@ -19,9 +20,11 @@ const PRESENTATION: Record<Channel, string> = {
   phone: VOICE_PRESENTATION_HR,
 }
 
-/** The static, user-independent system prompt of a channel. */
-export function buildStaticSystemPrompt(channel: Channel): string {
-  return `${INTRO[channel]}\n\n${DOMAIN_RULES_HR}\n\n${PRESENTATION[channel]}`
+/** The static, user-independent system prompt of a channel. `packRules` is the registry's
+ * `domainRules()`: fixed per process, so the result stays byte-identical per channel. */
+export function buildStaticSystemPrompt(channel: Channel, packRules: readonly string[] = []): string {
+  const rules = [DOMAIN_RULES_HR, ...packRules].join('\n\n')
+  return `${INTRO[channel]}\n\n${rules}\n\n${PRESENTATION[channel]}`
 }
 
 /** `Danas je …` for the Europe/Zagreb day of `now`: the third, uncached system block every

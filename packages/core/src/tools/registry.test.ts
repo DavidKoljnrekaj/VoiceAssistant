@@ -180,4 +180,13 @@ describe('ToolRegistry', () => {
     const core = await import('../index.js')
     expect(core).not.toHaveProperty('CHANNEL_ALLOWLIST')
   })
+
+  it("T09: the registry hands the packs' domain rules to the prompt in pack order, skipping packs without", () => {
+    const a: ToolPack = { name: 'a', tools: [], domainRules: '## A' }
+    const none: ToolPack = { name: 'none', tools: [] }
+    const empty: ToolPack = { name: 'empty', tools: [], domainRules: '' }
+    const b: ToolPack = { name: 'b', tools: [], domainRules: '## B' }
+    expect(new ToolRegistry([a, none, empty, b], {}).domainRules()).toEqual(['## A', '## B'])
+    expect(new ToolRegistry([], {}).domainRules()).toEqual([])
+  })
 })

@@ -1,7 +1,7 @@
 // The data rules every channel shares verbatim. In the skeleton this is one placeholder rule.
-// Integration packs will contribute their own rules later through the `domainRules` field on
-// `ToolPack` (concatenated in pack order after this block); Landmark's domain rules (TIC, cesija,
-// invoices) are deliberately not here.
+// Integration packs contribute their own rules through the `domainRules` field on `ToolPack`,
+// appended in pack order after this block (`buildStaticSystemPrompt`); Landmark's domain rules
+// (TIC, cesija, invoices) are deliberately not here.
 //
 // Written from developer to model; "Vi" addresses the model. <!-- needs native review -->
 
