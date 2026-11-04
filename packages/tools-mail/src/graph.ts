@@ -85,8 +85,9 @@ export function createGraphClient(config: GraphClientConfig): GraphClient {
         throw new GraphError('unavailable', 0, null, null)
       }
       if (res.ok) {
-        if (res.status === 204) return undefined as T
-        return (await res.json()) as T
+        // 202 (a reply accepted for sending) and 204 come without a body.
+        const text = await res.text()
+        return (text ? JSON.parse(text) : undefined) as T
       }
       const requestId = res.headers.get('request-id')
       const json = (await res.json().catch(() => null)) as { error?: { code?: unknown } } | null

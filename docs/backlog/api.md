@@ -1,10 +1,21 @@
 # Backlog — api
 
-Ids: API-16 (next free)
+Ids: API-17 (next free)
 
 The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpoints.
 
 ## Open
+
+### API-16 · Low · No daily cap on replies the assistant sends
+
+- **Check:** By design (Part 13c, the user's choice on 2026-11-04)
+- **Where:** `packages/tools-mail/src/tools/reply-mail.ts`; the roadmap sketch
+  (`docs/plan/10-integration-roadmap.md` step 3) mentioned a daily send cap per user
+- **What happens:** every reply needs the user's explicit confirmation, so nothing is sent on
+  the model's say-so, but a user (or someone with their phone and PIN) can send any number
+- **Fix direction:** count today's executed `reply_mail` confirmations per user (the chat table
+  and the call's store together, so a count in the database) and answer an error envelope past
+  a limit (20?), when more users join
 
 ### API-15 · Low · Mail refs live in one process's memory
 

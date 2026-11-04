@@ -13,11 +13,15 @@ export const API_ALLOWLIST: ChannelAllowlist = { chat: 'all' }
 
 /** The mail pack is always registered, so the prompt and the tools are the same in every
  * deployment; without a token store (no MS_ variables) its tools answer outlook_unavailable.
- * `graphFetch` is the tests' fake Graph. */
-export function createRegistry(tokens: TokenStore | null = null, graphFetch?: typeof fetch): ToolRegistry {
+ * `test` is the tests' fake Graph and a fixed first message ref. */
+export function createRegistry(
+  tokens: TokenStore | null = null,
+  test: { graphFetch?: typeof fetch; refStart?: number } = {},
+): ToolRegistry {
   const mail = createMailPack({
     token: mailTokenProvider(tokens),
-    ...(graphFetch ? { fetch: graphFetch } : {}),
+    ...(test.graphFetch ? { fetch: test.graphFetch } : {}),
+    ...(test.refStart !== undefined ? { refStart: test.refStart } : {}),
   })
   return new ToolRegistry([demoPack, mail], API_ALLOWLIST)
 }

@@ -22,6 +22,7 @@ import {
   createMailPack,
   MAIL_READ_TOOLS,
   MAIL_RULES_HR,
+  MAIL_WRITE_TOOLS,
   MailAccessError,
   type MailTokenProvider,
 } from './index.js'
@@ -36,7 +37,7 @@ const token: MailTokenProvider = async (ctx, options) => {
   return options.forceRefresh ? 'at-fresh' : 'at-current'
 }
 const ALLOWLIST: ChannelAllowlist = { chat: 'all', voice: MAIL_READ_TOOLS, phone: MAIL_READ_TOOLS }
-const pack = () => createMailPack({ token, fetch: graph.fetch, clock: () => now })
+const pack = () => createMailPack({ token, fetch: graph.fetch, clock: () => now, refStart: 1 })
 
 const MARKO = { name: 'Marko Horvat', address: 'marko@partner.hr' }
 const ANA = { name: 'Ana Kovač', address: 'ana@dobavljac.hr' }
@@ -135,11 +136,14 @@ beforeEach(() => {
 })
 
 describe('@va/tools-mail', () => {
-  it('Z01 the pack: four strict read-only tools with described fields; the rules go after the core rules; voice and phone may name all four', () => {
+  it('Z01 the pack: four strict read-only tools and two confirmed writes, every field described; the rules go after the core rules; voice and phone may name the reads', () => {
     const p = pack()
-    expect(p.tools.map((t) => t.name).sort()).toEqual([...MAIL_READ_TOOLS].sort())
+    expect(p.tools.map((t) => t.name).sort()).toEqual([...MAIL_READ_TOOLS, ...MAIL_WRITE_TOOLS].sort())
     for (const def of p.tools) {
-      expect(def.readOnly, def.name).toBe(true)
+      // Part 13c: the writes are not read-only and run only after the user confirmed.
+      const write = (MAIL_WRITE_TOOLS as readonly string[]).includes(def.name)
+      expect(def.readOnly, def.name).toBe(!write)
+      expect(def.confirmation, def.name).toBe(write ? 'required' : undefined)
       const tool = toAnthropicTool(def)
       expect(tool.strict).toBe(true)
       for (const [key, prop] of Object.entries(

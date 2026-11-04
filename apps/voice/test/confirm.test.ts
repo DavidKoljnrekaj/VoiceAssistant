@@ -1,8 +1,11 @@
 // W35–W39: the write protocol on a call. The model previews, the worker keeps the pending id,
-// and the caller's "da" or "ne" is decided in code before the model sees the turn.
+// and the caller's "da" or "ne" is decided in code before the model sees the turn. W42, W43:
+// reply_mail on a call (Part 13c): the preview is read out before the model asks.
 import { describe, expect, it, vi } from 'vitest'
 
 import { answer, callTools, CONFIRM_PACK, executions, toolUse } from '@va/core/test'
+import { createMailPack } from '@va/tools-mail'
+import { FakeGraph, installMailbox } from '@va/tools-mail/test'
 
 import { classifyAnswer, normalizeAnswer } from '../src/answers.js'
 import { anthropic, ask, logs, openCall, scenario } from './harness.js'
@@ -125,5 +128,72 @@ describe('the caller’s answer', () => {
     expect(executions).toEqual([])
     expect(logs.some((l) => l.line.includes('confirmation expired'))).toBe(true)
     expect(call.session.confirmations.rows[0]!.outcome).toBe('pending')
+  })
+})
+
+describe('reply_mail on a call', () => {
+  const graph = new FakeGraph()
+  const mailCall = async () => {
+    graph.reset()
+    installMailbox(graph, {
+      messages: [
+        {
+          id: 'AAMkAD-marko=',
+          subject: 'Sastanak u petak',
+          from: { name: 'Marko Horvat', address: 'marko@partner.hr' },
+          received: '2026-11-04T08:15:00Z',
+          body: 'Stižeš li u deset?',
+        },
+      ],
+    })
+    const pack = createMailPack({ token: async () => 'at-current', fetch: graph.fetch, refStart: 1 })
+    return openCall({ packs: [pack], allowlist: { voice: ['list_mail', 'reply_mail'] } })
+  }
+  const SUMMARY =
+    'Odgovorit ću na poruku „Sastanak u petak“. Primatelj je Marko Horvat, s vanjske domene partner.hr, a tekst glasi: „Stižem u deset.“'
+  const replies = () => graph.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/reply'))
+
+  async function previewReply(call: Awaited<ReturnType<typeof openCall>>) {
+    anthropic.script(
+      callTools(toolUse('list_mail', {})),
+      callTools(toolUse('reply_mail', { ref: 'm1', text: 'Stižem u deset.' })),
+      answer('Da pošaljem?'),
+    )
+    const out = await (await ask(call, 'Odgovori Marku da stižem u deset.')).done
+    // VOICE-19: the caller hears the preview verbatim, then the model's short question.
+    expect(out.text).toContain(SUMMARY)
+    expect(out.text.indexOf(SUMMARY)).toBeLessThan(out.text.indexOf('Da pošaljem?'))
+    expect(out.text).not.toContain('marko@partner.hr')
+    expect(replies()).toHaveLength(0)
+  }
+
+  scenario('W42 the preview is read out; "da" sends exactly one reply to the sender', async () => {
+    const call = await mailCall()
+    await previewReply(call)
+    anthropic.script(
+      callTools(toolUse('reply_mail', { ref: 'm1', text: 'Stižem u deset.' })),
+      answer('Poslano.'),
+    )
+    const out = await (await ask(call, 'Da.')).done
+    expect(out.text).toContain('Poslano')
+    expect(replies()).toHaveLength(1)
+    expect(replies()[0]!.body).toMatchObject({
+      message: {
+        toRecipients: [{ emailAddress: { address: 'marko@partner.hr' } }],
+        body: { content: 'Stižem u deset.' },
+      },
+    })
+    expect(call.session.confirmations.rows[0]!.outcome).toBe('executed')
+  })
+
+  scenario('W43 "ne" sends nothing and settles the reply as declined', async () => {
+    const call = await mailCall()
+    await previewReply(call)
+    anthropic.script(answer('U redu, ne šaljem.'))
+    await (
+      await ask(call, 'Ne.')
+    ).done
+    expect(replies()).toHaveLength(0)
+    expect(call.session.confirmations.rows[0]!.outcome).toBe('declined')
   })
 })

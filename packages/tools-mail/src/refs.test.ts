@@ -5,7 +5,7 @@ import { MessageRefs, REF_TTL_MS } from './refs.js'
 
 describe('message refs', () => {
   it('Q08 a message keeps its ref; refs are per user; an unknown or malformed ref is null', () => {
-    const refs = new MessageRefs(() => new Date(0))
+    const refs = new MessageRefs(() => new Date(0), 1)
     expect(refs.refFor('u1', 'AAMkAD-long-graph-id-1')).toBe('m1')
     expect(refs.refFor('u1', 'AAMkAD-long-graph-id-2')).toBe('m2')
     expect(refs.refFor('u1', 'AAMkAD-long-graph-id-1')).toBe('m1')
@@ -19,7 +19,7 @@ describe('message refs', () => {
 
   it('Q09 a ref lives 30 minutes after its last use; an expired number is never given to another message', () => {
     let now = 0
-    const refs = new MessageRefs(() => new Date(now))
+    const refs = new MessageRefs(() => new Date(now), 1)
     refs.refFor('u1', 'a')
     refs.refFor('u1', 'b')
     now = REF_TTL_MS - 1
@@ -36,7 +36,7 @@ describe('message refs', () => {
 
   it('Q10 at most 200 refs per user: the least recently used goes first', () => {
     let now = 0
-    const refs = new MessageRefs(() => new Date(now))
+    const refs = new MessageRefs(() => new Date(now), 1)
     for (let i = 1; i <= 200; i++) {
       now = i
       refs.refFor('u1', `id-${i}`)
@@ -47,5 +47,12 @@ describe('message refs', () => {
     expect(refs.refFor('u1', 'id-201')).toBe('m201')
     expect(refs.resolve('u1', 'm1')).toBe('id-1')
     expect(refs.resolve('u1', 'm2')).toBeNull()
+  })
+
+  it('Q15 by default a process starts numbering at a random point, so two processes almost never share a ref', () => {
+    const a = new MessageRefs().refFor('u1', 'x')
+    const b = new MessageRefs().refFor('u1', 'x')
+    expect(a).toMatch(/^m[1-9][0-9]{0,5}$/)
+    expect([a, b]).not.toEqual(['m1', 'm1'])
   })
 })

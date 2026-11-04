@@ -160,6 +160,9 @@ export interface LoopConfig {
   confirmations: ConfirmationStore
   /** The owning channel's log tag, e.g. `[api]`. */
   logTag: string
+  /** The ceiling of a confirmed write once it began (`CONFIRMED_WRITE_TIMEOUT_MS`, 20 s, by
+   * default; the tests set it short). */
+  writeTimeoutMs?: number
 }
 
 export interface LoopInput {

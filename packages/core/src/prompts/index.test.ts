@@ -54,4 +54,13 @@ describe('prompts', () => {
     expect(buildStaticSystemPrompt('chat', [])).toBe(buildStaticSystemPrompt('chat'))
     expect(buildStaticSystemPrompt('phone', packRules)).toBe(buildStaticSystemPrompt('voice', packRules))
   })
+
+  it('P26 (VOICE-18): the spoken prompt says a write waits for the caller and its summary is not repeated; it no longer says changes are impossible', () => {
+    for (const channel of ['voice', 'phone'] as const) {
+      const prompt = buildStaticSystemPrompt(channel)
+      expect(prompt).toContain('pending_confirmation')
+      expect(prompt).toContain('sustav je korisniku već pročitao sažetak')
+      expect(prompt).not.toContain('ne možete unositi promjene')
+    }
+  })
 })

@@ -12,7 +12,14 @@ describe('labels', () => {
   })
 
   it('L06: every mail-pack tool has a Croatian chip label', () => {
-    for (const tool of ['list_mail', 'read_mail', 'search_mail', 'list_calendar']) {
+    for (const tool of [
+      'list_mail',
+      'read_mail',
+      'search_mail',
+      'list_calendar',
+      'reply_mail',
+      'flag_mail',
+    ]) {
       expect(TOOL_LABELS_HR[tool]).toBeTruthy()
       expect(toolLabel(tool)).not.toBe(tool)
     }

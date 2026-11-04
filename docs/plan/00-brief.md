@@ -107,7 +107,8 @@ through an `EventSink`, a `MessageStore`, `LoopHooks` and a `ChannelSettings` ro
    `is_error` result for the rest). History assembly repairs any unanswered `tool_use` it still finds.
 4. **Default-deny per channel.** A tool reaches chat when registered; it reaches voice (and every later
    channel) only when its name is in that channel's allowlist, in a reviewed diff. Every allowlisted
-   voice tool is `readOnly: true`, asserted at module load and in a test.
+   voice tool is `readOnly: true` or carries `confirmation: 'required'` (decision 0015, amended in
+   Part 12), asserted at module load and in a test.
 5. **The gate is applied at dispatch, not only at advertisement.** The model can name any tool; dispatch
    resolves it through the same role-and-channel filter, and an unknown or forbidden name becomes an
    `is_error` tool result, logged.

@@ -1,8 +1,9 @@
 // The worker's composition of the engine's registry: the packs it serves and what a caller may
 // reach by voice. Default-deny per channel: only the tools named here are advertised and
-// dispatchable on voice, every one read-only (asserted at load), and no other channel is named
-// (an absent channel gets nothing). A tool joins this list in a reviewed diff whose commit says
-// why its output is safe to read aloud: no ids spoken, at most five items, plain numbers.
+// dispatchable on voice, every one read-only or waiting for the caller's confirmation (asserted
+// at load, decision 0015), and no other channel is named (an absent channel gets nothing). A tool
+// joins this list in a reviewed diff whose commit says why it is safe on a call: no ids spoken,
+// at most five items, plain numbers, and for a write the confirmation it waits for.
 import { type ChannelAllowlist, ToolRegistry } from '@va/core'
 import type { TokenStore } from '@va/integrations'
 import { demoPack } from '@va/tools-demo'
@@ -17,6 +18,10 @@ import { mailTokenProvider } from './mail.js'
 // the subject, the time and a 120-character preview; read_mail the new text clipped to 600
 // characters with names only; list_calendar at most five live events, times only. They carry
 // short refs (m1 …) for chaining, which the pack's prompt rules say are never spoken.
+// The two mail writes (Part 13c), each `confirmation: 'required'`: nothing is sent or flagged
+// until the caller's "da", decided in code from a closed set (answers.ts); the preview is read
+// out verbatim before the model asks (VOICE-19); a reply goes only to the message's sender, never
+// a Reply-To, and no address is spoken.
 const SPOKEN_TOOLS = [
   'search_items',
   'get_item',
@@ -24,6 +29,8 @@ const SPOKEN_TOOLS = [
   'read_mail',
   'search_mail',
   'list_calendar',
+  'reply_mail',
+  'flag_mail',
 ] as const
 
 /** One list for the two spoken channels: the phone (Part 11) hears exactly what the in-app

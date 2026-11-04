@@ -58,6 +58,9 @@ describe('graph client', () => {
       ['POST', 'application/json', { comment: 'Stižem.' }],
       ['PATCH', 'application/json', { flag: { flagStatus: 'flagged' } }],
     ])
+    // A 202 without a body (Graph's accepted reply) resolves too.
+    graph.route('POST', '/me/sendMail', { status: 202 })
+    await expect(client().post('/me/sendMail', {})).resolves.toBeUndefined()
   })
 
   it('Q03: a 429 waits Retry-After and retries once, with a fresh token', async () => {

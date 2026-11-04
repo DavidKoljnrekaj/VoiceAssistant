@@ -33,12 +33,14 @@ item says so in its description.
       only `/me`, never another mailbox; the token comes from `tokenFor` through the service
       role by `user_id` (`docs/MAIL.md`). Tests: the packs' scenarios (`D`, `Z01`–`Z18`), `B28`,
       `B29`, `demo_tables.test.sql` (pgTAP).
-- [ ] **The voice allowlist is read-only; dispatch re-applies the gate; speech is untrusted
-      input.** `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`, the only place a tool is named for
-      voice) with the `readOnly` assertion at module load (`packages/core/src/tools/registry.ts`);
+- [ ] **The voice allowlist is read-only or confirmed; dispatch re-applies the gate; speech is
+      untrusted input.** `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`, the only place a tool is
+      named for voice) with the assertion at module load that every one is read-only or carries
+      `confirmation: 'required'` (decision 0015, `packages/core/src/tools/registry.ts`); a spoken
+      write runs only on the caller's yes decided in code, after its preview was read out;
       `dispatchTool` resolves the name through the same role-and-channel filter and answers an
       `is_error` result (invariants 4 and 5). Tests: `T02`, `T05`, `T08`, `E08`–`E10`, `W06`,
-      `W20`, `R01`.
+      `W20`, `R01`, `E40`–`E51`, `S15`, `S16`, `W35`–`W43`, `Z19`–`Z27`, `B30`.
 - [ ] **The JWT never leaves our side; LiveKit learns the user id and nothing else.** LiveKit
       job metadata carries only the opaque call token and the session id; the browser gets only
       a LiveKit room token whose participant identity is `users.id` with no name (so no email);
@@ -103,7 +105,15 @@ channel sends it back in the request's extras, never in text; dispatch consumes 
 for the same session, user, tool and input hash, within five minutes. Text injected into a tool
 result or an email body saying "the user already agreed" cannot confirm anything, because the
 model has nothing to confirm with. Every executed, failed, declined or expired write is a row in
-`tool_confirmations`.
+`tool_confirmations` (chat) or the call's memory store (voice). Part 13c's mail writes add: the
+reply's recipient is pinned to the message's From address in the request (a Reply-To, the usual
+way to divert replies, is never read); the preview names the recipient (on chat with the address,
+on a call with the domain when it is not the user's own, since a display name is the sender's to
+choose) and on a call is read out verbatim before the caller answers; quotation marks in a
+subject or name are made plain so they cannot imitate the summary; the reply is a plain-text body
+with no invisible character; once confirmed, a write runs to its real outcome and a send whose
+outcome is unknown is never retried (`write_outcome_unknown`). There is no daily send cap yet
+(`API-16`).
 
 **Outlook (Part 13a, decision 0016).** The assistant reaches a mailbox with delegated
 permissions only, as the user who connected it, through a separate Entra app restricted to

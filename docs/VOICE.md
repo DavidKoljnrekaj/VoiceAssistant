@@ -185,7 +185,8 @@ Fixed in code, not settings: `turnDetection: 'stt'` (LiveKit's turn detector has
 `interruption.mode: 'vad'` (never LiveKit's hosted "adaptive" model), the Soniox EU host and
 `stt-rt-v5`, `languageHints: ['hr']` strict, `eleven_v4_turbo` with `language: 'hr'`, and the
 voice channel's engine settings (`docs/CORE.md` → Channels: Sonnet 5.5, `low`, `between_tools`,
-1024 tokens, 4 iterations, 6 s per tool, 25 s per request, last 20 messages, the sink's 200 ms
+1024 tokens, 4 iterations, 6 s per tool (a confirmed write up to 20 s: once the caller said yes it
+runs to its outcome, so a turn may outlast its 25 s by that much), 25 s per request, last 20 messages, the sink's 200 ms
 hold, which `runVoiceTurn` takes from `settings.holdMs`).
 
 ## Latency budget and measurements
@@ -212,6 +213,8 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | 2026-11-04 | `021b455` | before Part 13b (`main`, 13a merged)                     | `claude-sonnet-5-5`, `low` | 1.74 s / 3.66 s      | 4.09 s / 9.23 s        | 2.03   | 36  |
 | 2026-11-04 | `c3d2f81` | 13b: the mail pack on voice (four tools, the rules)      | `claude-sonnet-5-5`, `low` | 1.94 s / 5.24 s      | 4.70 s / 10.80 s       | 2.03   | 36  |
 | 2026-11-04 | `91b06fe` | 13b trimmed: shorter mail descriptions and rules         | `claude-sonnet-5-5`, `low` | 1.82 s / 2.98 s      | 4.34 s / 9.07 s        | 2.03   | 36  |
+| 2026-11-04 | `3edafe7` | 13c: the mail writes, the confirmation rule (VOICE-18)   | `claude-sonnet-5-5`, `low` | 1.87 s / 3.33 s      | 4.84 s / 8.30 s        | 2.08   | 36  |
+| 2026-11-04 | `16fd4c5` | 13c trimmed: shorter write descriptions and rule         | `claude-sonnet-5-5`, `low` | 1.89 s / 2.49 s      | 4.50 s / 8.70 s        | 2.08   | 36  |
 
 **Part 13b, the mail pack on voice.** Both runs on the local stack with the seed member, three
 repeats each, one shell (`~/.config/va/voice.local.env` sourced after `voice.env`). The bench
@@ -225,6 +228,17 @@ cached read is 3,819 tokens (+1,385 over `main` instead of +2,219), first text p
 (+0.08 s, p95 better at 2.98 s) and whole answer p50 4.34 s (+0.25 s, p95 9.07 s), same
 rounds. The whole-answer p50 is at the top of the range earlier baselines spread over
 (4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost. Accepted by the user on 2026-11-04: kept.
+
+**Part 13c on voice** (`3edafe7`): the confirmation rule in `VOICE_INTRO_HR` (VOICE-18), the
+`write_outcome_unknown` line in `MAIL_RULES_HR` and the two write tools add about 700 tokens to
+the fixed prefix (the first call's cached read 3,819 → 4,535). Against `91b06fe`: first text p50
+1.87 s (+0.05 s), whole answer p50 4.84 s (+0.50 s), p95 lower on both, rounds 2.08 (q08, "detalje
+o radnom stolu", took the third round — search, details, answer — in all three repeats, two of
+three before). Trimmed (`16fd4c5`: the two write descriptions halved, the confirmation rule
+shortened): cached read 4,346, first text p50 1.89 s (+0.07 s), whole answer p50 4.50 s
+(+0.16 s), p95 lower on both. Most of the rest is q08 at three rounds (6.93 s against 3.78 s),
+the right path for a "details" question; one q10 repeat had one `invalid tool input` the model
+corrected within its three rounds. Accepted by the user on 2026-11-04: kept.
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
@@ -364,8 +378,10 @@ Barge-in acceptance: 20 tries each with `INTERRUPT_ON=vad` and `stt`, the agent 
 
 ## A write on a call (Part 12b)
 
-The write protocol on a spoken channel: the model previews a write and asks; the sink's
-`confirm` hands the pending id to `CallSession` (`onConfirm`), which keeps the newest one. On the
+The write protocol on a spoken channel: the model previews a write; the sink's `confirm` reads
+the preview's summary aloud verbatim (VOICE-19, S15), then hands the pending id to `CallSession`
+(`onConfirm`), which keeps the newest one; the model then only asks briefly (the voice prompt's
+rule, VOICE-18, P06). On the
 next turn `answers.ts` decides in code, before the model sees the text, whether the caller said
 yes or no: a closed set of Croatian answers matched whole after normalisation ("da", "može",
 "u redu", "potvrđujem", "pošalji" …; "ne", "nemoj", "odustani" …). A yes carries the id into
@@ -373,11 +389,11 @@ the turn (`extras.confirmation`, consumed once by dispatch); a no settles the wr
 and the turn is a plain one; anything else ("da, ali…", a question) is a plain turn with the
 write still waiting; a pending write older than five minutes is forgotten (`confirmation
 expired`). The store is the call's `MemoryConfirmationStore`. Logs: `confirmation answered`
-(`answer`), `confirmation expired`; never the text. W35–W39. No write tool is named for a spoken
-channel yet; Part 13 names the first with the reason in its commit, and the voice prompt gets its
-confirmation line then, measured (`VOICE-18`). The reviewer's open point for that part: the
-model paraphrases the summary, so the caller confirms what the model said, not the preview
-verbatim (`VOICE-19`).
+(`answer`), `confirmation expired`; never the text. W35–W39. The spoken writes are the mail
+pack's `reply_mail` and `flag_mail` (Part 13c, the reasons in their allowlist commit): W42 (the
+preview is heard before the question, "da" sends one reply to the sender), W43 ("ne" sends
+nothing). Once confirmed, a write runs to its real outcome even if the caller barges in or it
+takes longer than the 6 s tool timeout (`CONFIRMED_WRITE_TIMEOUT_MS`, `docs/CORE.md`).
 
 ## The phone channel (Part 11; 11a and 11b built 2026-11-03)
 
@@ -483,7 +499,7 @@ scenario's deferred rows never land in the next one's world.
 | W17        | a failed save is logged without the text; the next turn still saves; no log line carries the words                                                                                                                                                     |
 | W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                                                                           |
 | W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                                                                              |
-| W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat                                                                                                            |
+| W20        | `VOICE_ALLOWLIST` names the two demo reads, the four mail reads and the two confirmed mail writes; every one read-only or confirmation-required; an unknown or a plain write tool fails at load; nothing on chat                                       |
 | W21        | the channel setting `holdMs` reaches the sink: with a 10 ms hold a one-sentence answer the model stalls after is spoken within 100 ms (`V-10`)                                                                                                         |
 
 ```

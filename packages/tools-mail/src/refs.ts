@@ -2,9 +2,12 @@
 // would copy them wrong, and a caller must never hear one. Per user, in this process, for 30
 // minutes after the last use; the same message keeps its ref while it lives, and a number is
 // never given twice in a process, so a ref left in an old conversation is expired, never another
-// message. The API and the
-// worker are one process each (decision 0016), so a ref from a chat list is not valid on a call;
-// a second instance would need the map in the database (API-15).
+// message. Numbering starts at a random point per process, so after a restart an old ref (in a
+// conversation, or a confirmation not yet answered) does not name a new process's message either.
+// The API and the worker are one process each (decision 0016), so a ref from a chat list is not
+// valid on a call; a second instance would need the map in the database (API-15).
+import { randomInt } from 'node:crypto'
+
 export const REF_TTL_MS = 30 * 60_000
 /** Refs one user holds at once; the least recently used goes first. */
 const MAX_PER_USER = 200
@@ -25,7 +28,11 @@ interface UserRefs {
 export class MessageRefs {
   private readonly users = new Map<string, UserRefs>()
 
-  constructor(private readonly clock: () => Date = () => new Date()) {}
+  constructor(
+    private readonly clock: () => Date = () => new Date(),
+    /** The first number given; random per process (tests pass 1 for readable refs). */
+    private readonly start: number = randomInt(1, 900_000),
+  ) {}
 
   /** The ref for this message, a new one or the one it already has. */
   refFor(userId: string, graphId: string): string {
@@ -59,7 +66,7 @@ export class MessageRefs {
   private sweep(userId: string, now: number): UserRefs {
     let u = this.users.get(userId)
     if (!u) {
-      u = { next: 1, byRef: new Map(), byId: new Map() }
+      u = { next: this.start, byRef: new Map(), byId: new Map() }
       this.users.set(userId, u)
     }
     for (const [ref, e] of u.byRef) if (now - e.touched >= REF_TTL_MS) this.drop(u, ref)
