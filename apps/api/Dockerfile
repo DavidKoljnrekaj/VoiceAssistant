@@ -14,6 +14,7 @@ COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/integrations/package.json packages/integrations/
 COPY packages/tools-demo/package.json packages/tools-demo/
+COPY packages/tools-mail/package.json packages/tools-mail/
 RUN pnpm install --frozen-lockfile --filter @va/api...
 
 FROM base AS runtime
@@ -24,12 +25,14 @@ COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=deps /app/packages/integrations/node_modules ./packages/integrations/node_modules
 COPY --from=deps /app/packages/tools-demo/node_modules ./packages/tools-demo/node_modules
+COPY --from=deps /app/packages/tools-mail/node_modules ./packages/tools-mail/node_modules
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api ./apps/api
 COPY packages/core ./packages/core
 COPY packages/db ./packages/db
 COPY packages/integrations ./packages/integrations
 COPY packages/tools-demo ./packages/tools-demo
+COPY packages/tools-mail ./packages/tools-mail
 RUN pnpm --filter @va/api typecheck
 EXPOSE 3000
 USER node

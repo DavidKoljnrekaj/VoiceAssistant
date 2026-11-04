@@ -18,7 +18,7 @@ const app = createApp({
     apiKey: env.ANTHROPIC_API_KEY,
     ...(env.ANTHROPIC_BASE_URL ? { baseURL: env.ANTHROPIC_BASE_URL } : {}),
   }),
-  registry: createRegistry(),
+  registry: createRegistry(microsoft?.tokens ?? null),
   env,
   livekit: createLiveKit(env),
   microsoft,
