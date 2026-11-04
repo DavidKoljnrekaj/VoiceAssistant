@@ -214,6 +214,7 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | 2026-11-04 | `c3d2f81` | 13b: the mail pack on voice (four tools, the rules)      | `claude-sonnet-5-5`, `low` | 1.94 s / 5.24 s      | 4.70 s / 10.80 s       | 2.03   | 36  |
 | 2026-11-04 | `91b06fe` | 13b trimmed: shorter mail descriptions and rules         | `claude-sonnet-5-5`, `low` | 1.82 s / 2.98 s      | 4.34 s / 9.07 s        | 2.03   | 36  |
 | 2026-11-04 | `3edafe7` | 13c: the mail writes, the confirmation rule (VOICE-18)   | `claude-sonnet-5-5`, `low` | 1.87 s / 3.33 s      | 4.84 s / 8.30 s        | 2.08   | 36  |
+| 2026-11-04 | `16fd4c5` | 13c trimmed: shorter write descriptions and rule         | `claude-sonnet-5-5`, `low` | 1.89 s / 2.49 s      | 4.50 s / 8.70 s        | 2.08   | 36  |
 
 **Part 13b, the mail pack on voice.** Both runs on the local stack with the seed member, three
 repeats each, one shell (`~/.config/va/voice.local.env` sourced after `voice.env`). The bench
@@ -233,7 +234,11 @@ rounds. The whole-answer p50 is at the top of the range earlier baselines spread
 the fixed prefix (the first call's cached read 3,819 → 4,535). Against `91b06fe`: first text p50
 1.87 s (+0.05 s), whole answer p50 4.84 s (+0.50 s), p95 lower on both, rounds 2.08 (q08, "detalje
 o radnom stolu", took the third round — search, details, answer — in all three repeats, two of
-three before).
+three before). Trimmed (`16fd4c5`: the two write descriptions halved, the confirmation rule
+shortened): cached read 4,346, first text p50 1.89 s (+0.07 s), whole answer p50 4.50 s
+(+0.16 s), p95 lower on both. Most of the rest is q08 at three rounds (6.93 s against 3.78 s),
+the right path for a "details" question; one q10 repeat had one `invalid tool input` the model
+corrected within its three rounds.
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
