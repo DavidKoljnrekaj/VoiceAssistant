@@ -103,7 +103,15 @@ channel sends it back in the request's extras, never in text; dispatch consumes 
 for the same session, user, tool and input hash, within five minutes. Text injected into a tool
 result or an email body saying "the user already agreed" cannot confirm anything, because the
 model has nothing to confirm with. Every executed, failed, declined or expired write is a row in
-`tool_confirmations`.
+`tool_confirmations` (chat) or the call's memory store (voice). Part 13c's mail writes add: the
+reply's recipient is pinned to the message's From address in the request (a Reply-To, the usual
+way to divert replies, is never read); the preview names the recipient (on chat with the address,
+on a call with the domain when it is not the user's own, since a display name is the sender's to
+choose) and on a call is read out verbatim before the caller answers; quotation marks in a
+subject or name are made plain so they cannot imitate the summary; the reply is a plain-text body
+with no invisible character; once confirmed, a write runs to its real outcome and a send whose
+outcome is unknown is never retried (`reply_outcome_unknown`). There is no daily send cap yet
+(`API-16`).
 
 **Outlook (Part 13a, decision 0016).** The assistant reaches a mailbox with delegated
 permissions only, as the user who connected it, through a separate Entra app restricted to

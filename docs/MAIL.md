@@ -4,7 +4,8 @@ The user's own Outlook mailbox through Microsoft Graph with delegated permission
 decision 0016). **13a, built:** the connection: the sealed token table, the token store with
 refresh, the tenant-pinned OAuth connect flow in the API, a Graph client with its fake, the
 Settings entry in the PWA. **13b, built:** the four read tools on chat, voice and phone, and the
-mail rules in the prompt. **13c** adds the two confirmed writes (`docs/plan/13-email-pack.md`).
+mail rules in the prompt. **13c, built:** the two confirmed writes, `reply_mail` and `flag_mail`, on chat, voice and phone
+(`docs/plan/13-email-pack.md`).
 
 ## Packages
 
@@ -66,6 +67,37 @@ mailbox; the tools themselves only GET.
 - **Search.** The user's words go inside one pair of quotes with every quote and backslash
   removed; Graph still reads KQL words such as `from:` inside them, which only narrows a search of
   the user's own mail. `*` is refused by the schema; a Graph 400 is `search_invalid`.
+
+## The writes (13c)
+
+Both carry `confirmation: 'required'` (decision 0015): the first call previews, the channel asks
+(the chat card; on a call the summary read out verbatim, then "da" or "ne" decided in code), and
+only a request carrying the user's confirmation runs the write, once.
+
+| Tool                    | Preview (nominative, needs native review)                                            | On the confirmed request                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `reply_mail(ref, text)` | `Odgovorit ću na poruku „{subject}“. Primatelj je {sender}, a tekst glasi: „{text}“` | `POST /me/messages/{id}/reply` with `message.toRecipients` = the From address and `message.body` = the text as plain text; 202 |
+| `flag_mail(ref)`        | `Označit ću zastavicom poruku „{subject}“. Pošiljatelj je {sender}.`                 | `PATCH /me/messages/{id}` with `flag.flagStatus: flagged`                                                                      |
+
+- **The recipient is the sender, pinned.** The request names the From address; a Reply-To is never
+  read (the usual way to divert replies). There is no recipient input: a field the model adds is
+  dropped by the schema. No reply-all, no forward, no new mail.
+- **The preview names who receives it.** On chat `{sender}` is the name with the address beside
+  it; on a call the name, and the sender's domain when it is not the user's own (`s vanjske domene
+partner.hr`), since a display name is the sender's to choose. Quotation marks in the subject or
+  the name are made plain so they cannot imitate the summary's structure.
+- **What is sent is what was shown.** The text is refused when it holds invisible characters; it
+  goes as a plain-text body, so nothing in it is markup. On a call a reply over 500 characters is
+  refused (`reply_too_long`): the whole preview is read out before the caller answers.
+- **Once confirmed, the write runs to its real outcome** (`docs/CORE.md` → the write protocol): a
+  barge-in or the 6 s voice tool timeout does not cut it off. A send whose outcome cannot be known
+  (a timeout, a lost answer, a 5xx after it left) is `reply_outcome_unknown`; the rules tell the
+  model to say so and to suggest checking Sent Items, never to send again.
+- **Errors** as the reads, plus `no_sender` (a reply to a message without a From address),
+  `reply_too_long`, `reply_outcome_unknown`; a preview's failure reaches the model as an is_error
+  result naming the code. A 404 on the write is `message_not_found`.
+- **No daily cap** (`API-16`). Whether Graph replaces or adds recipients with `toRecipients` is
+  the first live check's (`REL-13`).
 
 ## The rules in the prompt
 
@@ -189,7 +221,10 @@ or a body; the field names are on the denylist of `packages/core/src/log-fields.
 | O01–O11          | `packages/integrations/src/microsoft/oauth.test.ts`                                 | the authorize URL, tenant pinning, PKCE, exchange, refresh, error mapping, the refresh-only client                                                                            |
 | U01–U18          | `packages/integrations/src/microsoft/tokens.test.ts`                                | the token store against the fake PostgREST and Microsoft, races, aborts, timeouts                                                                                             |
 | Q01–Q07          | `packages/tools-mail/src/graph.test.ts`                                             | the Graph client                                                                                                                                                              |
-| Q08–Q14          | `packages/tools-mail/src/refs.test.ts`, `clean.test.ts`                             | refs (never reused), body cleaning, invisible characters, clipping                                                                                                            |
+| Q08–Q15          | `packages/tools-mail/src/refs.test.ts`, `clean.test.ts`                             | refs (never reused), body cleaning, invisible characters, clipping                                                                                                            |
+| Z19–Z27          | `packages/tools-mail/src/writes.test.ts`                                            | the writes through the loop: preview, confirmed send pinned to From, a changed text, the voice summary, refusals, an unknown outcome, the flag                                |
+| W42, W43         | `apps/voice/test/confirm.test.ts`                                                   | a reply on a call: heard verbatim, sent on "da", nothing on "ne"                                                                                                              |
+| B30              | `apps/api/test/integrations.test.ts`                                                | a reply over `/chat`: the confirm event, then one send                                                                                                                        |
 | Z01–Z18          | `packages/tools-mail/src/pack.test.ts`                                              | the four tools through the loop on chat, voice and phone: the Graph requests, what the model got, the prompt, every error envelope, the 401 refresh, the field caps, the logs |
 | B01–B16, B20–B29 | `apps/api/test/integrations.test.ts`                                                | the connect routes, the identity check, the env group; a chat turn reading the mailbox (B28, B29)                                                                             |
 | B17–B19          | `apps/api/test/state.test.ts`                                                       | the OAuth state store                                                                                                                                                         |

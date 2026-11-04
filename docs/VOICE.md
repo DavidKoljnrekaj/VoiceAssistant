@@ -226,6 +226,11 @@ cached read is 3,819 tokens (+1,385 over `main` instead of +2,219), first text p
 rounds. The whole-answer p50 is at the top of the range earlier baselines spread over
 (4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost. Accepted by the user on 2026-11-04: kept.
 
+**Owed: Part 13c on voice.** The confirmation rule in `VOICE_INTRO_HR` (VOICE-18), the
+`reply_outcome_unknown` line in `MAIL_RULES_HR` and the two write tools change the fixed prefix
+again. "Before" is the `91b06fe` row (the code `main` had before 13c); the "after" runs on the 13c
+branch head with the same commands; its row goes here.
+
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
 catalogue, so each one took 3 rounds. The second row is the same bench with the seeded catalogue
@@ -364,8 +369,10 @@ Barge-in acceptance: 20 tries each with `INTERRUPT_ON=vad` and `stt`, the agent 
 
 ## A write on a call (Part 12b)
 
-The write protocol on a spoken channel: the model previews a write and asks; the sink's
-`confirm` hands the pending id to `CallSession` (`onConfirm`), which keeps the newest one. On the
+The write protocol on a spoken channel: the model previews a write; the sink's `confirm` reads
+the preview's summary aloud verbatim (VOICE-19, S15), then hands the pending id to `CallSession`
+(`onConfirm`), which keeps the newest one; the model then only asks briefly (the voice prompt's
+rule, VOICE-18, P06). On the
 next turn `answers.ts` decides in code, before the model sees the text, whether the caller said
 yes or no: a closed set of Croatian answers matched whole after normalisation ("da", "može",
 "u redu", "potvrđujem", "pošalji" …; "ne", "nemoj", "odustani" …). A yes carries the id into
@@ -373,11 +380,11 @@ the turn (`extras.confirmation`, consumed once by dispatch); a no settles the wr
 and the turn is a plain one; anything else ("da, ali…", a question) is a plain turn with the
 write still waiting; a pending write older than five minutes is forgotten (`confirmation
 expired`). The store is the call's `MemoryConfirmationStore`. Logs: `confirmation answered`
-(`answer`), `confirmation expired`; never the text. W35–W39. No write tool is named for a spoken
-channel yet; Part 13 names the first with the reason in its commit, and the voice prompt gets its
-confirmation line then, measured (`VOICE-18`). The reviewer's open point for that part: the
-model paraphrases the summary, so the caller confirms what the model said, not the preview
-verbatim (`VOICE-19`).
+(`answer`), `confirmation expired`; never the text. W35–W39. The spoken writes are the mail
+pack's `reply_mail` and `flag_mail` (Part 13c, the reasons in their allowlist commit): W42 (the
+preview is heard before the question, "da" sends one reply to the sender), W43 ("ne" sends
+nothing). Once confirmed, a write runs to its real outcome even if the caller barges in or it
+takes longer than the 6 s tool timeout (`CONFIRMED_WRITE_TIMEOUT_MS`, `docs/CORE.md`).
 
 ## The phone channel (Part 11; 11a and 11b built 2026-11-03)
 
@@ -483,7 +490,7 @@ scenario's deferred rows never land in the next one's world.
 | W17        | a failed save is logged without the text; the next turn still saves; no log line carries the words                                                                                                                                                     |
 | W18        | a pino line loses every `lk.pii.*` key; the stdout wrapper rewrites what LiveKit would write                                                                                                                                                           |
 | W19        | the session's turn handling: Soniox end of turn, VAD interruption, no preemptive generation, no recording                                                                                                                                              |
-| W20        | `VOICE_ALLOWLIST` names the two demo reads and nothing else; every one read-only; an unknown or a write tool fails at load; nothing on chat                                                                                                            |
+| W20        | `VOICE_ALLOWLIST` names the two demo reads, the four mail reads and the two confirmed mail writes; every one read-only or confirmation-required; an unknown or a plain write tool fails at load; nothing on chat                                       |
 | W21        | the channel setting `holdMs` reaches the sink: with a 10 ms hold a one-sentence answer the model stalls after is spoken within 100 ms (`V-10`)                                                                                                         |
 
 ```

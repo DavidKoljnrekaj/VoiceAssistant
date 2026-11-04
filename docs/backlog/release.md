@@ -59,7 +59,12 @@ three sets of checks) and says how to paste the results back.
       columns null. Then with `REL-9`: the owner adds
       `https://API_HOST/integrations/microsoft/callback` in the app registration, and the api host
       gets the six variables (the voice host the four) in its env file. Before the first real
-      mailbox: `OPS-4` and `OPS-5`.
+      mailbox: `OPS-4` and `OPS-5`. The writes (Part 13c), against a message you sent yourself
+      with a `Reply-To` set to another of your addresses: a confirmed reply arrives only at the
+      `From` address (Graph's `message.toRecipients` replaces the default recipients, it does not
+      add to them), its body is the plain text as dictated, and `flag_mail` shows the flag in
+      Outlook. If the reply also reached the `Reply-To`, stop: the pack must switch to
+      `createReply` + PATCH + `send` (the security review of 13c, finding 5).
 
 - [ ] REL-14 · Part 13a, and a precondition of Part 14: public sign-up off on every Supabase
       project the assistant uses (Dashboard → Authentication → Sign In / Providers → "Allow new

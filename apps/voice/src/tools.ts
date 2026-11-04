@@ -1,8 +1,9 @@
 // The worker's composition of the engine's registry: the packs it serves and what a caller may
 // reach by voice. Default-deny per channel: only the tools named here are advertised and
-// dispatchable on voice, every one read-only (asserted at load), and no other channel is named
-// (an absent channel gets nothing). A tool joins this list in a reviewed diff whose commit says
-// why its output is safe to read aloud: no ids spoken, at most five items, plain numbers.
+// dispatchable on voice, every one read-only or waiting for the caller's confirmation (asserted
+// at load, decision 0015), and no other channel is named (an absent channel gets nothing). A tool
+// joins this list in a reviewed diff whose commit says why it is safe on a call: no ids spoken,
+// at most five items, plain numbers, and for a write the confirmation it waits for.
 import { type ChannelAllowlist, ToolRegistry } from '@va/core'
 import type { TokenStore } from '@va/integrations'
 import { demoPack } from '@va/tools-demo'

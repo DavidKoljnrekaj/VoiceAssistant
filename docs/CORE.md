@@ -152,8 +152,17 @@ line). Stores: `MemoryConfirmationStore` in core (the voice worker's per-call st
 (`confirmationStoreContract` in `@va/core/test`: K01, K02). The preview takes the handler's
 signal and issues nothing once the loop gave up on it. The registry's spoken-channel
 assertion is amended: a tool named for `voice` or `phone` is read-only or confirmed (E45).
-Scenarios E40–E45 (`confirm.test.ts`); the demo pack's `create_note` is the first tool under it
-(D13, D14).
+Scenarios E40–E47 (`confirm.test.ts`); the demo pack's `create_note` is the first tool under it
+(D13, D14), the mail pack's `reply_mail` and `flag_mail` the first spoken ones (Part 13c).
+
+**A confirmed write runs to its real outcome** (`isConfirmedWrite`, Part 13c). When the request
+carries the user's confirmation and the tool requires one, the handler's signal fires only on its
+own ceiling (`CONFIRMED_WRITE_TIMEOUT_MS`, 20 s), not on the channel's tool timeout (6 s on a
+call) or the loop's abort, and `dispatchAll` awaits it even after an abort, so the `tool_result`
+row says what happened (E46, E47): an email accepted but reported as failed would invite a
+second send. On a call the spoken sink reads the preview's summary verbatim before the model's
+question (`SpokenTextSink.confirm`, S15, `VOICE-19`); the voice prompt tells the model not to
+repeat it (P06, `VOICE-18`).
 
 ### History assembly
 
@@ -366,15 +375,17 @@ when the registry is built (`T02`, `W20`).
 
 ### Catalogue
 
-| Tool            | Pack | Roles         | readOnly      | Channels           | What                                                                                                                                                  |
-| --------------- | ---- | ------------- | ------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_items`  | demo | admin, member | yes           | chat, voice, phone | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids                                   |
-| `get_item`      | demo | admin, member | yes           | chat, voice, phone | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                                                                |
-| `create_note`   | demo | admin, member | no, confirmed | chat               | attaches a user-written note to an item (`demo_notes`) after the user confirmed the preview (Part 12)                                                 |
-| `list_mail`     | mail | admin, member | yes           | chat, voice, phone | the user's own inbox, unread by default, newest first, with the inbox unread count; ≤ 20 (default 10); voice: ≤ 5, names only, 120-character previews |
-| `read_mail`     | mail | admin, member | yes           | chat, voice, phone | one message by ref (`m1` …): the new text, signature and disclaimer cut, clipped to 3000 (voice 600) characters; does not mark it read                |
-| `search_mail`   | mail | admin, member | yes           | chat, voice, phone | `$search` as one quoted KQL phrase over every folder, `*` refused; ≤ 10 (voice 5)                                                                     |
-| `list_calendar` | mail | admin, member | yes           | chat, voice, phone | the events of one Europe/Zagreb day (today by default); ≤ 20; voice: ≤ 5 live events, times only                                                      |
+| Tool            | Pack | Roles         | readOnly      | Channels           | What                                                                                                                                                                                    |
+| --------------- | ---- | ------------- | ------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_items`  | demo | admin, member | yes           | chat, voice, phone | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids                                                                     |
+| `get_item`      | demo | admin, member | yes           | chat, voice, phone | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                                                                                                  |
+| `create_note`   | demo | admin, member | no, confirmed | chat               | attaches a user-written note to an item (`demo_notes`) after the user confirmed the preview (Part 12)                                                                                   |
+| `reply_mail`    | mail | admin, member | no, confirmed | chat, voice, phone | replies to the sender of one message (the From address, never a Reply-To) with the user's text as a plain-text body; ≤ 2000 characters (500 on a call); no other recipient can be named |
+| `flag_mail`     | mail | admin, member | no, confirmed | chat, voice, phone | flags one message for follow-up; nothing else                                                                                                                                           |
+| `list_mail`     | mail | admin, member | yes           | chat, voice, phone | the user's own inbox, unread by default, newest first, with the inbox unread count; ≤ 20 (default 10); voice: ≤ 5, names only, 120-character previews                                   |
+| `read_mail`     | mail | admin, member | yes           | chat, voice, phone | one message by ref (`m1` …): the new text, signature and disclaimer cut, clipped to 3000 (voice 600) characters; does not mark it read                                                  |
+| `search_mail`   | mail | admin, member | yes           | chat, voice, phone | `$search` as one quoted KQL phrase over every folder, `*` refused; ≤ 10 (voice 5)                                                                                                       |
+| `list_calendar` | mail | admin, member | yes           | chat, voice, phone | the events of one Europe/Zagreb day (today by default); ≤ 20; voice: ≤ 5 live events, times only                                                                                        |
 
 `demo_items` and `demo_notes` have a migration (`20261029100000_demo_tables.sql`, `docs/DB.md`)
 and the local seed carries the nine items the fakes do; the demo pack still narrows the user
