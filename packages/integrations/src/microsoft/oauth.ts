@@ -37,8 +37,9 @@ export interface MicrosoftOAuthConfig {
   tenantId: string
   clientId: string
   clientSecret: string
-  /** Exactly the redirect URI registered in Entra (`…/integrations/microsoft/callback`). */
-  redirectUri: string
+  /** Exactly the redirect URI registered in Entra (`…/integrations/microsoft/callback`). Only the
+   * connect flow needs it (the API); a refresh-only client (the voice worker) leaves it out. */
+  redirectUri?: string
   fetch?: typeof fetch
   clock?: () => Date
   /** The ceiling of one request to Microsoft (10 s). */
@@ -175,12 +176,17 @@ export function createMicrosoftOAuth(config: MicrosoftOAuthConfig): MicrosoftOAu
     }
   }
 
+  const redirectUri = (): string => {
+    if (!config.redirectUri) throw new Error('the connect flow needs MS_REDIRECT_URI')
+    return config.redirectUri
+  }
+
   return {
     authorizeUrl({ state, challenge }) {
       const q = new URLSearchParams({
         client_id: config.clientId,
         response_type: 'code',
-        redirect_uri: config.redirectUri,
+        redirect_uri: redirectUri(),
         response_mode: 'query',
         scope,
         state,
@@ -194,7 +200,7 @@ export function createMicrosoftOAuth(config: MicrosoftOAuthConfig): MicrosoftOAu
     exchangeCode(code, verifier, signal) {
       return tokenRequest(
         'authorization_code',
-        { code, code_verifier: verifier, redirect_uri: config.redirectUri },
+        { code, code_verifier: verifier, redirect_uri: redirectUri() },
         signal,
       )
     },

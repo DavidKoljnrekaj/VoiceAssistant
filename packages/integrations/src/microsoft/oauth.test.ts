@@ -172,4 +172,21 @@ describe('microsoft oauth', () => {
     const e = await failure(oauth().refresh(refreshToken))
     expect([e.kind, e.code]).toEqual(['bad_response', null])
   })
+
+  it('O11: a refresh-only client (the worker) needs no redirect URI; its connect methods refuse', async () => {
+    const worker = createMicrosoftOAuth({
+      tenantId: FAKE_TENANT_ID,
+      clientId: FAKE_CLIENT_ID,
+      clientSecret: FAKE_CLIENT_SECRET,
+      fetch: ms.fetch,
+      clock: () => NOW,
+    })
+    const { refreshToken } = ms.grant(ACCOUNT)
+    expect((await worker.refresh(refreshToken)).accessToken).toMatch(/^at-/)
+    expect(ms.tokenCalls('refresh_token')[0]!.form!.has('redirect_uri')).toBe(false)
+    expect(() => worker.authorizeUrl({ state: 's', challenge: 'c' })).toThrow(
+      'the connect flow needs MS_REDIRECT_URI',
+    )
+    expect(() => worker.exchangeCode('code', 'verifier')).toThrow('the connect flow needs MS_REDIRECT_URI')
+  })
 })
