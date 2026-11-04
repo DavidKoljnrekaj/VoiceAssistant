@@ -93,7 +93,8 @@ export function readMail(deps: MailDeps) {
       const to = recipients(result.toRecipients, spoken)
       const cc = recipients(result.ccRecipients, spoken)
       return {
-        ref: input.ref,
+        // The model already holds the ref; on a call nothing that stands for an id goes back.
+        ...(spoken ? {} : { ref: input.ref }),
         from: senderName(result.from, spoken),
         to: to.names,
         to_total: to.total,

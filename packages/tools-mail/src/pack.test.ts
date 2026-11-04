@@ -1,7 +1,7 @@
 // Z scenarios: the mail pack through the real loop, on chat and on voice, against the fake Graph
 // and the core fakes. They assert the requests Graph got, what the model received (and that no
 // Graph id or address reached it on a call), the prompt's rules and the log lines.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { type ChannelAllowlist, DOMAIN_RULES_HR, toAnthropicTool, ToolRegistry } from '@va/core'
 import {
@@ -120,6 +120,11 @@ function sentToModel(run: Awaited<ReturnType<typeof runChat>>, i: number): Recor
 const ours = (value: unknown): string =>
   JSON.stringify(value, (k, v: unknown) => (k === 'untrusted_email_content' ? '' : v))
 const graphCalls = (path: string) => graph.calls.filter((c) => c.path === path)
+
+// A request to a route nobody registered is a 404 the tools may read as an answer: never allowed.
+afterEach(() => {
+  expect(graph.unexpectedCalls, 'requests to an unregistered Graph route').toBe(0)
+})
 
 beforeEach(() => {
   graph.reset()
@@ -497,6 +502,7 @@ describe('@va/tools-mail', () => {
     const ctx = await authAs('member')
     const gone = await runChat(ctx, 'Pročitaj prvu.', { packs: [pack()], allowlist: ALLOWLIST })
     expect(sentToModel(gone, 1)).toEqual({ error: 'message_not_found' })
+    expect(graph.calls.filter((c) => c.path === '/me/messages/AAMkAD-marko%3D')).toHaveLength(1)
   })
 
   scenario(
