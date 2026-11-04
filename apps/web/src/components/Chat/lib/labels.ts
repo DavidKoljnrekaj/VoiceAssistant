@@ -6,6 +6,11 @@ export const TOOL_LABELS_HR: Record<string, string> = {
   search_items: 'Pretraživanje artikala',
   get_item: 'Učitavanje artikla',
   create_note: 'Spremanje bilješke',
+  // The mail pack (Part 13b).
+  list_mail: 'Provjera pošte',
+  read_mail: 'Čitanje poruke',
+  search_mail: 'Pretraživanje pošte',
+  list_calendar: 'Pregled kalendara',
 }
 
 export const ERROR_LABELS_HR: Record<string, string> = {
