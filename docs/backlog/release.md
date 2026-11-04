@@ -40,6 +40,15 @@ three sets of checks) and says how to paste the results back.
       drop the hand-written types in `apps/voice/src/phone/db.ts` for the generated ones. Then
       enrol the pilot caller (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller).
 
+- [ ] REL-12 · Part 13a: apply `20261104100000_user_integrations.sql` to the dev project (by the
+      operator, `supabase db push`). Check after applying: as a signed-in user
+      `select status from user_integrations` returns 0 rows and
+      `select refresh_token_enc from user_integrations` is refused with `42501`; as the service role an insert with
+      `provider = 'google'` is refused with `23514`. Then `/db-types`, commit
+      `packages/db/src/database.ts`, and drop the hand-written table types in
+      `packages/integrations/src/db.ts` (and the untyped cast in
+      `packages/core/src/test/fake-supabase.test.ts`) for the generated ones.
+
 - [ ] REL-13 · Part 13a: the first live connect, on a developer machine, once the admin's reply
       (`docs/requests/entra-admin-request.md`) is in: `MS_TENANT_ID`, `MS_CLIENT_ID`,
       `MS_CLIENT_SECRET` from it, `MS_REDIRECT_URI=http://localhost:3000/integrations/microsoft/callback`,
@@ -56,18 +65,9 @@ three sets of checks) and says how to paste the results back.
       (Dashboard → Authentication → Sign In / Providers → "Allow new users to sign up" off;
       users are invited), and email confirmation stays on. The Outlook callback requires the
       user's confirmed email to equal the mailbox's UPN; with sign-up open and confirmation off,
-      anyone could register a colleague's address first. Check: `curl -X POST
-    "$SUPABASE_URL/auth/v1/signup" -H "apikey: $ANON" -d '{"email":"x@example.com","password":"…"}'`
-      answers `422` with `signup_disabled`.
-
-- [ ] REL-12 · Part 13a: apply `20261104100000_user_integrations.sql` to the dev project (by the
-      operator, `supabase db push`). Check after applying: as a signed-in user
-      `select status from user_integrations` returns 0 rows and `select refresh_token_enc from
-  user_integrations` is refused with `42501`; as the service role an insert with
-      `provider = 'google'` is refused with `23514`. Then `/db-types`, commit
-      `packages/db/src/database.ts`, and drop the hand-written table types in
-      `packages/integrations/src/db.ts` (and the untyped cast in
-      `packages/core/src/test/fake-supabase.test.ts`) for the generated ones.
+      anyone could register a colleague's address first. Check: a `POST` to
+      `$SUPABASE_URL/auth/v1/signup` with the anon key as `apikey` and any email and password
+      answers `422` with `signup_disabled` (`docs/RELEASE-RUNBOOK.md` → Connecting Outlook, B).
 
 - [x] REL-11 · Part 12a: apply `20261103150000_tool_confirmations.sql` to the dev project (by the
       operator, `supabase db push`). Check after applying: as a signed-in user

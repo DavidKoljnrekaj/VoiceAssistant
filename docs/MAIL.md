@@ -16,7 +16,7 @@ packages/integrations/              @va/integrations   api → integrations → 
 ├── src/connections.ts              listConnections (the owner's view, through the user's client)
 ├── src/db.ts                       user_integrations typed by hand until /db-types (REL-12)
 └── src/test/fake-microsoft.ts      @va/integrations/test: the token endpoint and Graph /me
-packages/tools-mail/                @va/tools-mail     tools-* → core
+packages/tools-mail/                @va/tools-mail     tools-* → core (defineTool, log, types)
 ├── src/graph.ts                    createGraphClient, GraphError
 └── test/fake-graph.ts              Graph v1.0 over fetch
 ```
@@ -38,8 +38,11 @@ hands the pack a `token(signal)` function.
 3. **Callback.** Microsoft redirects to `GET /integrations/microsoft/callback?code&state`, the one
    API route without a bearer token. The state is taken (deleted) first, whatever the query
    says; then the code is exchanged with the verifier and the client secret; Graph `/me` gives
-   the UPN; the `users` row is re-read by the state's user id; the UPN must equal its `email`
-   (case-insensitive). Then `saveConnection` upserts the sealed row, and the browser goes to
+   the UPN; the `users` row is re-read by the state's user id and the auth user by its
+   `auth_user_id` (`apps/api/src/integrations/identity.ts`): the UPN must equal both addresses,
+   GoTrue must have confirmed the address, the user must not be banned, and only ASCII addresses
+   are compared (case-insensitive). With public sign-up off (`REL-14`) that address is one an
+   admin invited. Then `saveConnection` upserts the sealed row, and the browser goes to
    `WEB_APP_URL/settings?connected=1`, or `?connect_error=` one of `state_invalid`, `denied`,
    `exchange_failed`, `account_mismatch`, `failed`. The response carries `Cache-Control:
 no-store` and `Referrer-Policy: no-referrer`.

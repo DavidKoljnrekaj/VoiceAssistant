@@ -125,10 +125,13 @@ Other events worth grepping for: `[api]` `listening`, `auth refused`, `pre-strea
 ended`, `previous call cleanup failed`, `agent dispatch failed`, `join token failed`, `rollback
 failed` (`table`), `client disconnect` (`source`), `request timeout`, `stream worker error`,
 `unhandled error`, `microsoft connect started`, `microsoft connect refused` (`reason`),
-`microsoft connected`, `microsoft disconnected`, `connect identity check failed`;
-`[integrations]` `token refreshed`, `refresh refused, reauth required` (`code`: AADSTS),
-`refresh failed`, `microsoft refused the client` (an expired secret: alert on it), `token
-unreadable`; `[core]` `tool refused at dispatch`, `invalid
+`microsoft connected`, `microsoft disconnected`, `connect identity check failed`,
+`integrations lookup failed`; `[integrations]` `connected`, `disconnected`, `token refreshed`,
+`refresh refused, reauth required` (`code`: AADSTS), `refresh failed`, `microsoft refused the
+client` (an expired secret: alert on it), `token unreadable`, `token lookup failed`, `refresh not
+stored`, `connection not stored`, `disconnect failed`, `microsoft token request failed`,
+`microsoft token response unusable`, `graph me failed`; `[mail]` `graph request failed`, `graph
+throttled, retrying`; `[core]` `tool refused at dispatch`, `invalid
 tool input`, `tool timeout`, `model call failed`, `assistant insert failed`, `tool_result insert
 failed`, `tool iteration limit reached`; `[core:auth]` `unauthorized`, `no_profile`,
 `internal_error`; `[voice]` `job refused`, `call accepted`, `warm`, `warm failed`, `turn limit

@@ -14,7 +14,10 @@ item says so in its description.
 - [ ] **Every request authenticated; role re-read; no claim trusted.** `authenticateToken` in
       `@va/core` asks GoTrue for the user and re-reads `public.users` with the service role on
       every request (`apps/api/src/middleware/auth.ts`); the worker does the same per turn, cached
-      at most 60 s (`IDENTITY_CACHE_MS`, invariant 7). Tests: `A01`–`A07`, `P03`, `P04`, `W03`.
+      at most 60 s (`IDENTITY_CACHE_MS`, invariant 7). The one route without a bearer token is
+      Microsoft's redirect to `/integrations/microsoft/callback`, whose identity is the
+      single-use OAuth state; it re-reads the profile and the auth user from it (below, Outlook).
+      Tests: `A01`–`A07`, `P03`, `P04`, `W03`, `B14`, `B25`.
 - [ ] **Service-role writes filtered by `user_id` / `session_id`; updates and deletes assert the
       rows they touched where a row must exist.** `apps/api/src/chat/prepare.ts`,
       `routes/sessions.ts`, `voice/calls.ts`, `apps/voice/src/call.ts`, `turn.ts`; the loop's

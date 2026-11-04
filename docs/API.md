@@ -129,6 +129,7 @@ Croatian text from `@va/core`'s catalogue.
 | 429    | `rate_limited`                    | a limit below                                                                                           |
 | 500    | `internal_error`                  | a failed write or read; the pre-stream deadline; LiveKit not configured or its token signing failed     |
 | 502    | `voice_dispatch_failed`           | LiveKit refused the agent dispatch (both rows removed)                                                  |
+| 503    | `integration_unavailable`         | the MS_ variables are not set: `/integrations/microsoft/start` and the callback                         |
 
 Mid-stream failures are `error` events on the open 200 stream: the model codes
 (`model_rate_limited`, `model_timeout`, `model_unreachable`, `model_bad_request`,

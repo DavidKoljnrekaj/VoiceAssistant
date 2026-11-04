@@ -37,7 +37,7 @@ VoiceAssistant/
 ```
 web ──HTTP──▶ api ──▶ core ──▶ db
               voice ─▶ core ──▶ db
-              tools-* ─▶ core (defineTool and types)
+              tools-* ─▶ core (defineTool, log and types)
               api, voice ─▶ tools-* (an app composes the packs it registers; a pack never imports an app)
               api, voice ─▶ integrations ─▶ db, core (log)   (decision 0016)
 ```
