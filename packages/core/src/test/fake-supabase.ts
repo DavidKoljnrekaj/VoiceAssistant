@@ -1,5 +1,6 @@
 // In-memory stand-in for the Supabase services the engine talks to: GoTrue (`/auth/v1/user`,
-// and the magic-link flow the phone channel uses: `admin/generate_link`, `verify`, `logout`)
+// the magic-link flow the phone channel uses: `admin/generate_link`, `verify`, `logout`, and
+// `admin/users/<id>` for the Outlook callback's identity check)
 // and PostgREST (`/rest/v1/*`, including `rpc/`). Ported from Landmark without its Storage part.
 //
 // It speaks HTTP, not a client API: the real supabase-js / postgrest-js in the code under test
@@ -74,6 +75,13 @@ const DEFAULTS: Record<string, Row> = {
 }
 const HAS_UPDATED_AT = new Set(['users', 'ai_sessions', 'user_integrations'])
 
+export interface FakeAuthUser {
+  id: string
+  email: string
+  confirmed?: boolean
+  banned?: boolean
+}
+
 export interface RecordedRequest {
   method: string
   service: 'auth' | 'rest' | 'rpc'
@@ -108,10 +116,11 @@ interface Cond {
 
 export class FakeSupabase {
   tables: Record<string, Row[]> = {}
-  /** token → auth user. A token not in this map is rejected by `/auth/v1/user`. */
-  authUsers: Record<string, { id: string; email: string }> = {}
+  /** token → auth user. A token not in this map is rejected by `/auth/v1/user`. `confirmed`
+   * (default true) and `banned` shape `email_confirmed_at` and `banned_until`. */
+  authUsers: Record<string, FakeAuthUser> = {}
   /** Magic links `admin/generate_link` issued and `verify` has not consumed: token hash → auth user. */
-  magicLinks: Record<string, { id: string; email: string }> = {}
+  magicLinks: Record<string, FakeAuthUser> = {}
   private issued = 0
   rpcs: Record<string, (args: Row) => unknown> = {}
   requests: RecordedRequest[] = []
@@ -288,6 +297,13 @@ export class FakeSupabase {
         refresh_token: `refresh-${this.issued}`,
         user: authUserJson(user),
       })
+    }
+    // `admin.getUserById(id)`, service role only: the auth user as GoTrue holds it.
+    const byId = name.match(/^admin\/users\/([^/]+)$/)
+    if (byId && req.method === 'GET') {
+      const user = Object.values(this.authUsers).find((u) => u.id === byId[1])
+      if (!user) return json(404, { code: 404, error_code: 'user_not_found', msg: 'User not found' })
+      return json(200, authUserJson(user))
     }
     // `admin.signOut(jwt, scope)`: the session behind the bearer stops working.
     if (name === 'logout' && req.method === 'POST') {
@@ -478,12 +494,14 @@ function untilOrAbort<T>(until: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-function authUserJson(user: { id: string; email: string }): Row {
+function authUserJson(user: FakeAuthUser): Row {
   return {
     id: user.id,
     aud: 'authenticated',
     role: 'authenticated',
     email: user.email,
+    email_confirmed_at: user.confirmed === false ? null : '2026-01-01T00:00:00Z',
+    banned_until: user.banned ? '2099-01-01T00:00:00Z' : null,
     app_metadata: {},
     user_metadata: {},
     created_at: '2026-01-01T00:00:00Z',
