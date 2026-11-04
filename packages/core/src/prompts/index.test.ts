@@ -59,7 +59,7 @@ describe('prompts', () => {
     for (const channel of ['voice', 'phone'] as const) {
       const prompt = buildStaticSystemPrompt(channel)
       expect(prompt).toContain('pending_confirmation')
-      expect(prompt).toContain('sustav je korisniku već pročitao')
+      expect(prompt).toContain('sustav je korisniku već pročitao sažetak')
       expect(prompt).not.toContain('ne možete unositi promjene')
     }
   })

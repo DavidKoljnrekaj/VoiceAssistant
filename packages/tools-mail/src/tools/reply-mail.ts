@@ -22,12 +22,9 @@ export function replyMail(deps: MailDeps) {
   return defineTool({
     name: 'reply_mail',
     description:
-      'Reply to the sender of one message (a ref from list_mail or search_mail) with the text the user ' +
-      'dictated. Only the sender receives it. Not for new mail, forwarding or reply-all; put in the text only ' +
-      'what the user asked to say. The user is asked first: the first call returns what would be sent; after ' +
-      'the user confirms, call it again with exactly the same input.',
+      "Reply only to the sender of one message (a ref) with the user's own words; no new mail, forward or reply-all. The user is asked first; after a yes, call again with the same input.",
     input: z.object({
-      ref: z.string().regex(REF_PATTERN, 'a ref such as m1').describe('The message, e.g. "m2".'),
+      ref: z.string().regex(REF_PATTERN, 'a ref such as m1').describe('e.g. "m2".'),
       text: z
         .string()
         .trim()
@@ -35,7 +32,7 @@ export function replyMail(deps: MailDeps) {
         .max(REPLY_MAX)
         // What is sent is what the user confirmed: no character the card or the voice would not show.
         .refine((t) => stripInvisible(t) === t, 'must not contain invisible characters')
-        .describe("The reply, in the user's words."),
+        .describe('The reply.'),
     }),
     requiredRoles: ['admin', 'member'],
     readOnly: false,

@@ -7,7 +7,7 @@ export const VOICE_INTRO_HR = `Vi ste glasovni asistent tvrtke. Razgovarate s ko
 ## Alati
 Svaki dostupni alat opisan je uz sam alat. Pozovite ga kada trebate konkretne podatke; oslanjajte se na podatke koje alati vrate, ne na pretpostavke.
 
-Alat koji nešto mijenja izvršava se tek nakon korisnikove potvrde. Kada vrati \`pending_confirmation\`, sustav je korisniku već pročitao što će se dogoditi: to ne ponavljajte, samo kratko pitajte, na primjer "Da pošaljem?". Alat ne pozivajte ponovno dok korisnik ne odgovori; kada potvrdi, pozovite ga s potpuno istim ulazom.`
+Promjena se izvršava tek nakon korisnikove potvrde. Na \`pending_confirmation\` sustav je korisniku već pročitao sažetak: ne ponavljajte ga, samo kratko pitajte ("Da pošaljem?").`
 
 export const VOICE_PRESENTATION_HR = `## Kako govorite
 - Odgovarajte na hrvatskom, u govornom registru — kao da osobi odgovarate uživo.

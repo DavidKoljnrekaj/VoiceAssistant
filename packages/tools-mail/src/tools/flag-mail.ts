@@ -11,11 +11,9 @@ export function flagMail(deps: MailDeps) {
   return defineTool({
     name: 'flag_mail',
     description:
-      'Flag one message (a ref from list_mail or search_mail) for follow-up in Outlook. It only sets the ' +
-      'flag: it cannot unflag, complete or mark read. The user is asked first: the first call returns what ' +
-      'would happen; after the user confirms, call it again with the same ref.',
+      'Flag one message (a ref) for follow-up; nothing else. The user is asked first; after a yes, call again with the same ref.',
     input: z.object({
-      ref: z.string().regex(REF_PATTERN, 'a ref such as m1').describe('The message, e.g. "m2".'),
+      ref: z.string().regex(REF_PATTERN, 'a ref such as m1').describe('e.g. "m2".'),
     }),
     requiredRoles: ['admin', 'member'],
     readOnly: false,
