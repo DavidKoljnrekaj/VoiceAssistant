@@ -26,7 +26,7 @@ VoiceAssistant/
 │   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile
 │   └── web/                      # @va/web   — React PWA: auth, chat panel, call button; Dockerfile (nginx), e2e/ smoke
 ├── supabase/                     # config.toml, migrations/, tests/database/ (pgTAP), seed.sql   (Part 2)
-├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/, research/
+├── docs/                         # this file, one doc per package, TESTING.md, OPS.md, SECURITY.md, RELEASE-RUNBOOK.md, decisions/, backlog/, plan/, research/, requests/ (asks to people outside this repo)
 └── tools/                        # repo-level scripts only (no app code)
 ```
 

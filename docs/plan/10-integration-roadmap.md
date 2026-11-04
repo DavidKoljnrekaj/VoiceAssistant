@@ -74,7 +74,7 @@ one-time id issued by the channel after the user agreed, and the tool refuses wi
   reused id, abort between preview and confirm leaves no write), a C scenario for the card, a
   pgTAP file for `tool_executions`.
 
-## Step 3 — the email pack (Part 13, sketch)
+## Step 3 — the email pack (Part 13, written: `13-email-pack.md`)
 
 `packages/tools-email`, one provider adapter behind it (Microsoft Graph first unless the
 company is on Google Workspace; open question 10).
@@ -101,7 +101,7 @@ company is on Google Workspace; open question 10).
 - **Compliance before the first mailbox:** DPAs (`OPS-5`), retention (`OPS-4`), the records of
   processing updated.
 
-## Step 4 — the company pack (Part 14, sketch)
+## Step 4 — the company pack (Part 14, written: `14-landmark-pack.md`)
 
 `packages/tools-company` over the small API the company server will expose.
 
@@ -141,10 +141,10 @@ and keeps the HS256 secret only as a previous key, so Part 11 §4 takes the magi
 
 | #  | Question                                                                                                  | Needed by |
 | -- | --------------------------------------------------------------------------------------------------------- | --------- |
-| 10 | Is the company on Microsoft 365 or Google Workspace, and can a tenant admin grant consent?                 | Step 3    |
+| 10 | ~~Microsoft 365 or Google Workspace?~~ Answered 2026-11-04: Microsoft 365; Landmark's Entra sign-in shows the tenant and an admin exist (Part 13) | Step 3 |
 | 11 | ~~Telephony provider and number~~ Answered 2026-11-03: Twilio, a Croatian `+385` number (decision 0013); the account is the user's  | Step 1    |
 | 12 | ~~Which roles need a PIN~~ Answered 2026-11-03: every caller during the pilot (decision 0013)                 | Step 1    |
-| 13 | How many pilot callers, and who enrols them (admin page in step 5, or SQL in the runbook until then)?        | Step 1    |
-| 14 | The company API: who builds it, where it runs, how it authenticates our users?                              | Step 4    |
+| 13 | ~~How many pilot callers?~~ Answered 2026-11-03: one; enrolled by SQL in the runbook        | Step 1    |
+| 14 | ~~The company API?~~ Answered 2026-11-04: based on Landmark; an `assistant-api` edge function there over its own handlers, called with a signed assertion (Part 14) | Step 4 |
 | 15 | Is a native wrapper for the in-app call wanted at all, or does the phone number cover the car entirely?     | Step 5    |
 | 16 | ~~HS256 secret or asymmetric keys?~~ Answered 2026-11-03: ECC P-256 is current, HS256 is a previous key only; Part 11 §4 takes the magic-link path (decision 0013) | Step 1 |
