@@ -2,25 +2,20 @@
 
 ## Prompt for the session
 
-Two sessions in two repositories, in this order.
+The assistant repository does not change Landmark (2026-11-04). The Landmark half is a request
+David carries out in that repository: `docs/requests/landmark-assistant-api-request.md`, with its
+own paste-ready prompt. This part's session builds only the assistant side:
 
 ```
-(14L, in /home/user/Dev/Pannonia/Landmark) Read its CLAUDE.md and docs/AI_CHAT.md, then this repo's
-/home/user/Dev/Pannonia/VoiceAssistant/docs/plan/14-landmark-pack.md §1–§4. Implement the assistant-api
-edge function on a branch feat/assistant-api from development. Reuse _shared/tool-handlers.ts and
-_shared/auth.ts; do not change a handler's behaviour. Deploy nothing; never touch the production
-project xhlgviunhitdgzkeucxc. When done, run that repo's own checks and report.
+Read docs/plan/00-brief.md and docs/plan/14-landmark-pack.md, then implement packages/tools-landmark on a
+branch feat/landmark-pack from main. The Landmark API's contract is
+docs/requests/landmark-assistant-api-request.md §3; test against a fake of it. Do not read or change the
+Landmark repository. Run the tool-security-reviewer before committing. When done, run /done, write
+docs/LANDMARK.md, record decision 0017, and report.
 ```
 
-```
-(14V, in /home/user/Dev/Pannonia/VoiceAssistant) Read docs/plan/00-brief.md and
-docs/plan/14-landmark-pack.md, then implement packages/tools-landmark on a branch feat/landmark-pack from
-main. The Landmark API's contract is §2; test against a fake of it. Run the tool-security-reviewer before
-committing. When done, run /done, write docs/LANDMARK.md, record decision 0017, and report.
-```
-
-Depends on nothing hosted for the code; the live check needs the Landmark function on Landmark's dev
-project (`nxvbglegqcgxlxvyfuht`) and our hosted API (`REL-9`).
+Depends on nothing hosted for the code; the live check needs the function on Landmark's dev project
+(`nxvbglegqcgxlxvyfuht`), the pilot Director mapped there, and our hosted API (`REL-9`).
 
 ## Goal
 
@@ -62,7 +57,7 @@ caller ─▶ our engine ─▶ tools-landmark (VA) ──HTTPS──▶ Landmar
   tests and its deploy, like every other function there.
 - **Our side signs a short assertion per call**: an HS256 JWT with `iss: va`, `aud:
   landmark-assistant-api`, `sub`: the assistant user's email, `exp`: 60 s, `jti`, signed with
-  `LANDMARK_ASSISTANT_SECRET` (in our api and voice env, and in Landmark's function secrets). The
+  `LANDMARK_ASSISTANT_SECRET` (in our api and voice env; `ASSISTANT_API_SECRET` in Landmark's function secrets). The
   shared-secret pattern Landmark already uses, with the identity inside a signed, expiring token
   rather than a header anyone holding the secret could set to anything without a trace. Our user's
   JWT never leaves our side.
@@ -76,20 +71,14 @@ caller ─▶ our engine ─▶ tools-landmark (VA) ──HTTPS──▶ Landmar
 
 ## §1 Landmark side: the function
 
-```
-supabase/functions/assistant-api/index.ts      routes, the assertion check, the mapping, dispatch to the handlers
-supabase/functions/assistant-api/manifest.ts   the exposed tools: name, description, input schema, roles, voiceSafe; DOMAIN_RULES_HR
-supabase/functions/assistant-api/voice.ts      the voice clamps the voice plan §5 names (≤ 5 items, no ids, short text)
-supabase/functions/assistant-api/tests/        Deno tests on the contract, the mapping, refusals
-supabase/config.toml                           [functions.assistant-api] verify_jwt = false, with the comment the others carry
-docs/ASSISTANT_API.md                          the contract, the mapping, the secret, the deploy
-```
+Specified in full, for David to build in the Landmark repository, in
+`docs/requests/landmark-assistant-api-request.md`. In short: an edge function that verifies the
+assertion, maps the email to Landmark's `public.users`, gets that user a real session by the
+magic-link flow, and calls Landmark's own `dispatchTool(name, input, ctx, extras, channel)`, which
+already gates by role and channel. It exposes the twelve tools of `TOOL_ALLOWLIST.voice`; the
+document tools and `create_document` stay out.
 
-Exposed in 14: the twelve tools of Landmark's v1 voice list. The document tools and
-`create_document` stay out until their parent-entity probe has been reviewed for this caller
-(backlog in Landmark).
-
-## §2 The contract
+## §2 The contract (the request's §3 is authoritative)
 
 All requests: `POST`, `Authorization: Bearer <assertion>`, JSON. All failures: `{ error: { code,
 message } }` with a real status, the codes below.
@@ -156,8 +145,8 @@ packages/tools-landmark/
 
 ## Acceptance checklist
 
-- [ ] 14L: `assistant-api` with its Deno tests green, on Landmark's dev project only when asked;
-      the contract documented in Landmark's `docs/ASSISTANT_API.md`.
+- [ ] 14L (David, in Landmark): the request carried out; the function on the dev project; the URL
+      and the manifest handed over; the pilot Director mapped.
 - [ ] 14V: the pack against the fake with a scenario per tool through the loop; the contract test
       on the snapshot; the registry's extra filter with its tests (advertised equals dispatchable);
       pack domain rules in the prompt with the prompt tests updated; the security reviewer run.
@@ -165,8 +154,8 @@ packages/tools-landmark/
       the caller mapped by email; the bench figures for the new prompt.
 - [ ] `docs/LANDMARK.md`, decision 0017, `docs/SECURITY.md`, `docs/OPS.md` (env), `/done` green.
 
-## Open in this part (ask once)
+## Answered (2026-11-04)
 
-- May the session work in the Landmark repo, from `development`, and who deploys the function to
-  Landmark's dev project?
-- The pilot caller's Landmark role, so the live check covers the right tools.
+- The assistant's sessions never work in the Landmark repository; David carries out the request.
+- The pilot caller is a Director: all twelve tools, the finance ones included, so the live check
+  covers every tool.

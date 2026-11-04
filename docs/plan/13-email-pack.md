@@ -28,6 +28,16 @@ summarises and reads messages, and replies or flags only after the user confirme
 never deletes, never sends to anyone the user did not correspond with, and treats every email body
 as untrusted text.
 
+## The administrator, once (answered 2026-11-04)
+
+The tenant is administered by an outsourced administrator who is rarely available, so every Entra
+step is bundled into one request: `docs/requests/entra-admin-request.md`. It creates the app,
+grants every permission this part and the next ones need, creates the secret, restricts the app
+to assigned users and makes David the owner of the app registration and the enterprise
+application. As owner he adds the production redirect address once `API_HOST` exists, renews the
+secret and assigns colleagues without another request. The request goes out before 13a starts;
+the code does not wait for it (the fakes stand in), the live check does.
+
 ## What already exists in the tenant
 
 Landmark signs staff in with Microsoft through Supabase's Azure provider, scoped to the company
@@ -40,8 +50,9 @@ only and stays as it is.
 - **A separate Entra app registration** for the assistant's mail access ("Asistent (pošta)"),
   not the Landmark sign-in app: least privilege, its own consent and its own revocation. A
   confidential web client (client secret, or a certificate later) whose redirect URI is the API's
-  `https://API_HOST/integrations/microsoft/callback`. Delegated permissions: `User.Read`,
-  `Mail.Read`, `Mail.Send`, `Calendars.Read`, `offline_access`. Tenant admin consent once, so no
+  `https://API_HOST/integrations/microsoft/callback`. Delegated permissions: `openid`, `profile`, `email`,
+  `offline_access`, `User.Read`, `Mail.ReadWrite` (reading, and the flag), `Mail.Send`,
+  `Calendars.Read`, `People.Read` (for a later part, asked now so the admin is visited once). Tenant admin consent once, so no
   user sees a consent prompt. No application permissions: the assistant never reads a mailbox
   its user did not connect.
 - **The connection is separate from signing in to the assistant.** The user connects Outlook once
@@ -199,9 +210,9 @@ Outputs are small; dates ISO in Europe/Zagreb (`Prefer: outlook.timezone="Centra
 - [ ] The Entra steps in `docs/RELEASE-RUNBOOK.md`, written for an operator who has not used Entra.
 - [ ] `docs/MAIL.md`, decision 0016, `docs/SECURITY.md`, `/done` green.
 
-## Open in this part (ask once)
+## Answered (2026-11-04)
 
-- Who registers the Entra app and grants the admin consent: the same person who set up Landmark's
-  Microsoft sign-in?
-- Calendar reads: wanted from day one, or mail only?
-- Shared mailboxes (`info@`, `nabava@`): out of scope unless asked; they need `.Shared` scopes.
+- The administrator is outsourced: one bundled request, the owner role for David (above).
+- Calendar reads from the start: `list_calendar` is in 13b.
+- Shared mailboxes (`info@`, `nabava@`): out of scope; they would need `.Shared` scopes and a
+  second visit to the administrator, so they stay out unless asked before the request goes.

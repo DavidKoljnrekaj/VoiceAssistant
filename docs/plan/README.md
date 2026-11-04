@@ -43,7 +43,7 @@ each part is sized to finish well inside one context window.
 | 11 | [11-phone-channel.md](./11-phone-channel.md) | hosting (`OPS-3`) | 3 (11a, 11b, 11c) | 12, 14 |
 | 12 | [12-write-protocol.md](./12-write-protocol.md) | — | 2 (12a, 12b) | 11, 14 |
 | 13 | [13-email-pack.md](./13-email-pack.md) | 12, hosting for the OAuth redirect | 3 (13a, 13b, 13c) | 14 |
-| 14 | [14-landmark-pack.md](./14-landmark-pack.md) | — (14L in the Landmark repo first) | 2 (14L, 14V) | 13 |
+| 14 | [14-landmark-pack.md](./14-landmark-pack.md) | the Landmark request (`docs/requests/`), carried out by David | 1 (14V) | 13 |
 | 15–16 | written when their turn comes (Part 10 sketches them) | see Part 10 | | |
 
 Roughly 10–12 sessions for the skeleton. Parallel work goes in git worktrees, one session each.
