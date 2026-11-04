@@ -121,6 +121,8 @@ export function scenario(
       await fn()
       if (microsoftFake.unexpectedCalls > 0)
         throw new Error(`${microsoftFake.unexpectedCalls} request(s) to an unknown Microsoft route`)
+      if (graphFake.unexpectedCalls > 0)
+        throw new Error(`${graphFake.unexpectedCalls} request(s) to an unregistered Graph route`)
     },
     opts,
   )

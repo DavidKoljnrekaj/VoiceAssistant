@@ -4,13 +4,13 @@
 // to Microsoft and the log lines.
 import { expect, it } from 'vitest'
 
+import { answer, callTools, toolUse } from '@va/core/test'
 import { open, parseIntegrationsKey, tokenAad } from '@va/integrations'
+import { installMailbox } from '@va/tools-mail/test'
 
 import { parseApiEnv } from '../src/env.js'
 import { createMicrosoft } from '../src/integrations/microsoft.js'
 import { STATE_TTL_MS } from '../src/integrations/state.js'
-import { answer, callTools, toolUse } from '@va/core/test'
-import { installMailbox } from '@va/tools-mail/test'
 
 import {
   anthropic,
