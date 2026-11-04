@@ -266,7 +266,11 @@ export async function runChat(
       channel,
       settings,
       system: [
-        { type: 'text', text: buildStaticSystemPrompt(channel), cache_control: { type: 'ephemeral' } },
+        {
+          type: 'text',
+          text: buildStaticSystemPrompt(channel, registry.domainRules()),
+          cache_control: { type: 'ephemeral' },
+        },
         { type: 'text', text: buildUserContext(ctx) },
       ],
       tools: registry.anthropicTools(ctx, channel),

@@ -42,9 +42,9 @@ export interface ToolDefinition<I> {
 export interface ToolPack {
   name: string
   tools: ToolDefinition<unknown>[]
-  /** Domain rules this pack contributes to the shared prompt block. Reserved: the skeleton's
-   * prompt builders use `DOMAIN_RULES_HR` alone; concatenation in pack order comes with the
-   * first integration pack. */
+  /** Domain rules this pack contributes to the shared prompt block: Croatian, from developer to
+   * model, appended after `DOMAIN_RULES_HR` in pack order (`ToolRegistry.domainRules`). Shared by
+   * every channel, so a spoken-only rule says so in its own words. */
   domainRules?: string
 }
 

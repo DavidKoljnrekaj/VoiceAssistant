@@ -11,6 +11,13 @@ describe('labels', () => {
     expect(toolLabel('brand_new_tool')).toBe('brand_new_tool')
   })
 
+  it('L06: every mail-pack tool has a Croatian chip label', () => {
+    for (const tool of ['list_mail', 'read_mail', 'search_mail', 'list_calendar']) {
+      expect(TOOL_LABELS_HR[tool]).toBeTruthy()
+      expect(toolLabel(tool)).not.toBe(tool)
+    }
+  })
+
   it('L02: a client-side code gets its label; a server code falls through to the message it came with', () => {
     expect(errorLabel('rename_failed', '')).toBe(ERROR_LABELS_HR.rename_failed)
     expect(errorLabel('model_timeout', 'Model nije odgovorio na vrijeme.')).toBe(

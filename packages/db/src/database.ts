@@ -261,6 +261,59 @@ export type Database = {
           },
         ]
       }
+      user_integrations: {
+        Row: {
+          access_expires_at: string | null
+          access_token_enc: string | null
+          account: string
+          connected_at: string
+          id: string
+          last_error_code: string | null
+          provider: string
+          refresh_token_enc: string | null
+          scopes: string[]
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_expires_at?: string | null
+          access_token_enc?: string | null
+          account: string
+          connected_at?: string
+          id?: string
+          last_error_code?: string | null
+          provider: string
+          refresh_token_enc?: string | null
+          scopes: string[]
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_expires_at?: string | null
+          access_token_enc?: string | null
+          account?: string
+          connected_at?: string
+          id?: string
+          last_error_code?: string | null
+          provider?: string
+          refresh_token_enc?: string | null
+          scopes?: string[]
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'user_integrations_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       users: {
         Row: {
           auth_user_id: string

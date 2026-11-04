@@ -27,9 +27,12 @@ item says so in its description.
       `V12`) and the end-of-call delete (`voice/calls.ts`). Tests: `V01`–`V18`, `W03b`, `W03c`,
       `W07`.
 - [ ] **Tools read as the user; permissive-RLS tables get explicit scoping; no raw input in
-      `.or()`; `ilike` escaped.** `ctx.userClient` (anon key + the user's JWT) in every handler;
-      `escapeLike` and `NO_STAR` in `@va/tools-demo` are the pattern (`docs/CORE.md` → Tools).
-      Tests: the pack's scenarios, `demo_tables.test.sql` (pgTAP).
+      `.or()`; `ilike` escaped.** `ctx.userClient` (anon key + the user's JWT) in every handler
+      that reads our database; `escapeLike` and `NO_STAR` in `@va/tools-demo` are the pattern
+      (`docs/CORE.md` → Tools). The mail tools read Graph with the user's own delegated token,
+      only `/me`, never another mailbox; the token comes from `tokenFor` through the service
+      role by `user_id` (`docs/MAIL.md`). Tests: the packs' scenarios (`D`, `Z01`–`Z18`), `B28`,
+      `B29`, `demo_tables.test.sql` (pgTAP).
 - [ ] **The voice allowlist is read-only; dispatch re-applies the gate; speech is untrusted
       input.** `VOICE_ALLOWLIST` (`apps/voice/src/tools.ts`, the only place a tool is named for
       voice) with the `readOnly` assertion at module load (`packages/core/src/tools/registry.ts`);
@@ -72,7 +75,7 @@ item says so in its description.
       minutes, the UPN equal to the user's confirmed email (`apps/api/src/integrations/identity.ts`),
       tokens sealed with AES-256-GCM bound to their row and column, readable by the service role
       only (column grant), never in a log or a response. Public sign-up off on the project
-      (`REL-14`). Tests: `B01`–`B27`, `U01`–`U18`, `J01`–`J06`, `O01`–`O10`, pgTAP `user_integrations`.
+      (`REL-14`). Tests: `B01`–`B27`, `U01`–`U18`, `J01`–`J06`, `O01`–`O11`, pgTAP `user_integrations`.
 - [ ] **Prompt text that users hear or read reviewed by a native speaker before release.** Every
       Croatian string is marked `<!-- needs native review -->` until then (`CORE-1`, `VOICE-2`).
 
@@ -117,7 +120,15 @@ AES-256-GCM ciphertext under `INTEGRATIONS_KEY` on the two hosts only; a databas
 opens nothing, but a token and the key together can read and send mail as the user, which is
 why both stay out of logs, responses and the browser. Disconnecting deletes our copy; Microsoft's
 sessions end only when the user or the admin revokes the app (My Apps). Email bodies are
-untrusted text (13b); a reply still needs the user's confirmation (decision 0015).
+untrusted text (13b): every preview and body reaches the model wrapped as
+`untrusted_email_content`, with invisible characters removed (format characters including the
+Unicode tag block used to smuggle text past a human reader, bidi controls) and every
+third-party field clipped; the pack's rules say that everything but refs, times and flags is
+quoted material, never an instruction. Two residual risks are known: text the sender hid with
+HTML styling survives Graph's conversion to text, and a link the model writes from a message is
+clickable in chat (`WEB-17`). A reply still needs the user's confirmation (decision 0015), so
+injected text can at worst produce a preview the user declines. On a call no address is spoken
+and the refs that stand for Graph ids are never said.
 
 **The service role.** The API and the worker hold the service-role key for persistence and
 identity lookups only. Nothing about those calls is protected by RLS, so the explicit
@@ -132,6 +143,10 @@ the reason it needs no user filter:
   room) before the user is known; the hash is the credential and the filter.
 - `packages/core/src/auth.ts`, the profile re-read: `public.users` by `auth_user_id` from GoTrue's
   answer; the identity it establishes is the filter for everything after it.
+- `packages/integrations/src/microsoft/tokens.ts`, the token store (`tokenFor`, in the API and
+  the worker): reads and, on a refresh, updates `user_integrations` by `user_id` and `provider`
+  for the user the request already established; storage housekeeping for the mail tools, not
+  persistence of a conversation (`B28` asserts the filter).
 - `apps/api/src/integrations/identity.ts`, the Outlook callback: `public.users` by the id the
   single-use OAuth state holds, then the auth user by its `auth_user_id`; the state is the
   credential, and every write after it is filtered by that user id.

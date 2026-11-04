@@ -15,14 +15,13 @@ import {
 } from '@va/core'
 import { anthropicClient, db, scenario as coreScenario, USERS, uuid } from '@va/core/test'
 import { createServiceClient } from '@va/db'
-import { demoPack } from '@va/tools-demo'
 
 import { AssistantAgent, type EngineChunk } from '../src/assistant-llm.js'
 import { CallIdentity, type CallIdentityOptions, sha256Hex } from '../src/call.js'
 import type { VoiceDeps } from '../src/config.js'
 import { GREETING_HR } from '../src/greeting.js'
 import { CallSession, type CallSessionOptions } from '../src/session.js'
-import { VOICE_ALLOWLIST } from '../src/tools.js'
+import { createRegistry, VOICE_ALLOWLIST } from '../src/tools.js'
 
 export { anthropic, db, logs, TOKENS, USERS, uuid } from '@va/core/test'
 
@@ -66,7 +65,9 @@ export interface DepsOptions {
 export function deps(opts: DepsOptions = {}): VoiceDeps {
   return {
     anthropic: anthropicClient(),
-    registry: new ToolRegistry(opts.packs ?? [demoPack], opts.allowlist ?? VOICE_ALLOWLIST),
+    // The worker's own composition unless a scenario brings its packs (the mail pack answers
+    // outlook_unavailable here: no token store).
+    registry: opts.packs ? new ToolRegistry(opts.packs, opts.allowlist ?? VOICE_ALLOWLIST) : createRegistry(),
     channel: opts.channel ?? 'voice',
     settings: { ...channelSettings(opts.channel ?? 'voice', {}), ...opts.settings },
     clock: () => new Date(NOW),

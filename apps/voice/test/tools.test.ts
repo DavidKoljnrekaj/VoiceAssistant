@@ -1,30 +1,30 @@
 // W20: the worker's own composition of the engine's registry: the voice allowlist lives here,
-// names only read-only demo tools, and the read-only-or-confirmed assertion still runs at load.
+// names only read-only tools (the demo reads and, from Part 13b, the four mail reads), and the
+// read-only-or-confirmed assertion still runs at load. W41: the mail pack's token provider.
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { defineTool, type ToolPack, ToolRegistry } from '@va/core'
 import { demoPack } from '@va/tools-demo'
 
+import { authAs, reset } from '@va/core/test'
+import { IntegrationError, type TokenStore } from '@va/integrations'
+import { MailAccessError } from '@va/tools-mail'
+
+import { mailTokenProvider } from '../src/mail.js'
 import { createRegistry, VOICE_ALLOWLIST } from '../src/tools.js'
 
 describe('voice tools', () => {
   it('W20 CORE-10: the worker names its voice tools; every one is read-only; an unknown or a write tool fails at load', () => {
     // Part 11: the phone channel hears exactly what the in-app call hears, from one list.
-    expect(VOICE_ALLOWLIST).toEqual({
-      voice: ['search_items', 'get_item'],
-      phone: ['search_items', 'get_item'],
-    })
+    const spoken = ['search_items', 'get_item', 'list_mail', 'read_mail', 'search_mail', 'list_calendar']
+    expect(VOICE_ALLOWLIST).toEqual({ voice: spoken, phone: spoken })
     expect(VOICE_ALLOWLIST.phone).toBe(VOICE_ALLOWLIST.voice)
     const registry = createRegistry()
-    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual([
-      'get_item',
-      'search_items',
-    ])
-    expect(registry.select({ role: 'member' }, 'phone').map((t) => t.name)).toEqual([
-      'get_item',
-      'search_items',
-    ])
+    const advertised = ['get_item', 'list_calendar', 'list_mail', 'read_mail', 'search_items', 'search_mail']
+    expect(registry.select({ role: 'member' }, 'voice').map((t) => t.name)).toEqual(advertised)
+    expect(registry.select({ role: 'member' }, 'phone').map((t) => t.name)).toEqual(advertised)
+    expect(registry.domainRules()).toHaveLength(1)
     expect(registry.select({ role: 'member' }, 'voice').every((t) => t.readOnly)).toBe(true)
     // The worker serves voice only: nothing is advertised for chat from this process.
     expect(registry.select({ role: 'admin' }, 'chat')).toEqual([])
@@ -51,5 +51,32 @@ describe('voice tools', () => {
     expect(() => new ToolRegistry([plainPack], { phone: ['plain_write'] })).toThrow(
       /writes without confirmation: plain_write/,
     )
+  })
+
+  it("W41 the mail token provider: the store's token for the caller; not connected or expired is not_connected, the rest unavailable; no store is unavailable", async () => {
+    reset()
+    const ctx = await authAs('member')
+    const signal = new AbortController().signal
+    const seen: Array<{ userId: string; forceRefresh: boolean }> = []
+    let fail: IntegrationError | null = null
+    const store = {
+      async tokenFor(_service, userId, options) {
+        seen.push({ userId, forceRefresh: options?.forceRefresh === true })
+        if (fail) throw fail
+        return 'at-1'
+      },
+    } as Pick<TokenStore, 'tokenFor'> as TokenStore
+    const provider = mailTokenProvider(store)
+    expect(await provider(ctx, { signal, forceRefresh: true })).toBe('at-1')
+    expect(seen).toEqual([{ userId: ctx.userId, forceRefresh: true }])
+    const reason = async (code: ConstructorParameters<typeof IntegrationError>[0]) => {
+      fail = new IntegrationError(code)
+      return provider(ctx, { signal }).catch((e: unknown) => (e as MailAccessError).reason)
+    }
+    expect(await reason('not_connected')).toBe('not_connected')
+    expect(await reason('reauth_required')).toBe('not_connected')
+    for (const code of ['refresh_failed', 'misconfigured', 'token_unreadable', 'store_failed'] as const)
+      expect(await reason(code)).toBe('unavailable')
+    await expect(mailTokenProvider(null)(ctx, { signal })).rejects.toEqual(new MailAccessError('unavailable'))
   })
 })

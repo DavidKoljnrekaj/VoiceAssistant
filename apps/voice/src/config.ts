@@ -42,7 +42,11 @@ export function voiceLoopConfig(
     channel: deps.channel,
     settings: deps.settings,
     system: [
-      { type: 'text', text: buildStaticSystemPrompt(deps.channel), cache_control: { type: 'ephemeral' } },
+      {
+        type: 'text',
+        text: buildStaticSystemPrompt(deps.channel, deps.registry.domainRules()),
+        cache_control: { type: 'ephemeral' },
+      },
       { type: 'text', text: buildUserContext(ctx) },
       { type: 'text', text: dateLine(deps.clock()) },
     ],

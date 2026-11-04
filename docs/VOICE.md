@@ -31,7 +31,8 @@ apps/voice/
 │   ├── call.ts             CallIdentity: token → voice_calls → authenticateToken; 60 s cache; touch(); end()
 │   ├── config.ts           VoiceDeps, voiceLoopConfig(deps, ctx): the LoopConfig of one caller; dateLine
 │   ├── messages.ts         userTurnOf (the new user turn from LiveKit's context), callHistory (the call's own rows → messages)
-│   ├── tools.ts            createRegistry(): the demo pack with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
+│   ├── tools.ts            createRegistry(tokens): the demo and mail packs with VOICE_ALLOWLIST (the reviewed list of what a caller may reach)
+│   ├── mail.ts             createVoiceTokenStore(env) (refresh-only), mailTokenProvider (docs/MAIL.md)
 │   ├── turn.ts             runVoiceTurn: the loop + SpokenTextSink + DeferredStore; persistTurn after the answer
 │   ├── session.ts          CallSession: turn cap, identity read, last_seen bump, turns one after another, the timing line, settle()
 │   ├── deadline.ts         withDeadline: the identity read's 5 s deadline (the API's helper, same shape)
@@ -55,7 +56,8 @@ apps/voice/
 Dependencies: `@livekit/agents` and the Soniox, ElevenLabs and Silero plugins, all `1.9.2`
 (pinned exactly, move together, Dependabot groups them); `@livekit/rtc-node` 1.1.0;
 `onnxruntime-node` 1.24.3 (Silero, and the bench's offline speech span); `@anthropic-ai/sdk`;
-`zod`; `@va/core`, `@va/db`, `@va/tools-demo` (the registered pack). The root `package.json`
+`zod`; `@va/core`, `@va/db`, `@va/tools-demo` and `@va/tools-mail` (the registered packs),
+`@va/integrations` (the Microsoft env and the token store). The root `package.json`
 overrides `sharp` to 0.35.5 and `adm-zip` to 0.6.1 for the production audit (`OPS-2`).
 
 ## The engine as the LLM: the two designs, and which was built
@@ -207,6 +209,22 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | 2026-10-30 | `d764023` | review fixes, baseline for `VOICE-8` (PR #22)            | `claude-sonnet-5-5`, `low` | 1.83 s / 2.86 s      | 4.33 s / 8.76 s        | 2.06   | 36  |
 | 2026-10-30 | `1bde7af` | `VOICE-8` lever 1: the sink's 200 ms hold timer (PR #23) | `claude-sonnet-5-5`, `low` | 1.79 s / 2.87 s      | 4.18 s / 13.79 s       | 2.03   | 36  |
 | 2026-10-30 | `d5240fa` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
+| 2026-11-04 | `021b455` | before Part 13b (`main`, 13a merged)                     | `claude-sonnet-5-5`, `low` | 1.74 s / 3.66 s      | 4.09 s / 9.23 s        | 2.03   | 36  |
+| 2026-11-04 | `c3d2f81` | 13b: the mail pack on voice (four tools, the rules)      | `claude-sonnet-5-5`, `low` | 1.94 s / 5.24 s      | 4.70 s / 10.80 s       | 2.03   | 36  |
+| 2026-11-04 | `91b06fe` | 13b trimmed: shorter mail descriptions and rules         | `claude-sonnet-5-5`, `low` | 1.82 s / 2.98 s      | 4.34 s / 9.07 s        | 2.03   | 36  |
+
+**Part 13b, the mail pack on voice.** Both runs on the local stack with the seed member, three
+repeats each, one shell (`~/.config/va/voice.local.env` sourced after `voice.env`). The bench
+asks catalogue questions only and the bench user has no Outlook connection, so no mail tool was
+called: the whole difference is the larger fixed prefix of every request. The cached read of a
+first call grew from 2,434 to 4,653 tokens (the four tool definitions, about 3,600 characters,
+and `MAIL_RULES_HR`, about 1,400), and first text p50 moved +0.20 s, whole answer p50 +0.61 s,
+with the same rounds. Not kept as it was: the next commit trims the four descriptions, the field
+hints and the rules to about 2,750 characters together. On it (`91b06fe`) the first call's
+cached read is 3,819 tokens (+1,385 over `main` instead of +2,219), first text p50 1.82 s
+(+0.08 s, p95 better at 2.98 s) and whole answer p50 4.34 s (+0.25 s, p95 9.07 s), same
+rounds. The whole-answer p50 is at the top of the range earlier baselines spread over
+(4.02–4.33 s on 2026-10-30); the residue is what four more tools on every request cost. Accepted by the user on 2026-11-04: kept.
 
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the

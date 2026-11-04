@@ -11,6 +11,7 @@ import {
   FAKE_TENANT_ID,
   FakeMicrosoft,
 } from '@va/integrations/test'
+import { FakeGraph } from '@va/tools-mail/test'
 
 import { createApp } from '../src/app.js'
 import type { AppDeps } from '../src/deps.js'
@@ -56,6 +57,8 @@ export const livekit = new FakeLiveKit()
 /** Microsoft's token endpoint and Graph `/me`. The app gets its `fetch`; nothing reaches Microsoft. */
 export const microsoftFake = new FakeMicrosoft()
 export const WEB_APP_URL = 'https://web.test'
+/** Microsoft Graph, for the mail pack's tools. */
+export const graphFake = new FakeGraph()
 
 // Belt and braces: whatever reaches the global fetch for a Microsoft host fails the test loudly
 // instead of going to the network.
@@ -85,12 +88,17 @@ export const env = parseApiEnv({
 })
 
 export function buildApp(overrides: Partial<AppDeps> = {}) {
+  // The registry's mail pack uses the same token store as the connect routes, as in index.ts.
+  const microsoft =
+    overrides.microsoft !== undefined
+      ? overrides.microsoft
+      : createMicrosoft(env, () => new Date(), microsoftFake.fetch)
   return createApp({
     anthropic: anthropicClient(),
-    registry: createRegistry(),
+    registry: createRegistry(microsoft?.tokens ?? null, graphFake.fetch),
     env,
     livekit,
-    microsoft: createMicrosoft(env, () => new Date(), microsoftFake.fetch),
+    microsoft,
     clock: () => new Date(),
     ...overrides,
   })
@@ -109,9 +117,12 @@ export function scenario(
     async () => {
       livekit.reset()
       microsoftFake.reset()
+      graphFake.reset()
       await fn()
       if (microsoftFake.unexpectedCalls > 0)
         throw new Error(`${microsoftFake.unexpectedCalls} request(s) to an unknown Microsoft route`)
+      if (graphFake.unexpectedCalls > 0)
+        throw new Error(`${graphFake.unexpectedCalls} request(s) to an unregistered Graph route`)
     },
     opts,
   )

@@ -1,10 +1,21 @@
 # Backlog — api
 
-Ids: API-15 (next free)
+Ids: API-16 (next free)
 
 The HTTP API (`apps/api`): auth, SSE, sessions, rate limits, voice session endpoints.
 
 ## Open
+
+### API-15 · Low · Mail refs live in one process's memory
+
+- **Check:** By design (Part 13b, like `API-13`)
+- **Where:** `packages/tools-mail/src/refs.ts` (`MessageRefs`, one per pack, one pack per process)
+- **What happens:** the refs (`m1` …) a list gave live 30 minutes in that process only. A
+  restart forgets them (the model lists again on `ref_expired`); the API and the worker hold
+  separate maps, so a ref from a chat list is not valid on a call; a second instance of either
+  would answer `ref_expired` for refs the other gave
+- **Fix direction:** before a second instance, a table (user, ref, Graph id, touched_at) with
+  the same TTL, read and written through the service role by `user_id`
 
 ### API-14 · Medium · OQ: one email per person, but the Outlook check uses the UPN and Landmark the mail address
 

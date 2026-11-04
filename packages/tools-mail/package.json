@@ -5,7 +5,8 @@
   "description": "The email pack: Outlook through Microsoft Graph (the Graph client in 13a; tools in 13b and 13c)",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test": "./test/fake-graph.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",
@@ -13,6 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@va/core": "workspace:*"
+    "@va/core": "workspace:*",
+    "zod": "4.6.7"
   }
 }

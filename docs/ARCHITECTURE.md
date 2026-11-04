@@ -22,7 +22,7 @@ VoiceAssistant/
 │   ├── db/                       # @va/db   — generated Supabase types, client factories, env
 │   ├── integrations/             # @va/integrations — sealed tokens, the Microsoft OAuth, the token store (docs/MAIL.md)
 │   ├── tools-demo/               # @va/tools-demo — one example tool pack (the contract for real packs)
-│   └── tools-mail/               # @va/tools-mail — the email pack: the Graph client (13a); tools in 13b, 13c
+│   └── tools-mail/               # @va/tools-mail — the email pack: the Graph client and four reads (13a, 13b); writes in 13c
 ├── apps/
 │   ├── api/                      # @va/api   — Hono: /chat (SSE), /voice/sessions, /integrations, /health; Dockerfile
 │   ├── voice/                    # @va/voice — LiveKit Agents worker; imports the engine in-process; Dockerfile

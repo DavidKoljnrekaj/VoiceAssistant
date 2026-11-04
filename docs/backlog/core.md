@@ -1,10 +1,23 @@
 # Backlog — core
 
-Ids: CORE-13 (next free)
+Ids: CORE-14 (next free)
 
 The engine (`packages/core`): loop, tools, prompts, history, sinks, fakes.
 
 ## Open
+
+### CORE-13 · Low · OQ: text a sender hides with HTML styling reaches the model
+
+- **Check:** Known risk (the mail tool review, Part 13b; not testable without live Graph)
+- **Where:** `packages/tools-mail/src/tools/read-mail.ts` asks Graph for the body as text
+  (`Prefer: outlook.body-content-type="text"`); Graph's HTML-to-text conversion keeps text the
+  sender hid (white on white, `display:none`, `font-size:0`, `mso-hide:all`)
+- **What happens:** the model reads instructions the user never saw in Outlook. They arrive
+  inside `untrusted_email_content`, the mail rules say it is quoted material, and every write
+  needs the user's confirmation (decision 0015), so the worst case is a wrong summary or a
+  preview the user declines
+- **Fix direction:** fetch the HTML body and strip hidden elements before converting, with a
+  test over real Outlook HTML; or show the caller "this message contains hidden text"
 
 ### CORE-1 · Medium · Croatian text in the engine has not had a native review
 

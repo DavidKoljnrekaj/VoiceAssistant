@@ -4,14 +4,20 @@
 // to Microsoft and the log lines.
 import { expect, it } from 'vitest'
 
+import { answer, callTools, toolUse } from '@va/core/test'
 import { open, parseIntegrationsKey, tokenAad } from '@va/integrations'
+import { installMailbox } from '@va/tools-mail/test'
 
 import { parseApiEnv } from '../src/env.js'
 import { createMicrosoft } from '../src/integrations/microsoft.js'
 import { STATE_TTL_MS } from '../src/integrations/state.js'
+
 import {
+  anthropic,
   buildApp,
   call,
+  chat,
+  graphFake,
   db,
   env,
   flatError,
@@ -396,6 +402,59 @@ scenario('B27 refused connects log the reason and ids, never the code, the state
   expect(all).toContain('account_mismatch')
   expect(all).toContain('state_invalid')
 })
+
+scenario(
+  'B28 a chat turn reads the connected mailbox with the token the connect stored, never the refresh token',
+  async () => {
+    const { url, state } = await start()
+    await callback({ code: ms.authorize(url, { upn: M.email }), state })
+    const stored = open(
+      keys,
+      rows()[0]!.access_token_enc as string,
+      tokenAad(M.id, 'microsoft', 'access_token_enc'),
+    )
+    installMailbox(graphFake, {
+      messages: [
+        {
+          id: 'AAMkAD-1',
+          subject: 'Sastanak u petak',
+          from: { name: 'Marko Horvat', address: 'marko@partner.hr' },
+          received: '2026-11-04T08:15:00Z',
+          body: 'Stižem u deset.',
+        },
+      ],
+    })
+    anthropic.script(callTools(toolUse('list_mail', {})), answer('Imate jednu novu poruku.'))
+    const sse = await chat({ session_id: null, message: 'Imam li novih mailova?' })
+    expect(sse.types).toContain('tool_result')
+    const reads = graphFake.calls.filter((c) => c.path === '/me/mailFolders/inbox/messages')
+    expect(reads).toHaveLength(1)
+    expect(reads[0]!.headers.get('Authorization')).toBe(`Bearer ${stored}`)
+    const result = sse.events.find((e) => e.data.type === 'tool_result')!.data as unknown as {
+      output: Record<string, unknown>
+    }
+    expect(result.output).toMatchObject({ unread_count: 1, messages: [{ ref: 'm1', from: 'Marko Horvat' }] })
+    const system = JSON.stringify(anthropic.calls[0]!.body.system)
+    expect(system).toContain('Pošta i kalendar (Outlook)')
+    // The token store read the row with the service role, by this user only.
+    const tokenRead = db.requestsTo('user_integrations', 'GET').at(-1)!
+    expect(tokenRead.params.get('user_id')).toBe(`eq.${M.id}`)
+  },
+)
+
+scenario(
+  'B29 a user who never connected: the mail tools answer outlook_not_connected and Graph is never called',
+  async () => {
+    anthropic.script(callTools(toolUse('list_mail', {})), answer('Povežite Outlook u postavkama.'))
+    const sse = await chat({ session_id: null, message: 'Imam li novih mailova?' })
+    const result = sse.events.find((e) => e.data.type === 'tool_result')!.data as unknown as {
+      output: unknown
+      is_error?: boolean
+    }
+    expect(result.output).toEqual({ error: 'outlook_not_connected' })
+    expect(graphFake.calls).toHaveLength(0)
+  },
+)
 
 it('B16 the Microsoft env is all or none, the tenant a GUID, the redirect the callback path; errors name no value', () => {
   const base = { ...process.env, ANTHROPIC_API_KEY: 'k' }

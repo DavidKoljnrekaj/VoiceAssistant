@@ -72,6 +72,9 @@ importers:
       '@va/tools-demo':
         specifier: workspace:*
         version: link:../../packages/tools-demo
+      '@va/tools-mail':
+        specifier: workspace:*
+        version: link:../../packages/tools-mail
       hono:
         specifier: 4.13.13
         version: 4.13.13
@@ -121,6 +124,9 @@ importers:
       '@va/tools-demo':
         specifier: workspace:*
         version: link:../../packages/tools-demo
+      '@va/tools-mail':
+        specifier: workspace:*
+        version: link:../../packages/tools-mail
       onnxruntime-node:
         specifier: 1.24.3
         version: 1.24.3
@@ -259,6 +265,9 @@ importers:
       '@va/core':
         specifier: workspace:*
         version: link:../core
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
 packages:
 

@@ -90,7 +90,15 @@ describe('a spoken turn', () => {
         logs.some((l) => l.line.includes('tool refused at dispatch') && l.line.includes('create_note')),
       ).toBe(true)
       // The request advertised only the allowlisted tools.
-      expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual(['get_item', 'search_items'])
+      // Part 13b: the four mail reads joined the allowlist.
+      expect(anthropic.calls[0]!.body.tools!.map((t) => t.name)).toEqual([
+        'get_item',
+        'list_calendar',
+        'list_mail',
+        'read_mail',
+        'search_items',
+        'search_mail',
+      ])
     },
   )
 

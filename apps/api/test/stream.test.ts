@@ -249,7 +249,15 @@ describe('POST /chat stream', () => {
       expect(system[0]!.cache_control).toEqual({ type: 'ephemeral' })
       expect(system[1]!.text).toContain(M.email)
       expect(system[2]!.text).toMatch(/^Danas je .*2026\.$/)
-      expect(call0.body.tools!.map((t) => t.name)).toEqual(['create_note', 'get_item', 'search_items'])
+      expect(call0.body.tools!.map((t) => t.name)).toEqual([
+        'create_note',
+        'get_item',
+        'list_calendar',
+        'list_mail',
+        'read_mail',
+        'search_items',
+        'search_mail',
+      ])
       const tuned = buildApp({ env: { ...env, AI_CHAT_EFFORT: 'high' } })
       await chat({ session_id: null, message: 'x' }, { app: tuned })
       expect(anthropic.calls[1]!.body).toMatchObject({ output_config: { effort: 'high' } })

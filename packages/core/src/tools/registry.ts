@@ -22,8 +22,10 @@ export class ToolRegistry {
   private readonly byName = new Map<string, ToolDefinition<unknown>>()
   private readonly allowlist: ChannelAllowlist
   private readonly advertised = new Map<string, Anthropic.Tool[]>()
+  private readonly rules: readonly string[]
 
   constructor(packs: readonly ToolPack[], allowlist: ChannelAllowlist) {
+    this.rules = packs.map((p) => p.domainRules).filter((r): r is string => r !== undefined && r !== '')
     for (const pack of packs) {
       for (const tool of pack.tools) {
         if (this.byName.has(tool.name)) throw new Error(`duplicate tool name: ${tool.name}`)
@@ -32,6 +34,12 @@ export class ToolRegistry {
     }
     this.allowlist = allowlist
     assertAllowlist(this.byName, allowlist)
+  }
+
+  /** The packs' domain rules, in pack order, for the static prompt (`buildStaticSystemPrompt`).
+   * Fixed for the registry's life, so the prompt stays byte-identical per channel. */
+  domainRules(): readonly string[] {
+    return this.rules
   }
 
   /** Every registered tool, sorted by name. */

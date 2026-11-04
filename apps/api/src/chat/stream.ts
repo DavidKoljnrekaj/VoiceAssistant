@@ -103,7 +103,11 @@ export function streamChatResponse(input: StreamInput): Response {
           channel: 'chat',
           settings,
           system: [
-            { type: 'text', text: buildStaticSystemPrompt('chat'), cache_control: { type: 'ephemeral' } },
+            {
+              type: 'text',
+              text: buildStaticSystemPrompt('chat', deps.registry.domainRules()),
+              cache_control: { type: 'ephemeral' },
+            },
             { type: 'text', text: buildUserContext(ctx) },
             { type: 'text', text: dateLine(deps.clock()) },
           ],

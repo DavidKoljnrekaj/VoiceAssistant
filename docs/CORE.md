@@ -286,7 +286,8 @@ names the rejected field of a bad request; `E37`).
 
 ## Prompts
 
-`buildStaticSystemPrompt(channel)` = intro + `DOMAIN_RULES_HR` + presentation, per channel.
+`buildStaticSystemPrompt(channel, packRules)` = intro + `DOMAIN_RULES_HR` + each registered
+pack's `domainRules` in pack order (`registry.domainRules()`) + presentation, per channel.
 It is byte-identical per channel, pure (no clock, locale or env) and carries the cache
 breakpoint. `buildUserContext(ctx)` is the per-user block (`## Korisnik` with email and role,
 plus a scope sentence for members), sent as a second, uncached system block. The caller appends
@@ -294,9 +295,11 @@ plus a scope sentence for members), sent as a second, uncached system block. The
 uncached block.
 
 `DOMAIN_RULES_HR` is one short placeholder rule in the skeleton (rely on tool output; retry a
-search with a shorter stem, then ask). Integration packs will contribute rules through the
-`domainRules` field on `ToolPack`, concatenated in pack order; the field exists, the
-concatenation arrives with the first real pack. The chat blocks are Landmark's minus its
+search with a shorter stem, then ask). Packs contribute their own rules through the
+`domainRules` field on `ToolPack`, appended in pack order (`P05`, `T09`); the mail pack's
+(`MAIL_RULES_HR`, Part 13b) is the first. The pack list is fixed per process, so the static
+prompt stays byte-identical per channel; a pack's rules are shared by every channel, so a
+spoken-only rule says "Na pozivu …". The chat blocks are Landmark's minus its
 document, attachment and route sections; the voice blocks are Landmark's verbatim with the
 product and role names replaced. Every Croatian string is marked for native review.
 
@@ -355,18 +358,23 @@ channel to every registered tool its role allows, a list names what it gets, and
 absent from the record gets nothing (`T08`). Core ships no allowlist: the app that composes the
 packs supplies it, so core never names a pack's tools (`tools-* → core`, never back). The API
 (`apps/api/src/tools.ts`, `API_ALLOWLIST = { chat: 'all' }`) serves chat; the worker
-(`apps/voice/src/tools.ts`, `VOICE_ALLOWLIST = { voice: ['search_items', 'get_item'] }`) names
+(`apps/voice/src/tools.ts`, `VOICE_ALLOWLIST`: the two demo reads and the four mail reads,
+the same list for `voice` and `phone`) names
 what a caller may reach by voice, in a reviewed diff that says why the output is safe to read
 aloud (no ids spoken, ≤ 5 items, plain numbers). Every voice tool is `readOnly: true`, asserted
 when the registry is built (`T02`, `W20`).
 
 ### Catalogue
 
-| Tool           | Pack | Roles         | readOnly      | Channels    | What                                                                                                                |
-| -------------- | ---- | ------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `search_items` | demo | admin, member | yes           | chat, voice | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids |
-| `get_item`     | demo | admin, member | yes           | chat, voice | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                              |
-| `create_note`  | demo | admin, member | no, confirmed | chat        | attaches a user-written note to an item (`demo_notes`) after the user confirmed the preview (Part 12)               |
+| Tool            | Pack | Roles         | readOnly      | Channels           | What                                                                                                                                                  |
+| --------------- | ---- | ------------- | ------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_items`  | demo | admin, member | yes           | chat, voice, phone | substring search of `demo_items` by name, ≤ 100 (default 20), sorted, with the true total; voice: ≤ 5 items, no ids                                   |
+| `get_item`      | demo | admin, member | yes           | chat, voice, phone | one item by id; `{ error: 'item not found' }` when missing; voice: no id, clipped text                                                                |
+| `create_note`   | demo | admin, member | no, confirmed | chat               | attaches a user-written note to an item (`demo_notes`) after the user confirmed the preview (Part 12)                                                 |
+| `list_mail`     | mail | admin, member | yes           | chat, voice, phone | the user's own inbox, unread by default, newest first, with the inbox unread count; ≤ 20 (default 10); voice: ≤ 5, names only, 120-character previews |
+| `read_mail`     | mail | admin, member | yes           | chat, voice, phone | one message by ref (`m1` …): the new text, signature and disclaimer cut, clipped to 3000 (voice 600) characters; does not mark it read                |
+| `search_mail`   | mail | admin, member | yes           | chat, voice, phone | `$search` as one quoted KQL phrase over every folder, `*` refused; ≤ 10 (voice 5)                                                                     |
+| `list_calendar` | mail | admin, member | yes           | chat, voice, phone | the events of one Europe/Zagreb day (today by default); ≤ 20; voice: ≤ 5 live events, times only                                                      |
 
 `demo_items` and `demo_notes` have a migration (`20261029100000_demo_tables.sql`, `docs/DB.md`)
 and the local seed carries the nine items the fakes do; the demo pack still narrows the user
