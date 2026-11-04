@@ -66,4 +66,11 @@ describe('crypto', () => {
     ])
     expect(messages.join(' ')).not.toContain(short.slice(3))
   })
+
+  it('J06: a key that is not canonical base64 is refused, even when it decodes to 32 bytes', () => {
+    const key = randomBytes(32).toString('base64')
+    expect(() => parseIntegrationsKey(`k1:${key.slice(0, 10)}!${key.slice(10)}`)).toThrow(
+      'INTEGRATIONS_KEY entry 1: key is not canonical base64',
+    )
+  })
 })

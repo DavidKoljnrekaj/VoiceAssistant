@@ -37,7 +37,11 @@ export function parseIntegrationsKey(value: string): IntegrationsKeys {
     if (!KEY_ID.test(id))
       throw new Error(`INTEGRATIONS_KEY entry ${i + 1}: expected "<id>:<base64>", id a-z0-9`)
     if (keys.has(id)) throw new Error(`INTEGRATIONS_KEY entry ${i + 1}: key id repeated`)
-    const key = Buffer.from(part.slice(colon + 1), 'base64')
+    const encoded = part.slice(colon + 1)
+    const key = Buffer.from(encoded, 'base64')
+    // Buffer drops characters that are not base64; a mangled key must not pass as another one.
+    if (key.toString('base64') !== encoded)
+      throw new Error(`INTEGRATIONS_KEY entry ${i + 1}: key is not canonical base64`)
     if (key.length !== KEY_BYTES) throw new Error(`INTEGRATIONS_KEY entry ${i + 1}: key is not 32 bytes`)
     keys.set(id, key)
   })
