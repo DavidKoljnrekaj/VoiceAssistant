@@ -11,6 +11,8 @@ export const TOOL_LABELS_HR: Record<string, string> = {
   read_mail: 'Čitanje poruke',
   search_mail: 'Pretraživanje pošte',
   list_calendar: 'Pregled kalendara',
+  reply_mail: 'Slanje odgovora',
+  flag_mail: 'Označavanje poruke',
 }
 
 export const ERROR_LABELS_HR: Record<string, string> = {
