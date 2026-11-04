@@ -29,17 +29,17 @@ and `docs/decisions/0012-phone-call-first.md` (2026-11-03) is a different decisi
 | 1 | Product name and package scope (currently `@va`) | Part 1 |
 | 2 | Supabase region (EU recommended) and who creates the project | Part 2 |
 | 3 | Should the demo tool pack's `demo_items` table exist on the dev project, or fakes only? | Part 3 |
-| 4 | Which Landmark user maps to which assistant user, when the Landmark pack comes (Part 8) | later |
+| 4 | ~~Which Landmark user maps to which assistant user?~~ Proposed 2026-11-04: by email, the Entra address both share (Part 14 §design) | Part 14 |
 | 5 | Hosting for api and voice (own VM vs LiveKit Cloud agent hosting vs PaaS) and the LiveKit region | Part 7 |
 | 6 | Retention for voice and chat rows; recording policy (recommendation: off) | Part 7 |
 | 7 | Who reviews the Croatian prompt, greeting and filler text | before any user test |
 | 8 | Is Microsoft Entra sign-in needed in the PWA from the start (Landmark has it)? | Part 6 |
 | 9 | Should chat use Sonnet 5.5 at low effort too, after a bench, to cut cost? | after Part 5 bench |
-| 10 | Is the company on Microsoft 365 or Google Workspace, and can a tenant admin grant consent? | Part 13 (email) |
+| 10 | ~~Microsoft 365 or Google Workspace?~~ Answered 2026-11-04: Microsoft 365 | Part 13 (email) |
 | 11 | ~~Telephony provider and number~~ Answered 2026-11-03: Twilio, a Croatian `+385` number (decision 0013); the account is the user's | Part 11 |
 | 12 | ~~Which roles need a PIN~~ Answered 2026-11-03: every caller during the pilot (decision 0013) | Part 11 |
 | 13 | How many pilot callers, and who enrols them (admin page in Part 15, or SQL in the runbook until then)? | Part 11 |
-| 14 | The company API: who builds it, where it runs, how it authenticates our users? | Part 14 |
+| 14 | ~~The company API?~~ Answered 2026-11-04: an `assistant-api` function in Landmark over its handlers | Part 14 |
 | 15 | Is a native wrapper for the in-app call wanted at all, or does the phone number cover the car entirely? | Part 15 |
 | 16 | ~~HS256 secret or asymmetric keys?~~ Answered 2026-11-03: ECC P-256 is current, HS256 is a previous key only; Part 11 §4 takes the magic-link path (decision 0013) | Part 11 |
 
