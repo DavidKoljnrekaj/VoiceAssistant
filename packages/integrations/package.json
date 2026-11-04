@@ -5,7 +5,8 @@
   "description": "Connections to outside services: sealed tokens, the Microsoft OAuth, the token store",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test": "./src/test/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",

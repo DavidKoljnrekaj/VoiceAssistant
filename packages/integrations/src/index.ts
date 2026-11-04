@@ -8,3 +8,15 @@ export {
   tokenAad,
   type IntegrationsKeys,
 } from './crypto.js'
+export {
+  createMicrosoftOAuth,
+  MICROSOFT_SCOPES,
+  MicrosoftOAuthError,
+  newPkce,
+  type MicrosoftAccount,
+  type MicrosoftOAuth,
+  type MicrosoftOAuthConfig,
+  type MicrosoftOAuthErrorKind,
+  type Pkce,
+  type TokenSet,
+} from './microsoft/oauth.js'
