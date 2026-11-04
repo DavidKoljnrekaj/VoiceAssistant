@@ -208,6 +208,12 @@ in-process worker removes the function's cold start (~1.5 s) and the HTTP hop.
 | 2026-10-30 | `1bde7af` | `VOICE-8` lever 1: the sink's 200 ms hold timer (PR #23) | `claude-sonnet-5-5`, `low` | 1.79 s / 2.87 s      | 4.18 s / 13.79 s       | 2.03   | 36  |
 | 2026-10-30 | `d5240fa` | `VOICE-8` lever 2: paragraph breaks collapsed (not kept) | `claude-sonnet-5-5`, `low` | 1.78 s / 3.17 s      | 4.02 s / 8.81 s        | 2.06   | 36  |
 
+**Owed: Part 13b, the mail rules in the voice prompt** (`MAIL_RULES_HR` appended to the static
+voice prompt, plus four tools in the voice tools array; both change the cache key). Run by the
+operator, who holds the keys: the "before" on `main` before 13b, the "after" on `feat/email-read`,
+same stack, three repeats each (`docs/MAIL.md` → The rules in the prompt). The two rows go here
+with the commits; a p50 that moves the wrong way stops the merge.
+
 The baseline bench ran before the demo tables existed on the local stack (`CORE-2`): every
 catalogue question got a tool error, the model retried and then said it cannot reach the
 catalogue, so each one took 3 rounds. The second row is the same bench with the seeded catalogue

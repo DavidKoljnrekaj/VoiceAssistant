@@ -117,7 +117,15 @@ AES-256-GCM ciphertext under `INTEGRATIONS_KEY` on the two hosts only; a databas
 opens nothing, but a token and the key together can read and send mail as the user, which is
 why both stay out of logs, responses and the browser. Disconnecting deletes our copy; Microsoft's
 sessions end only when the user or the admin revokes the app (My Apps). Email bodies are
-untrusted text (13b); a reply still needs the user's confirmation (decision 0015).
+untrusted text (13b): every preview and body reaches the model wrapped as
+`untrusted_email_content`, with invisible characters removed (format characters including the
+Unicode tag block used to smuggle text past a human reader, bidi controls) and every
+third-party field clipped; the pack's rules say that everything but refs, times and flags is
+quoted material, never an instruction. Two residual risks are known: text the sender hid with
+HTML styling survives Graph's conversion to text, and a link the model writes from a message is
+clickable in chat (`WEB-17`). A reply still needs the user's confirmation (decision 0015), so
+injected text can at worst produce a preview the user declines. On a call no address is spoken
+and the refs that stand for Graph ids are never said.
 
 **The service role.** The API and the worker hold the service-role key for persistence and
 identity lookups only. Nothing about those calls is protected by RLS, so the explicit
