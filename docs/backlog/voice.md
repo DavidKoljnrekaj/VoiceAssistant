@@ -17,16 +17,6 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   and after (a prompt change changes the cache key); the intro's "ne možete unositi promjene"
   becomes "promjene radite samo uz potvrdu" in the same change
 
-### VOICE-19 · Low · OQ: on a call the caller confirms the model's paraphrase, not the preview verbatim
-
-- **Check:** Raised by the tool security review of Part 12a
-- **Where:** `apps/voice/src/session.ts` (`onConfirm` keeps the id; nothing speaks the summary)
-- **What happens:** the model says what it will do "in its own words" and asks; a caller's "da"
-  confirms the preview's exact input, which they heard only as the model rendered it
-- **Fix direction:** decide before Part 13 allowlists a write: the sink speaks the preview's
-  summary verbatim before the model's question, or the voice prompt requires quoting the summary
-  as given; then a scenario pins it
-
 ### VOICE-16 · Low · Unknown numbers have no attempt counter, so a scan of the phone number is invisible
 
 - **Check:** By design (Part 11 §9 lists it; 11b built the per-identity lock only)
@@ -136,6 +126,11 @@ The voice worker (`apps/voice`) and the spoken sink: adapters, latency, bench.
   it
 
 ## Resolved
+
+### VOICE-19 · Low · On a call the caller confirms the model's paraphrase (fixed 2026-11-04, Part 13c)
+
+- The spoken sink reads the preview's summary verbatim before the model's question
+  (`SpokenTextSink.confirm`, `S15`); the voice prompt tells the model not to repeat it (VOICE-18).
 
 ### VOICE-1 · Medium · Where the worker runs (decided 2026-11-03)
 

@@ -246,4 +246,35 @@ describe('SpokenTextSink hold timer (VOICE-8)', () => {
     expect(line?.line).toContain('"reason":"Error: tts gone"')
     expect(line?.line).not.toContain('Imamo')
   })
+
+  it('S15 (VOICE-19) a pending write is read out verbatim before the model asks: the caller confirms what will happen, not a paraphrase', async () => {
+    const confirmed: string[] = []
+    const said: string[] = []
+    const sink = new SpokenTextSink(
+      async (t) => {
+        said.push(t)
+      },
+      async () => {},
+      () => 'Samo trenutak.',
+      HOLD_MS,
+      (c) => confirmed.push(c.id),
+    )
+    const summary =
+      'Odgovorit ću na poruku „Sastanak u petak“. Primatelj je Marko Horvat, a tekst glasi: „Stižem u deset.“'
+    await sink.toolStarting()
+    await sink.confirm({
+      id: 'c1',
+      tool: 'reply_mail',
+      toolUseId: 't1',
+      summary,
+      expiresAt: '2099-01-01T00:00:00Z',
+    })
+    await sink.textDelta('Da pošaljem? ')
+    await sink.done('end_turn', USAGE)
+    const text = said.join('')
+    expect(text.trimEnd()).toBe(`Samo trenutak.\n\n${speakable(summary)}\n\nDa pošaljem?`)
+    expect(text.indexOf(summary)).toBeLessThan(text.indexOf('Da pošaljem?'))
+    expect(text.split(summary)).toHaveLength(2)
+    expect(confirmed).toEqual(['c1'])
+  })
 })
