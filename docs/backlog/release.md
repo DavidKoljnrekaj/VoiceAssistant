@@ -1,6 +1,6 @@
 # Backlog — release
 
-Ids: REL-12 (next free)
+Ids: REL-13 (next free)
 
 Things written but not live: migrations to apply (dev first, with the check to run after), secrets
 to set, and checks nobody has run. Tick an item when it is done on every environment it names.
@@ -39,6 +39,15 @@ three sets of checks) and says how to paste the results back.
       query is refused with `42501`. Then `/db-types`, commit `packages/db/src/database.ts`, and
       drop the hand-written types in `apps/voice/src/phone/db.ts` for the generated ones. Then
       enrol the pilot caller (`docs/RELEASE-RUNBOOK.md` → Enrolling a caller).
+
+- [ ] REL-12 · Part 13a: apply `20261104100000_user_integrations.sql` to the dev project (by the
+      operator, `supabase db push`). Check after applying: as a signed-in user
+      `select status from user_integrations` returns 0 rows and `select refresh_token_enc from
+    user_integrations` is refused with `42501`; as the service role an insert with
+      `provider = 'google'` is refused with `23514`. Then `/db-types`, commit
+      `packages/db/src/database.ts`, and drop the hand-written table types in
+      `packages/integrations/src/db.ts` (and the untyped cast in
+      `packages/core/src/test/fake-supabase.test.ts`) for the generated ones.
 
 - [x] REL-11 · Part 12a: apply `20261103150000_tool_confirmations.sql` to the dev project (by the
       operator, `supabase db push`). Check after applying: as a signed-in user
